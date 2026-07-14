@@ -3,27 +3,23 @@ mod db;
 mod middlewares;
 mod models;
 mod routes;
-mod rss_push;
 mod utils;
+mod web_push;
 
 use dotenv::dotenv;
 use middlewares::admin_middleware::AdminOnly;
 use middlewares::auth_middleware::Auth;
 use std::{env, fs, sync::Arc};
 
-use crate::routes::create_rss_source::create_rss_source;
 use crate::routes::delete_portfolio::delete_portfolio;
 use crate::routes::delete_post::delete_post;
 use crate::routes::delete_push_subscription::delete_push_subscription;
-use crate::routes::delete_rss_subscription::delete_rss_subscription;
 use crate::routes::get_all_posts::get_all_posts;
 use crate::routes::get_count_with_tags::get_count_with_tags;
-use crate::routes::get_feed_items::get_feed_items;
 use crate::routes::get_portfolio::get_portfolio;
 use crate::routes::get_posts_with_tags::get_posts_with_tags;
 use crate::routes::get_push_public_key::get_push_public_key;
 use crate::routes::get_push_subscriptions::get_push_subscriptions;
-use crate::routes::get_rss_sources::get_rss_sources;
 use crate::routes::get_tags_with_category::get_tags_with_category;
 use crate::routes::me::me;
 use crate::routes::signup::signup;
@@ -48,7 +44,6 @@ use routes::{
     get_post::get_post, get_posts::get_posts, login::login, login_google::login_google,
     upload_post::upload_post,
 };
-use rss_push::start_polling_worker;
 use sqlx::SqlitePool;
 
 #[handler]
@@ -91,8 +86,6 @@ async fn main() -> Result<(), std::io::Error> {
     init_db(&db)
         .await
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-
-    start_polling_worker(db.clone());
 
     let state = Arc::new(AppState::new(db));
 
@@ -144,15 +137,6 @@ async fn main() -> Result<(), std::io::Error> {
             .at("/signup", post(signup))
             .at("/me", get(me).with(Auth))
             .at("/me/profile", put(update_my_profile).with(Auth))
-            .at(
-                "/rss-sources",
-                get(get_rss_sources).post(create_rss_source).with(Auth),
-            )
-            .at("/feed/items", get(get_feed_items).with(Auth))
-            .at(
-                "/rss-sources/:source_id/subscription",
-                delete(delete_rss_subscription).with(Auth),
-            )
             .at(
                 "/push/subscriptions",
                 get(get_push_subscriptions)

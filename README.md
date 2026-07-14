@@ -8,7 +8,7 @@ Rust + Poem + SQLite로 만든 개인용 CMS API 서버입니다.
 이 API는 크게 다음을 해결하기 위해 만들어졌습니다.
 
 - 블로그 운영: 포스트/태그/이미지/포트폴리오 데이터를 CMS 형태로 관리
-- 알림 허브: 구독한 RSS 소스의 새 글을 감지하고 구독 브라우저로 Web Push 전송
+- 알림: 브라우저 Web Push 구독 관리 및 VAPID 서명 발송 인프라
 
 즉, "공용 SaaS형 CMS"보다는 "개인 콘텐츠 + 개인용 알림"에 최적화된 구조입니다.
 
@@ -21,7 +21,6 @@ Rust + Poem + SQLite로 만든 개인용 CMS API 서버입니다.
 - JWT (`jsonwebtoken`)
 - bcrypt
 - `web-push` (VAPID Web Push 발송)
-- `feed-rs` (RSS/Atom 파싱 워커)
 - `reqwest` (Google `tokeninfo`, GitHub `repository_dispatch` 호출)
 
 ## 빠른 시작
@@ -43,7 +42,7 @@ JWT_REFRESH_SECRET=replace-with-refresh-secret
 # Google Login
 GOOGLE_CLIENT_ID=replace-with-google-oauth-client-id
 
-# Web Push (RSS 기반 브라우저 푸시)
+# Web Push (브라우저 푸시)
 VAPID_PUBLIC_KEY=replace-with-vapid-public-key
 VAPID_PRIVATE_KEY=replace-with-vapid-private-key
 VAPID_SUBJECT=mailto:you@example.com
@@ -61,7 +60,7 @@ UPLOAD_MAX_BYTES=20971520
 
 ### Web Push 환경변수
 
-RSS 기반 브라우저 푸시를 사용하려면 아래 환경변수를 함께 설정해야 합니다.
+브라우저 푸시를 사용하려면 아래 환경변수를 함께 설정해야 합니다.
 
 - `VAPID_PUBLIC_KEY`: `GET /push/public-key`가 대시보드에 공개하는 브라우저 등록용 공개키
 - `VAPID_PRIVATE_KEY`: 실제 Web Push 발송 시 VAPID 서명을 만드는 비공개키
@@ -70,7 +69,6 @@ RSS 기반 브라우저 푸시를 사용하려면 아래 환경변수를 함께 
 동작 방식은 다음과 같습니다.
 
 - `VAPID_PUBLIC_KEY`가 없거나 빈 문자열이면 `GET /push/public-key`는 `503 Service Unavailable`을 반환합니다.
-- `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`가 모두 있어야 RSS polling worker가 실제 브라우저 푸시를 전송할 수 있습니다.
 
 로컬 개발 예시는 아래와 같습니다.
 
@@ -174,18 +172,14 @@ blog 대상 포스트 판정은 `status != draft` 이고 `dev` 태그가 없는 
 - `GET /me` (JWT) — 현재 로그인 사용자 정보.
 - `PUT /me/profile` (JWT) — 프로필 수정 (display_name, avatar, bio 등). Google 로그인 직후 기본값 자동 병합.
 
-### RSS 구독 / Feed / Web Push
+### Web Push
 
-- `GET /rss-sources` (JWT) — 내가 구독한 RSS 소스 목록.
-- `POST /rss-sources` (JWT) — RSS 소스 추가(중복 URL은 기존 소스와 공유 + 구독 레코드만 생성).
-- `DELETE /rss-sources/:source_id/subscription` (JWT) — 구독 해지(소스는 다른 유저가 구독 중이면 유지).
-- `GET /feed/items` (JWT) — 구독 소스들의 최신 feed 아이템을 오프셋 페이지네이션으로 조회(`limit`, `offset`).
 - `GET /push/public-key` — VAPID 공개키 반환. 환경변수가 비어 있으면 503.
 - `GET /push/subscriptions` (JWT) — 현재 유저의 Web Push 구독 목록.
 - `POST /push/subscriptions` (JWT) — 브라우저의 PushSubscription upsert.
 - `DELETE /push/subscriptions` (JWT) — 구독 해제.
 
-백그라운드 RSS 폴링 워커(`rss_push.rs`)가 주기적으로 새 feed 아이템을 감지하고, 구독 브라우저의 PushSubscription으로 VAPID 서명된 Web Push를 발송한다.
+구독 관리와 VAPID 서명 발송 헬퍼(`web_push.rs`)만 유지하며, 현재 자동 발송 트리거는 없다.
 
 ## 테스트
 
@@ -218,9 +212,9 @@ curl -sS -X POST http://127.0.0.1:8080/login/google \
 - **권한 스코핑**: 모든 수정/조회 API는 미들웨어로 `current_user()`를 주입받아 `user_id` 소유권을 일관되게 검증한다. 관리자 전용 엔드포인트는 `AdminOnly` 미들웨어가 role까지 확인한다.
 - **포트폴리오 DB 마이그레이션**: 초기에는 `portfolio_documents`에 단일 JSON을 저장했으나, 섹션 단위 편집 UX가 필요해지면서 `portfolio_section(section_key, content_json)` 테이블로 분리. 응답 스키마는 기존 클라이언트 호환성을 위해 런타임에 섹션들을 병합해 단일 문서로 내린다.
 - **블로그 재배포 트리거**: 포스트 publish/update/delete 후 `dev` 태그가 없는 경우에 한해 `tyange-blog` 저장소의 GitHub `repository_dispatch`(`event_type=cms-content-changed`)를 호출해 블로그를 재배포한다. dispatch 호출 실패는 로그만 남기고 CMS 저장은 유지한다.
-- **Web Push 옵셔널 구동**: VAPID 환경변수가 모두 설정되어야 RSS 폴링 워커가 브라우저 푸시를 실제 발송한다. 부분 설정이면 공개키 엔드포인트가 503으로 응답하고 워커는 아이템 저장만 수행한다.
+- **Web Push 옵셔널 구동**: `VAPID_PUBLIC_KEY`가 없으면 공개키 엔드포인트가 503으로 응답한다. 발송 헬퍼(`send_push_message`)는 VAPID 환경변수 3종이 모두 설정된 경우에만 사용할 수 있다.
 
 ## 테스트 커버리지 하이라이트
 
 - `portfolio_routes_test.rs` — 포트폴리오 섹션 분리 이후 응답 호환성 및 부분 업데이트 검증.
-- `feed_items_test.rs`, `post_authorization_test.rs` — 소유권 스코핑·권한 경계 회귀 방지.
+- `post_authorization_test.rs` — 소유권 스코핑·권한 경계 회귀 방지.

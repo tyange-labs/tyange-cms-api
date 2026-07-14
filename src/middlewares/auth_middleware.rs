@@ -38,10 +38,6 @@ fn authenticated_user_from_jwt(req: &Request) -> Result<AuthenticatedUser, Error
     }
 }
 
-pub fn require_jwt_user(req: &Request) -> Result<AuthenticatedUser, Error> {
-    authenticated_user_from_jwt(req)
-}
-
 pub struct Auth;
 
 impl<E: Endpoint> Middleware<E> for Auth {

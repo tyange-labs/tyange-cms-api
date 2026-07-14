@@ -8,7 +8,7 @@ use poem::{
 
 use crate::{
     models::{CustomResponse, UpsertPushSubscriptionRequest, WebPushSubscriptionResponse},
-    rss_push::upsert_push_subscription as upsert_push_subscription_service,
+    web_push::upsert_push_subscription as upsert_push_subscription_service,
     AppState,
 };
 use tyange_cms_api::auth::authorization::current_user;

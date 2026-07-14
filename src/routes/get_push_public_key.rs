@@ -2,7 +2,7 @@ use poem::{handler, web::Json, Error};
 
 use crate::{
     models::{CustomResponse, PublicPushKeyResponse},
-    rss_push::push_public_key,
+    web_push::push_public_key,
 };
 
 #[handler]

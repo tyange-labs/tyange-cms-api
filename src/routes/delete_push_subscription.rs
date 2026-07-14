@@ -7,7 +7,7 @@ use poem::{
     Error, Request,
 };
 
-use crate::{models::DeletePushSubscriptionRequest, rss_push::revoke_push_subscription, AppState};
+use crate::{models::DeletePushSubscriptionRequest, web_push::revoke_push_subscription, AppState};
 use tyange_cms_api::auth::authorization::current_user;
 
 #[handler]

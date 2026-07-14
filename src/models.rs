@@ -312,39 +312,6 @@ pub struct SearchPostsWithWriter {
     pub writer_id: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
-pub struct RssSourceResponse {
-    pub source_id: String,
-    pub feed_url: String,
-    pub normalized_feed_url: String,
-    pub title: Option<String>,
-    pub site_url: Option<String>,
-    pub last_polled_at: Option<String>,
-    pub last_success_at: Option<String>,
-    pub last_error: Option<String>,
-    pub consecutive_failures: i64,
-    pub subscribed_at: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct RssSourceListResponse {
-    pub sources: Vec<RssSourceResponse>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CreateRssSourceRequest {
-    pub feed_url: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct CreateRssSourceResponse {
-    pub source_id: String,
-    pub feed_url: String,
-    pub normalized_feed_url: String,
-    pub title: Option<String>,
-    pub site_url: Option<String>,
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PushSubscriptionKeysRequest {
     pub p256dh: String,
@@ -382,36 +349,4 @@ pub struct WebPushSubscriptionListResponse {
 #[derive(Debug, Serialize)]
 pub struct PublicPushKeyResponse {
     pub public_key: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct FeedItemsQuery {
-    pub limit: Option<u32>,
-    pub offset: Option<u32>,
-    pub unread_only: Option<bool>,
-    pub source_id: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct FeedItemResponse {
-    pub item_id: String,
-    pub source_id: String,
-    pub source_title: String,
-    pub title: String,
-    pub published_at: String,
-    pub item_url: Option<String>,
-    pub read: bool,
-    pub saved: bool,
-}
-
-#[derive(Debug, Serialize)]
-pub struct FeedSummaryResponse {
-    pub total_count: i64,
-    pub unread_count: i64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct FeedItemsResponse {
-    pub items: Vec<FeedItemResponse>,
-    pub summary: FeedSummaryResponse,
 }

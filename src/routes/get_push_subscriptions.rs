@@ -8,7 +8,7 @@ use poem::{
 
 use crate::{
     models::{CustomResponse, WebPushSubscriptionListResponse},
-    rss_push::list_push_subscriptions,
+    web_push::list_push_subscriptions,
     AppState,
 };
 use tyange_cms_api::auth::authorization::current_user;
