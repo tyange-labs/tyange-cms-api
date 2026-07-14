@@ -6,7 +6,6 @@ edition = "2021"
 [dependencies]
 base64 = "0.13.1"
 bcrypt = "0.17.0"
-calamine = "0.26.1"
 chrono = "0.4.40"
 dotenv = "0.15.0"
 feed-rs = "2.3.1"

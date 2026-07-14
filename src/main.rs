@@ -1,8 +1,4 @@
 mod blog_redeploy;
-#[cfg(test)]
-mod budget;
-mod budget_periods;
-mod card_excel;
 mod db;
 mod middlewares;
 mod models;
@@ -15,17 +11,12 @@ use middlewares::admin_middleware::AdminOnly;
 use middlewares::auth_middleware::Auth;
 use std::{env, fs, sync::Arc};
 
-use crate::routes::create_budget_plan::create_budget_plan;
 use crate::routes::create_rss_source::create_rss_source;
-use crate::routes::create_spending::create_spending;
-use crate::routes::delete_all_spending::delete_all_spending;
 use crate::routes::delete_portfolio::delete_portfolio;
 use crate::routes::delete_post::delete_post;
 use crate::routes::delete_push_subscription::delete_push_subscription;
 use crate::routes::delete_rss_subscription::delete_rss_subscription;
-use crate::routes::delete_spending::delete_spending;
 use crate::routes::get_all_posts::get_all_posts;
-use crate::routes::get_budget::get_budget;
 use crate::routes::get_count_with_tags::get_count_with_tags;
 use crate::routes::get_feed_items::get_feed_items;
 use crate::routes::get_portfolio::get_portfolio;
@@ -33,17 +24,13 @@ use crate::routes::get_posts_with_tags::get_posts_with_tags;
 use crate::routes::get_push_public_key::get_push_public_key;
 use crate::routes::get_push_subscriptions::get_push_subscriptions;
 use crate::routes::get_rss_sources::get_rss_sources;
-use crate::routes::get_spending::get_spending;
 use crate::routes::get_tags_with_category::get_tags_with_category;
-use crate::routes::import_spending_excel::{commit_spending_import, preview_spending_import};
 use crate::routes::me::me;
 use crate::routes::signup::signup;
-use crate::routes::update_active_budget::update_active_budget;
 use crate::routes::update_my_profile::update_my_profile;
 use crate::routes::update_portfolio::update_portfolio;
 use crate::routes::update_portfolio_section::update_portfolio_section;
 use crate::routes::update_post::update_post;
-use crate::routes::update_spending::update_spending;
 use crate::routes::upload_image::upload_image;
 use crate::routes::upsert_push_subscription::upsert_push_subscription;
 use crate::{models::AppState, routes::add_user::add_user};
@@ -178,33 +165,6 @@ async fn main() -> Result<(), std::io::Error> {
             .at(
                 "/admin/posts",
                 get(get_all_posts).with(AdminOnly).with(Auth),
-            )
-            .at(
-                "/budget",
-                get(get_budget.with(Auth)).put(update_active_budget.with(Auth)),
-            )
-            .at("/budget/plan", post(create_budget_plan).with(Auth))
-            .at(
-                "/budget/spending",
-                get(get_spending.with(Auth))
-                    .post(create_spending.with(Auth))
-                    .delete(delete_all_spending.with(Auth)),
-            )
-            .at(
-                "/budget/spending/import-preview",
-                post(preview_spending_import)
-                    .with(SizeLimit::new(upload_max_bytes))
-                    .with(Auth),
-            )
-            .at(
-                "/budget/spending/import-commit",
-                post(commit_spending_import)
-                    .with(SizeLimit::new(upload_max_bytes))
-                    .with(Auth),
-            )
-            .at(
-                "/budget/spending/:record_id",
-                put(update_spending.with(Auth)).delete(delete_spending.with(Auth)),
             )
             .nest("/images", StaticFilesEndpoint::new(upload_base_path))
             .at("/*path", options(options_handler))

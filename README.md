@@ -1,17 +1,16 @@
 # tyange-cms-api
 
 Rust + Poem + SQLite로 만든 개인용 CMS API 서버입니다.
-블로그 콘텐츠를 관리하고, 기간 총예산/지출을 추적하기 위해 만든 백엔드이며 현재는 단일 운영자(개인) 사용 시나리오를 중심으로 구성되어 있습니다.
+블로그 콘텐츠를 관리하기 위해 만든 백엔드이며 현재는 단일 운영자(개인) 사용 시나리오를 중심으로 구성되어 있습니다.
 
 ## 이 프로젝트의 목적
 
 이 API는 크게 다음을 해결하기 위해 만들어졌습니다.
 
 - 블로그 운영: 포스트/태그/이미지/포트폴리오 데이터를 CMS 형태로 관리
-- 소비 추적: 기간 총예산 설정, 지출 기록, 예산 요약 및 기간별 계산
 - 알림 허브: 구독한 RSS 소스의 새 글을 감지하고 구독 브라우저로 Web Push 전송
 
-즉, "공용 SaaS형 CMS"보다는 "개인 콘텐츠 + 개인 소비 관리 + 개인용 알림"에 최적화된 구조입니다.
+즉, "공용 SaaS형 CMS"보다는 "개인 콘텐츠 + 개인용 알림"에 최적화된 구조입니다.
 
 ## Tech Stack
 
@@ -23,7 +22,6 @@ Rust + Poem + SQLite로 만든 개인용 CMS API 서버입니다.
 - bcrypt
 - `web-push` (VAPID Web Push 발송)
 - `feed-rs` (RSS/Atom 파싱 워커)
-- `calamine` (신한카드 XLS 파싱)
 - `reqwest` (Google `tokeninfo`, GitHub `repository_dispatch` 호출)
 
 ## 빠른 시작
@@ -95,9 +93,7 @@ cargo run -q
 ### JWT 인증 (`Authorization`)
 
 `Authorization` 헤더에 JWT 액세스 토큰을 넣어 호출합니다.
-관리자/작성자 권한이 필요한 CMS 수정 계열 API와 일부 Budget 설정 API에서 사용됩니다.
-
-`POST /budget/spending`은 request body의 `user_id`를 신뢰하지 않고, 항상 인증 컨텍스트의 `user_id`를 사용합니다.
+관리자/작성자 권한이 필요한 CMS 수정 계열 API에서 사용됩니다.
 
 ## API 개요
 
@@ -191,78 +187,6 @@ blog 대상 포스트 판정은 `status != draft` 이고 `dev` 태그가 없는 
 
 백그라운드 RSS 폴링 워커(`rss_push.rs`)가 주기적으로 새 feed 아이템을 감지하고, 구독 브라우저의 PushSubscription으로 VAPID 서명된 Web Push를 발송한다.
 
-### Budget
-
-- `GET /budget` (JWT)
-현재 활성 기간 예산 요약 조회.
-응답 필드:
-`budget_id`, `total_budget`, `from_date`, `to_date`, `total_spent`, `remaining_budget`, `usage_rate`, `alert`, `alert_threshold`, `is_overspent`
-
-- `PUT /budget` (JWT)
-현재 활성 기간 예산의 총액과 `alert_threshold`를 다시 설정한다.
-기간 필드(`from_date`, `to_date`)는 수정할 수 없다.
-
-- `POST /budget/plan` (JWT)
-기간 총예산을 생성한다.
-
-- `GET /budget/spending`
-현재 활성 예산 기간의 소비 기록을 조회하고, 응답에서만 ISO week 기준으로 그룹핑한다.
-
-- `POST /budget/spending` (JWT)
-소비 기록 생성 및 기간 누적/남은 예산 계산.
-`transacted_at`는 현재 활성 예산 기간 안에 있어야 합니다.
-
-- `DELETE /budget/spending` (JWT)
-현재 로그인 사용자의 소비 기록을 모두 삭제한다. 예산 기간과 주간 설정은 유지된다.
-
-- `POST /budget/spending/import-preview` (JWT)
-신한카드 XLS 파일을 업로드해 미리보기 결과를 반환한다. 응답에는 `summary`, `rows`가 포함되며 각 row는 `fingerprint`, `transacted_at`, `amount`, `merchant`, `status`, `reason`을 가진다.
-
-- `POST /budget/spending/import-commit` (JWT)
-신한카드 XLS 파일과 `selected_fingerprints`를 함께 보내 선택한 거래만 반영한다. 이미 반영된 imported row는 중복으로 건너뛴다.
-
-- `PUT /budget/spending/:record_id`
-소비 기록 수정.
-
-- `DELETE /budget/spending/:record_id`
-소비 기록 삭제.
-
-#### Budget request 예시
-
-`POST /budget/plan`
-
-```json
-{
-  "total_budget": 1500,
-  "from_date": "2026-04-01",
-  "to_date": "2026-04-30",
-  "alert_threshold": 0.9
-}
-```
-
-`PUT /budget`
-
-```json
-{
-  "total_budget": 1800,
-  "alert_threshold": 0.9
-}
-```
-
-#### Budget 계산 규칙
-
-- `remaining_budget = total_budget - total_spent`
-- `is_overspent = total_spent > total_budget`
-- `usage_rate = total_spent / total_budget` (`total_budget > 0`)
-- `alert = usage_rate >= alert_threshold`
-- `total_spent`는 항상 해당 기간의 `spending_records` 합계로 계산한다.
-
-#### Spending import 정책
-
-- import 대상은 신한카드 XLS 거래내역이며 서버는 stateless하게 `preview -> commit` 2단계로 처리한다.
-- imported row는 `source_type='shinhancard_xls'`, `source_fingerprint`를 저장해 동일 거래 재업로드를 중복으로 막는다.
-- import 후 예산 요약의 `total_spent`도 같은 거래원장 기준으로 계산된다.
-
 ## 테스트
 
 ```bash
@@ -289,24 +213,14 @@ curl -sS -X POST http://127.0.0.1:8080/login/google \
   -d '{"id_token":"GOOGLE_ID_TOKEN_FROM_FRONTEND"}'
 ```
 
-### JWT로 소비 기록 생성
-
-```bash
-curl -sS -X POST http://127.0.0.1:8080/budget/spending \
-  -H "Authorization: $ACCESS_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"amount":12000,"merchant":"CU 역삼신웅점","transacted_at":"2026-03-03T12:20:00"}'
-```
-
 ## 설계 메모
 
 - **권한 스코핑**: 모든 수정/조회 API는 미들웨어로 `current_user()`를 주입받아 `user_id` 소유권을 일관되게 검증한다. 관리자 전용 엔드포인트는 `AdminOnly` 미들웨어가 role까지 확인한다.
 - **포트폴리오 DB 마이그레이션**: 초기에는 `portfolio_documents`에 단일 JSON을 저장했으나, 섹션 단위 편집 UX가 필요해지면서 `portfolio_section(section_key, content_json)` 테이블로 분리. 응답 스키마는 기존 클라이언트 호환성을 위해 런타임에 섹션들을 병합해 단일 문서로 내린다.
-- **신한카드 XLS import**: `preview → commit` 2단계. preview 단계에서 각 행에 `fingerprint`(거래일+금액+가맹점 기반 SHA2)를 계산해 내려주고, commit 시 `selected_fingerprints`만 반영한다. DB에 `source_type='shinhancard_xls'` + `source_fingerprint`를 남겨 같은 거래 재업로드 시 중복 저장을 막는다.
 - **블로그 재배포 트리거**: 포스트 publish/update/delete 후 `dev` 태그가 없는 경우에 한해 `tyange-blog` 저장소의 GitHub `repository_dispatch`(`event_type=cms-content-changed`)를 호출해 블로그를 재배포한다. dispatch 호출 실패는 로그만 남기고 CMS 저장은 유지한다.
 - **Web Push 옵셔널 구동**: VAPID 환경변수가 모두 설정되어야 RSS 폴링 워커가 브라우저 푸시를 실제 발송한다. 부분 설정이면 공개키 엔드포인트가 503으로 응답하고 워커는 아이템 저장만 수행한다.
 
 ## 테스트 커버리지 하이라이트
 
 - `portfolio_routes_test.rs` — 포트폴리오 섹션 분리 이후 응답 호환성 및 부분 업데이트 검증.
-- `feed_items_test.rs`, `budget_spending_scope_test.rs`, `post_authorization_test.rs` — 소유권 스코핑·권한 경계 회귀 방지.
+- `feed_items_test.rs`, `post_authorization_test.rs` — 소유권 스코핑·권한 경계 회귀 방지.
