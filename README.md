@@ -10,9 +10,8 @@ Rust + Poem + SQLite로 만든 개인용 CMS API 서버입니다.
 - 블로그 운영: 포스트/태그/이미지/포트폴리오 데이터를 CMS 형태로 관리
 - 소비 추적: 기간 총예산 설정, 지출 기록, 예산 요약 및 기간별 계산
 - 알림 허브: 구독한 RSS 소스의 새 글을 감지하고 구독 브라우저로 Web Push 전송
-- 1:1 매칭 & 메시지: 유저 간 단일 매칭 상태 머신 + 매칭된 두 유저 사이의 단순 메시지 저장소
 
-즉, "공용 SaaS형 CMS"보다는 "개인 콘텐츠 + 개인 소비 관리 + 개인용 알림·매칭"에 최적화된 구조입니다.
+즉, "공용 SaaS형 CMS"보다는 "개인 콘텐츠 + 개인 소비 관리 + 개인용 알림"에 최적화된 구조입니다.
 
 ## Tech Stack
 
@@ -179,33 +178,6 @@ blog 대상 포스트 판정은 `status != draft` 이고 `dev` 태그가 없는 
 - `GET /me` (JWT) — 현재 로그인 사용자 정보.
 - `PUT /me/profile` (JWT) — 프로필 수정 (display_name, avatar, bio 등). Google 로그인 직후 기본값 자동 병합.
 
-### 1:1 매칭 & 메시지
-
-- `POST /match/request` (JWT)
-다른 유저에게 1:1 매칭을 신청한다(`pending`). 한 유저는 동시에 하나의 활성 매칭만 가질 수 있다.
-
-- `POST /match/:match_id/respond` (JWT)
-대상 유저가 `accept` 또는 `reject`로 응답한다. 대상 유저만 응답 가능.
-
-- `GET /match/me` (JWT)
-현재 활성 매칭 + 상대 유저 프로필 요약 조회.
-
-- `DELETE /match/me` (JWT)
-본인 기준 활성 매칭을 종료한다. `pending`이면 `cancelled`, `matched`이면 `unmatched`로 전환.
-
-- `GET /match/messages` (JWT)
-`matched` 상태인 경우에 한해 두 유저 사이 메시지를 시간순으로 조회.
-
-- `POST /match/messages` (JWT)
-`matched` 상태에서 상대에게 메시지 저장. (브라우저 push 연동은 대시보드 측 구독이 있을 때 전송)
-
-상태 머신:
-```
-pending  --accept-->  matched  --unmatch-->  unmatched
-pending  --reject-->  rejected
-pending  --cancel-->  cancelled
-```
-
 ### RSS 구독 / Feed / Web Push
 
 - `GET /rss-sources` (JWT) — 내가 구독한 RSS 소스 목록.
@@ -336,6 +308,5 @@ curl -sS -X POST http://127.0.0.1:8080/budget/spending \
 
 ## 테스트 커버리지 하이라이트
 
-- `match_flow_test.rs` — 요청 → accept/reject → 메시지 전송 → unmatch 전 과정 통합 테스트 (in-memory SQLite).
 - `portfolio_routes_test.rs` — 포트폴리오 섹션 분리 이후 응답 호환성 및 부분 업데이트 검증.
 - `feed_items_test.rs`, `budget_spending_scope_test.rs`, `post_authorization_test.rs` — 소유권 스코핑·권한 경계 회귀 방지.
