@@ -3,6 +3,7 @@ mod db;
 mod middlewares;
 mod models;
 mod routes;
+mod services;
 mod utils;
 mod web_push;
 
