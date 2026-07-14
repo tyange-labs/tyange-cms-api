@@ -1,6 +1,5 @@
 use std::{env, sync::Arc};
 
-use bcrypt::{hash, DEFAULT_COST};
 use poem::{
     get,
     http::StatusCode,
@@ -13,18 +12,13 @@ use sqlx::{query, query_scalar, SqlitePool};
 
 use crate::{
     db::init_db,
-    middlewares::api_key_middleware::JwtOrApiKeyAuth,
     middlewares::auth_middleware::Auth,
     models::AppState,
     routes::{
-        add_user::create_user,
-        create_api_key::create_api_key_handler,
         create_budget_plan::create_budget_plan,
         create_spending::create_spending,
         delete_all_spending::delete_all_spending,
-        delete_api_key::delete_api_key,
         delete_spending::delete_spending,
-        get_api_keys::get_api_keys,
         get_budget::get_budget,
         get_spending::get_spending,
         import_spending_excel::{commit_spending_import, preview_spending_import},
@@ -45,14 +39,6 @@ async fn create_test_state() -> Arc<AppState> {
 fn create_budget_app(state: Arc<AppState>) -> impl Endpoint {
     Route::new()
         .at(
-            "/api-keys",
-            post(create_api_key_handler).get(get_api_keys).with(Auth),
-        )
-        .at(
-            "/api-keys/:api_key_id",
-            poem::delete(delete_api_key).with(Auth),
-        )
-        .at(
             "/budget",
             get(get_budget.with(Auth)).put(update_active_budget.with(Auth)),
         )
@@ -60,7 +46,7 @@ fn create_budget_app(state: Arc<AppState>) -> impl Endpoint {
         .at(
             "/budget/spending",
             get(get_spending.with(Auth))
-                .post(create_spending.with(JwtOrApiKeyAuth))
+                .post(create_spending.with(Auth))
                 .delete(delete_all_spending.with(Auth)),
         )
         .at(
@@ -745,161 +731,6 @@ async fn delete_all_spending_returns_no_content_without_active_budget() {
             .expect("failed to count reset-no-budget records");
     assert_eq!(remaining_for_owner, 0);
 }
-
-#[tokio::test]
-async fn api_key_can_create_spending_for_its_owner_and_updates_last_used_at() {
-    let state = create_test_state().await;
-    let cli = TestClient::new(create_budget_app(state.clone()));
-    create_user(&state.db, "macro-user", "password", "user")
-        .await
-        .expect("failed to create user");
-
-    cli.post("/budget/plan")
-        .header("Authorization", issue_access_token("macro-user", "user"))
-        .body_json(&json!({
-            "total_budget": 1000,
-            "from_date": "2026-04-01",
-            "to_date": "2026-04-30"
-        }))
-        .send()
-        .await
-        .assert_status_is_ok();
-
-    let create_key = cli
-        .post("/api-keys")
-        .header("Authorization", issue_access_token("macro-user", "user"))
-        .body_json(&json!({"name": "macrodroid phone"}))
-        .send()
-        .await;
-    create_key.assert_status(StatusCode::CREATED);
-    let create_json = create_key.json().await;
-    let api_key = create_json
-        .value()
-        .object()
-        .get("api_key")
-        .string()
-        .to_string();
-    let api_key_id = create_json.value().object().get("id").i64();
-
-    cli.post("/budget/spending")
-        .header("X-API-Key", &api_key)
-        .body_json(&json!({
-            "amount": 200,
-            "merchant": "coffee",
-            "transacted_at": "2026-04-02T12:00:00"
-        }))
-        .send()
-        .await
-        .assert_status(StatusCode::CREATED);
-
-    let owner: String =
-        query_scalar("SELECT owner_user_id FROM spending_records ORDER BY record_id DESC LIMIT 1")
-            .fetch_one(&state.db)
-            .await
-            .expect("failed to fetch spending owner");
-    assert_eq!(owner, "macro-user");
-
-    let last_used_at: Option<String> =
-        query_scalar("SELECT last_used_at FROM api_keys WHERE api_key_id = ?")
-            .bind(api_key_id)
-            .fetch_one(&state.db)
-            .await
-            .expect("failed to fetch api key last_used_at");
-    assert!(last_used_at.is_some());
-}
-
-#[tokio::test]
-async fn api_keys_are_listed_without_plaintext_and_revoked_keys_stop_working() {
-    let state = create_test_state().await;
-    let cli = TestClient::new(create_budget_app(state.clone()));
-    create_user(&state.db, "owner", "password", "user")
-        .await
-        .expect("failed to create owner");
-    create_user(&state.db, "other", "password", "user")
-        .await
-        .expect("failed to create other");
-
-    cli.post("/budget/plan")
-        .header("Authorization", issue_access_token("owner", "user"))
-        .body_json(&json!({
-            "total_budget": 1500,
-            "from_date": "2026-04-01",
-            "to_date": "2026-04-30"
-        }))
-        .send()
-        .await
-        .assert_status_is_ok();
-
-    let create_response = cli
-        .post("/api-keys")
-        .header("Authorization", issue_access_token("owner", "user"))
-        .body_json(&json!({"name": "android"}))
-        .send()
-        .await;
-    create_response.assert_status(StatusCode::CREATED);
-    let create_json = create_response.json().await;
-    let api_key = create_json
-        .value()
-        .object()
-        .get("api_key")
-        .string()
-        .to_string();
-    let api_key_id = create_json.value().object().get("id").i64();
-
-    let list_response = cli
-        .get("/api-keys")
-        .header("Authorization", issue_access_token("owner", "user"))
-        .send()
-        .await;
-    list_response.assert_status_is_ok();
-    let list_body = list_response
-        .0
-        .into_body()
-        .into_string()
-        .await
-        .expect("failed to read list response body");
-    assert!(!list_body.contains(&api_key));
-    let list_json: serde_json::Value =
-        serde_json::from_str(&list_body).expect("failed to parse list response json");
-    let items = list_json["api_keys"]
-        .as_array()
-        .expect("api_keys should be an array");
-    assert_eq!(items.len(), 1);
-    assert_eq!(items[0]["name"], "android");
-    assert_eq!(items[0]["id"], api_key_id);
-
-    cli.delete(&format!("/api-keys/{}", api_key_id))
-        .header("Authorization", issue_access_token("other", "user"))
-        .send()
-        .await
-        .assert_status(StatusCode::NOT_FOUND);
-
-    cli.delete(&format!("/api-keys/{}", api_key_id))
-        .header("Authorization", issue_access_token("owner", "user"))
-        .send()
-        .await
-        .assert_status(StatusCode::NO_CONTENT);
-
-    cli.post("/budget/spending")
-        .header("X-API-Key", &api_key)
-        .body_json(&json!({
-            "amount": 100,
-            "merchant": "blocked",
-            "transacted_at": "2026-04-02T12:00:00"
-        }))
-        .send()
-        .await
-        .assert_status(StatusCode::UNAUTHORIZED);
-
-    let revoked_at: Option<String> =
-        query_scalar("SELECT revoked_at FROM api_keys WHERE api_key_id = ?")
-            .bind(api_key_id)
-            .fetch_one(&state.db)
-            .await
-            .expect("failed to fetch revoked_at");
-    assert!(revoked_at.is_some());
-}
-
 
 #[tokio::test]
 async fn init_db_leaves_stale_spending_temp_table_alone_when_schema_is_current() {

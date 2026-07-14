@@ -173,46 +173,6 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
     .await
     .map_err(InternalServerError)?;
 
-    // api_keys
-    query(
-        r#"
-        CREATE TABLE IF NOT EXISTS api_keys (
-            api_key_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT NOT NULL,
-            name TEXT NOT NULL,
-            key_lookup TEXT NOT NULL,
-            key_hash TEXT NOT NULL,
-            user_role TEXT NOT NULL DEFAULT 'user',
-            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            last_used_at DATETIME,
-            revoked_at DATETIME
-        )
-        "#,
-    )
-    .execute(pool)
-    .await
-    .map_err(InternalServerError)?;
-
-    query(
-        r#"
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_lookup
-        ON api_keys(key_lookup)
-        "#,
-    )
-    .execute(pool)
-    .await
-    .map_err(InternalServerError)?;
-
-    query(
-        r#"
-        CREATE INDEX IF NOT EXISTS idx_api_keys_user_id
-        ON api_keys(user_id)
-        "#,
-    )
-    .execute(pool)
-    .await
-    .map_err(InternalServerError)?;
-
     // user_matches
     query(
         r#"

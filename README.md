@@ -5,21 +5,27 @@ Rust + Poem + SQLite로 만든 개인용 CMS API 서버입니다.
 
 ## 이 프로젝트의 목적
 
-이 API는 크게 두 가지를 해결하기 위해 만들어졌습니다.
+이 API는 크게 다음을 해결하기 위해 만들어졌습니다.
 
 - 블로그 운영: 포스트/태그/이미지/포트폴리오 데이터를 CMS 형태로 관리
 - 소비 추적: 기간 총예산 설정, 지출 기록, 예산 요약 및 기간별 계산
+- 알림 허브: 구독한 RSS 소스의 새 글을 감지하고 구독 브라우저로 Web Push 전송
+- 1:1 매칭 & 메시지: 유저 간 단일 매칭 상태 머신 + 매칭된 두 유저 사이의 단순 메시지 저장소
 
-즉, "공용 SaaS형 CMS"보다는 "개인 콘텐츠 + 개인 소비 관리"에 최적화된 구조입니다.
+즉, "공용 SaaS형 CMS"보다는 "개인 콘텐츠 + 개인 소비 관리 + 개인용 알림·매칭"에 최적화된 구조입니다.
 
 ## Tech Stack
 
 - Rust (Edition 2021)
 - Poem
-- SQLx (SQLite)
+- SQLx (SQLite, 컴파일 타임 쿼리 검증)
 - Tokio
 - JWT (`jsonwebtoken`)
 - bcrypt
+- `web-push` (VAPID Web Push 발송)
+- `feed-rs` (RSS/Atom 파싱 워커)
+- `calamine` (신한카드 XLS 파싱)
+- `reqwest` (Google `tokeninfo`, GitHub `repository_dispatch` 호출)
 
 ## 빠른 시작
 
@@ -92,17 +98,6 @@ cargo run -q
 `Authorization` 헤더에 JWT 액세스 토큰을 넣어 호출합니다.
 관리자/작성자 권한이 필요한 CMS 수정 계열 API와 일부 Budget 설정 API에서 사용됩니다.
 
-### API Key 인증 (`X-API-Key`)
-
-API Key는 유저별로 여러 개 발급할 수 있고, 원문은 발급 시 1회만 반환됩니다.
-DB에는 bcrypt 해시만 저장하며 `name`, `created_at`, `last_used_at`, `revoked_at`를 관리합니다.
-
-인증 규칙은 다음과 같습니다.
-
-- 대부분의 관리/조회 API: JWT(`Authorization`) 사용
-- `POST /budget/spending`: JWT 또는 `X-API-Key` 둘 다 허용
-- API Key 관리 API(`POST /api-keys`, `GET /api-keys`, `DELETE /api-keys/:id`): JWT 필요
-
 `POST /budget/spending`은 request body의 `user_id`를 신뢰하지 않고, 항상 인증 컨텍스트의 `user_id`를 사용합니다.
 
 ## API 개요
@@ -129,15 +124,6 @@ CORS preflight 처리.
 
 - `POST /admin/add-user` (JWT)
 신규 사용자 계정 추가(비밀번호 해시 저장).
-
-- `POST /api-keys` (JWT)
-현재 로그인한 유저용 API Key 발급. 원문 API key는 이 응답에서만 반환.
-
-- `GET /api-keys` (JWT)
-현재 로그인한 유저가 발급한 API key 목록 조회.
-
-- `DELETE /api-keys/:id` (JWT)
-현재 로그인한 유저의 API key 폐기(revoke).
 
 ### Posts / Tags (CMS)
 
@@ -173,14 +159,65 @@ blog 대상 포스트 판정은 `status != draft` 이고 `dev` 태그가 없는 
 
 ### Images / Portfolio
 
-- `POST /upload-image` (JWT)
-이미지 업로드 후 웹 경로(`/images/...`) 반환.
+- `POST /upload-image` (JWT) / `POST /images/upload` (JWT)
+이미지 업로드 후 웹 경로(`/images/...`) 반환. 두 경로 모두 동일 핸들러.
 
 - `GET /portfolio`
-포트폴리오 콘텐츠 조회.
+포트폴리오 콘텐츠 조회. DB 스키마는 `portfolio_section` 테이블로 분리되어 있지만, 응답은 기존 단일 문서 형태로 병합되어 호환성을 유지한다.
 
-- `PUT /portfolio/update` (JWT)
-포트폴리오 콘텐츠 수정.
+- `PUT /portfolio` / `PUT /portfolio/update` (JWT, Admin)
+포트폴리오 콘텐츠 전체 수정. `/portfolio/update`는 레거시 경로.
+
+- `PUT /portfolio/sections/:section_key` (JWT, Admin)
+포트폴리오 섹션(`intro`, `career`, `featured_projects` 등)만 부분 업데이트. 단일 JSON을 통째로 덮어쓰지 않고 섹션 단위로 저장해 동시 편집 충돌과 요청 크기를 줄인다.
+
+- `DELETE /portfolio` (JWT, Admin)
+포트폴리오 초기화.
+
+### Me / Profile
+
+- `GET /me` (JWT) — 현재 로그인 사용자 정보.
+- `PUT /me/profile` (JWT) — 프로필 수정 (display_name, avatar, bio 등). Google 로그인 직후 기본값 자동 병합.
+
+### 1:1 매칭 & 메시지
+
+- `POST /match/request` (JWT)
+다른 유저에게 1:1 매칭을 신청한다(`pending`). 한 유저는 동시에 하나의 활성 매칭만 가질 수 있다.
+
+- `POST /match/:match_id/respond` (JWT)
+대상 유저가 `accept` 또는 `reject`로 응답한다. 대상 유저만 응답 가능.
+
+- `GET /match/me` (JWT)
+현재 활성 매칭 + 상대 유저 프로필 요약 조회.
+
+- `DELETE /match/me` (JWT)
+본인 기준 활성 매칭을 종료한다. `pending`이면 `cancelled`, `matched`이면 `unmatched`로 전환.
+
+- `GET /match/messages` (JWT)
+`matched` 상태인 경우에 한해 두 유저 사이 메시지를 시간순으로 조회.
+
+- `POST /match/messages` (JWT)
+`matched` 상태에서 상대에게 메시지 저장. (브라우저 push 연동은 대시보드 측 구독이 있을 때 전송)
+
+상태 머신:
+```
+pending  --accept-->  matched  --unmatch-->  unmatched
+pending  --reject-->  rejected
+pending  --cancel-->  cancelled
+```
+
+### RSS 구독 / Feed / Web Push
+
+- `GET /rss-sources` (JWT) — 내가 구독한 RSS 소스 목록.
+- `POST /rss-sources` (JWT) — RSS 소스 추가(중복 URL은 기존 소스와 공유 + 구독 레코드만 생성).
+- `DELETE /rss-sources/:source_id/subscription` (JWT) — 구독 해지(소스는 다른 유저가 구독 중이면 유지).
+- `GET /feed/items` (JWT) — 구독 소스들의 최신 feed 아이템을 오프셋 페이지네이션으로 조회(`limit`, `offset`).
+- `GET /push/public-key` — VAPID 공개키 반환. 환경변수가 비어 있으면 503.
+- `GET /push/subscriptions` (JWT) — 현재 유저의 Web Push 구독 목록.
+- `POST /push/subscriptions` (JWT) — 브라우저의 PushSubscription upsert.
+- `DELETE /push/subscriptions` (JWT) — 구독 해제.
+
+백그라운드 RSS 폴링 워커(`rss_push.rs`)가 주기적으로 새 feed 아이템을 감지하고, 구독 브라우저의 PushSubscription으로 VAPID 서명된 Web Push를 발송한다.
 
 ### Budget
 
@@ -199,7 +236,7 @@ blog 대상 포스트 판정은 `status != draft` 이고 `dev` 태그가 없는 
 - `GET /budget/spending`
 현재 활성 예산 기간의 소비 기록을 조회하고, 응답에서만 ISO week 기준으로 그룹핑한다.
 
-- `POST /budget/spending` (JWT or API Key)
+- `POST /budget/spending` (JWT)
 소비 기록 생성 및 기간 누적/남은 예산 계산.
 `transacted_at`는 현재 활성 예산 기간 안에 있어야 합니다.
 
@@ -280,31 +317,6 @@ curl -sS -X POST http://127.0.0.1:8080/login/google \
   -d '{"id_token":"GOOGLE_ID_TOKEN_FROM_FRONTEND"}'
 ```
 
-### API Key 발급
-
-```bash
-curl -sS -X POST http://127.0.0.1:8080/api-keys \
-  -H "Authorization: $ACCESS_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"macrodroid-main-phone"}'
-```
-
-응답의 `api_key` 값은 이때만 확인할 수 있습니다.
-
-### API Key 목록 조회
-
-```bash
-curl -sS http://127.0.0.1:8080/api-keys \
-  -H "Authorization: $ACCESS_TOKEN"
-```
-
-### API Key 폐기
-
-```bash
-curl -sS -X DELETE http://127.0.0.1:8080/api-keys/1 \
-  -H "Authorization: $ACCESS_TOKEN"
-```
-
 ### JWT로 소비 기록 생성
 
 ```bash
@@ -314,11 +326,16 @@ curl -sS -X POST http://127.0.0.1:8080/budget/spending \
   -d '{"amount":12000,"merchant":"CU 역삼신웅점","transacted_at":"2026-03-03T12:20:00"}'
 ```
 
-### API Key로 소비 기록 생성
+## 설계 메모
 
-```bash
-curl -sS -X POST http://127.0.0.1:8080/budget/spending \
-  -H "X-API-Key: $MACRODROID_USER_API_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{"amount":12000,"merchant":"CU 역삼신웅점","transacted_at":"2026-03-03T12:20:00"}'
-```
+- **권한 스코핑**: 모든 수정/조회 API는 미들웨어로 `current_user()`를 주입받아 `user_id` 소유권을 일관되게 검증한다. 관리자 전용 엔드포인트는 `AdminOnly` 미들웨어가 role까지 확인한다.
+- **포트폴리오 DB 마이그레이션**: 초기에는 `portfolio_documents`에 단일 JSON을 저장했으나, 섹션 단위 편집 UX가 필요해지면서 `portfolio_section(section_key, content_json)` 테이블로 분리. 응답 스키마는 기존 클라이언트 호환성을 위해 런타임에 섹션들을 병합해 단일 문서로 내린다.
+- **신한카드 XLS import**: `preview → commit` 2단계. preview 단계에서 각 행에 `fingerprint`(거래일+금액+가맹점 기반 SHA2)를 계산해 내려주고, commit 시 `selected_fingerprints`만 반영한다. DB에 `source_type='shinhancard_xls'` + `source_fingerprint`를 남겨 같은 거래 재업로드 시 중복 저장을 막는다.
+- **블로그 재배포 트리거**: 포스트 publish/update/delete 후 `dev` 태그가 없는 경우에 한해 `tyange-blog` 저장소의 GitHub `repository_dispatch`(`event_type=cms-content-changed`)를 호출해 블로그를 재배포한다. dispatch 호출 실패는 로그만 남기고 CMS 저장은 유지한다.
+- **Web Push 옵셔널 구동**: VAPID 환경변수가 모두 설정되어야 RSS 폴링 워커가 브라우저 푸시를 실제 발송한다. 부분 설정이면 공개키 엔드포인트가 503으로 응답하고 워커는 아이템 저장만 수행한다.
+
+## 테스트 커버리지 하이라이트
+
+- `match_flow_test.rs` — 요청 → accept/reject → 메시지 전송 → unmatch 전 과정 통합 테스트 (in-memory SQLite).
+- `portfolio_routes_test.rs` — 포트폴리오 섹션 분리 이후 응답 호환성 및 부분 업데이트 검증.
+- `feed_items_test.rs`, `budget_spending_scope_test.rs`, `post_authorization_test.rs` — 소유권 스코핑·권한 경계 회귀 방지.

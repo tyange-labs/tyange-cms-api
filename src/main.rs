@@ -12,18 +12,15 @@ mod utils;
 
 use dotenv::dotenv;
 use middlewares::admin_middleware::AdminOnly;
-use middlewares::api_key_middleware::JwtOrApiKeyAuth;
 use middlewares::auth_middleware::Auth;
 use std::{env, fs, sync::Arc};
 
-use crate::routes::create_api_key::create_api_key_handler;
 use crate::routes::create_budget_plan::create_budget_plan;
 use crate::routes::create_match::create_match;
 use crate::routes::create_match_message::create_match_message;
 use crate::routes::create_rss_source::create_rss_source;
 use crate::routes::create_spending::create_spending;
 use crate::routes::delete_all_spending::delete_all_spending;
-use crate::routes::delete_api_key::delete_api_key;
 use crate::routes::delete_my_match::delete_my_match;
 use crate::routes::delete_portfolio::delete_portfolio;
 use crate::routes::delete_post::delete_post;
@@ -31,7 +28,6 @@ use crate::routes::delete_push_subscription::delete_push_subscription;
 use crate::routes::delete_rss_subscription::delete_rss_subscription;
 use crate::routes::delete_spending::delete_spending;
 use crate::routes::get_all_posts::get_all_posts;
-use crate::routes::get_api_keys::get_api_keys;
 use crate::routes::get_budget::get_budget;
 use crate::routes::get_count_with_tags::get_count_with_tags;
 use crate::routes::get_feed_items::get_feed_items;
@@ -202,11 +198,6 @@ async fn main() -> Result<(), std::io::Error> {
                 get(get_all_posts).with(AdminOnly).with(Auth),
             )
             .at(
-                "/api-keys",
-                post(create_api_key_handler).get(get_api_keys).with(Auth),
-            )
-            .at("/api-keys/:api_key_id", delete(delete_api_key).with(Auth))
-            .at(
                 "/budget",
                 get(get_budget.with(Auth)).put(update_active_budget.with(Auth)),
             )
@@ -214,7 +205,7 @@ async fn main() -> Result<(), std::io::Error> {
             .at(
                 "/budget/spending",
                 get(get_spending.with(Auth))
-                    .post(create_spending.with(JwtOrApiKeyAuth))
+                    .post(create_spending.with(Auth))
                     .delete(delete_all_spending.with(Auth)),
             )
             .at(
@@ -247,7 +238,7 @@ async fn main() -> Result<(), std::io::Error> {
             .allow_origin("https://dashboard.tyange.com")
             .allow_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
             .allow_credentials(true)
-            .allow_headers(vec!["authorization", "x-api-key", "content-type", "accept"]),
+            .allow_headers(vec!["authorization", "content-type", "accept"]),
     );
 
     Server::new(TcpListener::bind("0.0.0.0:8080"))
