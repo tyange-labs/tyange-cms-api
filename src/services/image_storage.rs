@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use poem::{http::StatusCode, web::Field, Error};
-use sqlx::{query, SqlitePool};
+use sqlx::{query, query_as, SqlitePool};
 use tokio::{fs, io::AsyncReadExt};
 use uuid::Uuid;
 
@@ -62,6 +62,15 @@ pub struct StoredImage {
     pub web_path: String,
 }
 
+/// images 테이블에 기록할 메타데이터. 파일 자체와 무관한 값들.
+pub struct ImageRecord {
+    pub post_id: Option<String>,
+    pub image_type: String,
+    pub uploader_ip: Option<String>,
+    /// 'confirmed'(인증 업로드) 또는 'pending'(익명 업로드, 미확정 시 정리 대상)
+    pub status: &'static str,
+}
+
 #[derive(Debug)]
 pub enum ImageStoreError {
     Empty,
@@ -116,13 +125,14 @@ impl From<ImageStoreError> for Error {
 /// - policy.max_bytes를 초과하면 전체를 메모리에 올리기 전에 중단
 /// - 포맷은 매직 바이트로 판별하고 policy.allowed_formats 화이트리스트로 검증
 /// - 저장 확장자와 mime_type은 판별된 실제 포맷에서만 도출 (유저 입력 미사용)
+/// - web_prefix는 정적 서빙 기준 경로 (예: "/images", "/images/public")
 pub async fn store_image(
     field: Field,
     policy: &ImageUploadPolicy,
     db: &SqlitePool,
-    post_id: Option<String>,
-    image_type: String,
+    record: ImageRecord,
     upload_dir: &Path,
+    web_prefix: &str,
 ) -> Result<StoredImage, ImageStoreError> {
     let origin_filename = field
         .file_name()
@@ -171,17 +181,19 @@ pub async fn store_image(
 
     query(
         r#"
-        INSERT INTO images (image_id, post_id, file_name, origin_name, file_path, mime_type, image_type)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO images (image_id, post_id, file_name, origin_name, file_path, mime_type, image_type, uploader_ip, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(&image_id)
-    .bind(&post_id)
+    .bind(&record.post_id)
     .bind(&file_name)
     .bind(&origin_filename)
     .bind(file_path.to_str())
     .bind(format.mime_type())
-    .bind(&image_type)
+    .bind(&record.image_type)
+    .bind(&record.uploader_ip)
+    .bind(record.status)
     .execute(db)
     .await
     .map_err(|err| {
@@ -191,13 +203,46 @@ pub async fn store_image(
 
     println!("이미지 저장 완료: {}", file_path.display());
 
-    let web_path = format!("/images/{}", file_name);
+    let web_path = format!("{}/{}", web_prefix, file_name);
 
     Ok(StoredImage {
         image_id,
         file_name,
         web_path,
     })
+}
+
+/// 24시간 넘게 pending 상태로 남은 익명 업로드를 파일과 함께 삭제한다.
+/// 파일 삭제에 실패하면 레코드를 남겨 다음 주기에 재시도한다.
+pub async fn purge_stale_pending_images(db: &SqlitePool) -> Result<u64, sqlx::Error> {
+    let stale: Vec<(String, String)> = query_as(
+        r#"
+        SELECT image_id, file_path FROM images
+        WHERE status = 'pending' AND uploaded_at <= datetime('now', '-24 hours')
+        "#,
+    )
+    .fetch_all(db)
+    .await?;
+
+    let mut removed = 0u64;
+    for (image_id, file_path) in stale {
+        match fs::remove_file(&file_path).await {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                eprintln!("pending 이미지 파일 삭제 실패 ({}): {}", file_path, e);
+                continue;
+            }
+        }
+
+        query("DELETE FROM images WHERE image_id = ?")
+            .bind(&image_id)
+            .execute(db)
+            .await?;
+        removed += 1;
+    }
+
+    Ok(removed)
 }
 
 #[cfg(test)]

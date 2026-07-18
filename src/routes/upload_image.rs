@@ -9,7 +9,7 @@ use poem::{
 use tyange_cms_api::auth::authorization::current_user;
 
 use crate::models::{AppState, CustomResponse, UploadImageQueryParmas, UploadImageResponse};
-use crate::services::image_storage::{store_image, ImageFormat, ImageUploadPolicy};
+use crate::services::image_storage::{store_image, ImageFormat, ImageRecord, ImageUploadPolicy};
 
 const AUTHENTICATED_UPLOAD_POLICY: ImageUploadPolicy = ImageUploadPolicy {
     max_bytes: 10 * 1024 * 1024,
@@ -45,9 +45,14 @@ pub async fn upload_image(
             field,
             &AUTHENTICATED_UPLOAD_POLICY,
             &data.db,
-            params.post_id.clone(),
-            image_type,
+            ImageRecord {
+                post_id: params.post_id.clone(),
+                image_type,
+                uploader_ip: None,
+                status: "confirmed",
+            },
             &upload_dir,
+            "/images",
         )
         .await?;
 

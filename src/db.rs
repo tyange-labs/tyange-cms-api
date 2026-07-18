@@ -34,6 +34,8 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
             mime_type TEXT NOT NULL,
             image_type TEXT NOT NULL,
             uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            uploader_ip TEXT,
+            status TEXT NOT NULL DEFAULT 'confirmed',
             FOREIGN KEY (post_id) REFERENCES posts(post_id)
         )
         "#,
@@ -41,6 +43,14 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
     .execute(pool)
     .await
     .map_err(InternalServerError)?;
+
+    // 기존 DB 마이그레이션: 컬럼이 이미 있으면 duplicate column 에러가 나므로 무시
+    for stmt in [
+        "ALTER TABLE images ADD COLUMN uploader_ip TEXT",
+        "ALTER TABLE images ADD COLUMN status TEXT NOT NULL DEFAULT 'confirmed'",
+    ] {
+        let _ = query(stmt).execute(pool).await;
+    }
 
     // users
     query(

@@ -19,3 +19,9 @@ Rust + Poem 프레임워크. cargo 사용.
   - 사용 중인 섹션: meta, identity, featured_projects, career
   - 섹션별 개별 업데이트 엔드포인트: PUT /portfolio/sections/:section_key
   - 기존 API 응답 형태(PortfolioResponse)는 하위 호환 유지
+- 이미지 업로드 공통 코어 분리 + 익명 업로드 엔드포인트 추가 (2026-07-15)
+  - services::image_storage::store_image: 매직 바이트 포맷 검증(png/jpg/gif/webp, SVG 제거), 크기 상한 스트리밍 읽기, 확장자는 판별된 포맷에서 도출
+  - POST /images/upload (인증, 10MB) / POST /public/images/upload (익명, 3MB)
+  - 익명 업로드: ANONYMOUS_UPLOAD_ENABLED=true일 때만 활성(기본 꺼짐), IP당 rate limit(분당 5/시간당 30), status='pending'으로 저장 후 24시간 미확정 시 자동 정리
+  - images 테이블에 uploader_ip, status 컬럼 추가 (기존 행은 'confirmed')
+  - 프록시 뒤 운영 시 TRUST_PROXY_FORWARDED_FOR=true 설정 필요 (rate limit IP 식별)
