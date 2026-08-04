@@ -20,17 +20,14 @@ pub mod update_portfolio;
 pub mod update_portfolio_section;
 pub mod update_post;
 pub mod upload_image;
-pub mod upload_image_public;
 pub mod upload_post;
 pub mod upsert_push_subscription;
 
 #[cfg(test)]
-mod post_authorization_test;
-#[cfg(test)]
 mod portfolio_routes_test;
 #[cfg(test)]
-mod signup_test;
+mod post_authorization_test;
 #[cfg(test)]
-mod upload_image_public_test;
+mod signup_test;
 #[cfg(test)]
 mod upload_image_test;

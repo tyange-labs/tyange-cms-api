@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use poem::{http::StatusCode, web::Field, Error};
-use sqlx::{query, query_as, SqlitePool};
+use sqlx::{query, SqlitePool};
 use tokio::{fs, io::AsyncReadExt};
 use uuid::Uuid;
 
@@ -210,39 +210,6 @@ pub async fn store_image(
         file_name,
         web_path,
     })
-}
-
-/// 24시간 넘게 pending 상태로 남은 익명 업로드를 파일과 함께 삭제한다.
-/// 파일 삭제에 실패하면 레코드를 남겨 다음 주기에 재시도한다.
-pub async fn purge_stale_pending_images(db: &SqlitePool) -> Result<u64, sqlx::Error> {
-    let stale: Vec<(String, String)> = query_as(
-        r#"
-        SELECT image_id, file_path FROM images
-        WHERE status = 'pending' AND uploaded_at <= datetime('now', '-24 hours')
-        "#,
-    )
-    .fetch_all(db)
-    .await?;
-
-    let mut removed = 0u64;
-    for (image_id, file_path) in stale {
-        match fs::remove_file(&file_path).await {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => {
-                eprintln!("pending 이미지 파일 삭제 실패 ({}): {}", file_path, e);
-                continue;
-            }
-        }
-
-        query("DELETE FROM images WHERE image_id = ?")
-            .bind(&image_id)
-            .execute(db)
-            .await?;
-        removed += 1;
-    }
-
-    Ok(removed)
 }
 
 #[cfg(test)]

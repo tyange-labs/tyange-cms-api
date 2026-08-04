@@ -29,11 +29,7 @@ use crate::routes::update_portfolio::update_portfolio;
 use crate::routes::update_portfolio_section::update_portfolio_section;
 use crate::routes::update_post::update_post;
 use crate::routes::upload_image::upload_image;
-use crate::routes::upload_image_public::upload_image_public;
 use crate::routes::upsert_push_subscription::upsert_push_subscription;
-use crate::services::image_storage::purge_stale_pending_images;
-use middlewares::rate_limit::RateLimit;
-use std::time::Duration;
 use crate::{models::AppState, routes::add_user::add_user};
 use db::init_db;
 use poem::{
@@ -94,22 +90,6 @@ async fn main() -> Result<(), std::io::Error> {
 
     let state = Arc::new(AppState::new(db));
 
-    // 24시간 넘게 pending 상태인 익명 업로드를 1시간 주기로 정리
-    let cleanup_state = state.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(3600));
-        loop {
-            interval.tick().await;
-            match purge_stale_pending_images(&cleanup_state.db).await {
-                Ok(removed) if removed > 0 => {
-                    println!("pending 이미지 {}건 정리 완료", removed);
-                }
-                Ok(_) => {}
-                Err(e) => eprintln!("pending 이미지 정리 실패: {}", e),
-            }
-        }
-    });
-
     fn configure_routes() -> Route {
         let upload_base_path = env::var("UPLOAD_PATH").unwrap_or(String::from(".uploads/images"));
         let upload_max_bytes = upload_size_limit();
@@ -137,9 +117,7 @@ async fn main() -> Result<(), std::io::Error> {
             )
             .at(
                 "/portfolio/sections/:section_key",
-                put(update_portfolio_section)
-                    .with(AdminOnly)
-                    .with(Auth),
+                put(update_portfolio_section).with(AdminOnly).with(Auth),
             )
             .at(
                 "/upload-image",
@@ -152,14 +130,6 @@ async fn main() -> Result<(), std::io::Error> {
                 post(upload_image)
                     .with(SizeLimit::new(upload_max_bytes))
                     .with(Auth),
-            )
-            .at(
-                // 익명 업로드: rate limit이 가장 바깥에서 모든 시도를 카운트
-                "/public/images/upload",
-                post(upload_image_public)
-                    .with(SizeLimit::new(4 * 1024 * 1024))
-                    .with(RateLimit::new(30, Duration::from_secs(3600)))
-                    .with(RateLimit::new(5, Duration::from_secs(60))),
             )
             .at("/login", post(login))
             .at("/login/google", post(login_google))

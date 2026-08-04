@@ -6,14 +6,6 @@ use crate::blog_redeploy::BlogRedeployService;
 pub struct AppState {
     pub db: Pool<Sqlite>,
     pub blog_redeploy: BlogRedeployService,
-    /// 익명 이미지 업로드 킬 스위치. ANONYMOUS_UPLOAD_ENABLED=true일 때만 활성.
-    pub anonymous_upload_enabled: bool,
-}
-
-fn anonymous_upload_enabled_from_env() -> bool {
-    std::env::var("ANONYMOUS_UPLOAD_ENABLED")
-        .map(|value| value == "true")
-        .unwrap_or(false)
 }
 
 impl AppState {
@@ -21,17 +13,12 @@ impl AppState {
         Self {
             db,
             blog_redeploy: BlogRedeployService::from_env(),
-            anonymous_upload_enabled: anonymous_upload_enabled_from_env(),
         }
     }
 
     #[cfg(test)]
     pub fn new_with_blog_redeploy(db: Pool<Sqlite>, blog_redeploy: BlogRedeployService) -> Self {
-        Self {
-            db,
-            blog_redeploy,
-            anonymous_upload_enabled: false,
-        }
+        Self { db, blog_redeploy }
     }
 }
 
