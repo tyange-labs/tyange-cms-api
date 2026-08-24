@@ -10,8 +10,10 @@ mod web_push;
 use dotenv::dotenv;
 use middlewares::admin_middleware::AdminOnly;
 use middlewares::auth_middleware::Auth;
-use std::{env, fs, sync::Arc};
+use middlewares::rate_limit::RateLimit;
+use std::{env, fs, sync::Arc, time::Duration};
 
+use crate::routes::create_wedding_guest::create_wedding_guest;
 use crate::routes::delete_portfolio::delete_portfolio;
 use crate::routes::delete_post::delete_post;
 use crate::routes::delete_push_subscription::delete_push_subscription;
@@ -22,6 +24,7 @@ use crate::routes::get_posts_with_tags::get_posts_with_tags;
 use crate::routes::get_push_public_key::get_push_public_key;
 use crate::routes::get_push_subscriptions::get_push_subscriptions;
 use crate::routes::get_tags_with_category::get_tags_with_category;
+use crate::routes::get_wedding_guests::get_wedding_guests;
 use crate::routes::me::me;
 use crate::routes::signup::signup;
 use crate::routes::update_my_profile::update_my_profile;
@@ -58,6 +61,9 @@ async fn options_handler() -> Response {
 }
 
 const DEFAULT_UPLOAD_MAX_BYTES: usize = 20 * 1024 * 1024;
+
+/// RSVP 본문은 name + companions 두 필드뿐이라 넉넉히 잡아도 4KB면 충분하다.
+const RSVP_MAX_BYTES: usize = 4 * 1024;
 
 fn upload_size_limit() -> usize {
     env::var("UPLOAD_MAX_BYTES")
@@ -144,7 +150,18 @@ async fn main() -> Result<(), std::io::Error> {
                     .with(Auth),
             )
             .at("/push/public-key", get(get_push_public_key))
+            .at(
+                "/public/wedding/guests",
+                post(create_wedding_guest)
+                    .with(SizeLimit::new(RSVP_MAX_BYTES))
+                    .with(RateLimit::new(5, Duration::from_secs(60)))
+                    .with(RateLimit::new(30, Duration::from_secs(60 * 60))),
+            )
             .at("/admin/add-user", post(add_user).with(AdminOnly).with(Auth))
+            .at(
+                "/admin/wedding/guests",
+                get(get_wedding_guests).with(AdminOnly).with(Auth),
+            )
             .at(
                 "/admin/posts",
                 get(get_all_posts).with(AdminOnly).with(Auth),
@@ -161,6 +178,7 @@ async fn main() -> Result<(), std::io::Error> {
             .allow_origin("https://cms.tyange.com")
             .allow_origin("https://blog.tyange.com")
             .allow_origin("https://dashboard.tyange.com")
+            .allow_origin("https://lovelog.tyange.com")
             .allow_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
             .allow_credentials(true)
             .allow_headers(vec!["authorization", "content-type", "accept"]),

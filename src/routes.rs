@@ -1,4 +1,5 @@
 pub mod add_user;
+pub mod create_wedding_guest;
 pub mod delete_portfolio;
 pub mod delete_post;
 pub mod delete_push_subscription;
@@ -11,6 +12,7 @@ pub mod get_posts_with_tags;
 pub mod get_push_public_key;
 pub mod get_push_subscriptions;
 pub mod get_tags_with_category;
+pub mod get_wedding_guests;
 pub mod login;
 pub mod login_google;
 pub mod me;
@@ -31,3 +33,5 @@ mod post_authorization_test;
 mod signup_test;
 #[cfg(test)]
 mod upload_image_test;
+#[cfg(test)]
+mod wedding_guest_test;

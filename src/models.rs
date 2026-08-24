@@ -350,3 +350,30 @@ pub struct WebPushSubscriptionListResponse {
 pub struct PublicPushKeyResponse {
     pub public_key: String,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct CreateWeddingGuestRequest {
+    pub name: String,
+    #[serde(default)]
+    pub companions: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateWeddingGuestResponse {
+    pub guest_id: i64,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct WeddingGuest {
+    pub guest_id: i64,
+    pub name: String,
+    pub companions: i64,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WeddingGuestListResponse {
+    pub guests: Vec<WeddingGuest>,
+    pub total_guests: i64,
+    pub total_attendees: i64,
+}

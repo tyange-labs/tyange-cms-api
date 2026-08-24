@@ -34,6 +34,7 @@ jobs:
           echo VAPID_SUBJECT=${{ secrets.VAPID_SUBJECT }} >> .env
           echo MACRODROID_API_KEY=${{ secrets.MACRODROID_API_KEY }} >> .env
           echo TYANGE_BLOG_REDEPLOY_TOKEN=${{ secrets.TYANGE_BLOG_REDEPLOY_TOKEN }} >> .env
+          echo TRUST_PROXY_FORWARDED_FOR=true >> .env
           echo UPLOAD_PATH=${{ vars.UPLOAD_PATH }} >> .env
           echo DATABASE_PATH=${{ vars.DATABASE_PATH }} >> .env
 
