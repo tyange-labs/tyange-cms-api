@@ -18,6 +18,11 @@ use crate::{
 const NAME_MAX_LENGTH: usize = 20;
 const COMPANIONS_MAX: i64 = 10;
 
+/// 전시는 12시에 열고 5시에 닫는다. 하객이 고르는 값은 한 시간짜리 시간대의 시작 시각이라
+/// 마지막 칸(4-5시)의 시작인 16이 상한이다.
+const VISIT_HOUR_MIN: i64 = 12;
+const VISIT_HOUR_MAX: i64 = 16;
+
 #[handler]
 pub async fn create_wedding_guest(
     Json(payload): Json<CreateWeddingGuestRequest>,
@@ -42,19 +47,34 @@ pub async fn create_wedding_guest(
 
     if payload.companions < 0 || payload.companions > COMPANIONS_MAX {
         return Err(Error::from_string(
-            format!("동반 인원은 0명에서 {}명 사이로 입력해 주세요.", COMPANIONS_MAX),
+            format!(
+                "동반 인원은 0명에서 {}명 사이로 입력해 주세요.",
+                COMPANIONS_MAX
+            ),
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+
+    let visit_hour = payload.visit_hour.ok_or_else(|| {
+        Error::from_string("방문 예정 시간을 골라 주세요.", StatusCode::BAD_REQUEST)
+    })?;
+
+    if !(VISIT_HOUR_MIN..=VISIT_HOUR_MAX).contains(&visit_hour) {
+        return Err(Error::from_string(
+            "방문 예정 시간은 전시 시간 안에서 골라 주세요.",
             StatusCode::BAD_REQUEST,
         ));
     }
 
     let result = query(
         r#"
-        INSERT INTO wedding_guests (name, companions)
-        VALUES (?, ?)
+        INSERT INTO wedding_guests (name, companions, visit_hour)
+        VALUES (?, ?, ?)
         "#,
     )
     .bind(name)
     .bind(payload.companions)
+    .bind(visit_hour)
     .execute(&data.db)
     .await
     .map_err(|err| {

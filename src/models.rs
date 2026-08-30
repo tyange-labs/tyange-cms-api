@@ -356,6 +356,10 @@ pub struct CreateWeddingGuestRequest {
     pub name: String,
     #[serde(default)]
     pub companions: i64,
+    /// 방문 예정 시간대의 시작 시각(24시간제). 누락과 범위 밖 값을 구분해 안내하려고
+    /// Option으로 받고 핸들러에서 검사한다.
+    #[serde(default)]
+    pub visit_hour: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -368,6 +372,8 @@ pub struct WeddingGuest {
     pub guest_id: i64,
     pub name: String,
     pub companions: i64,
+    /// 시간대를 받기 전에 접수된 하객은 NULL이다.
+    pub visit_hour: Option<i64>,
     pub created_at: String,
 }
 

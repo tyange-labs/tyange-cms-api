@@ -45,7 +45,7 @@ async fn rsvp_submission_succeeds_without_auth() {
 
     let response = client
         .post("/public/wedding/guests")
-        .body_json(&json!({ "name": "  김하객  ", "companions": 2 }))
+        .body_json(&json!({ "name": "  김하객  ", "companions": 2, "visit_hour": 13 }))
         .send()
         .await;
 
@@ -62,7 +62,7 @@ async fn rsvp_defaults_companions_to_zero_when_omitted() {
 
     client
         .post("/public/wedding/guests")
-        .body_json(&json!({ "name": "김하객" }))
+        .body_json(&json!({ "name": "김하객", "visit_hour": 12 }))
         .send()
         .await
         .assert_status_is_ok();
@@ -75,7 +75,7 @@ async fn rsvp_rejects_invalid_payloads() {
     // 공백만 있는 이름
     client
         .post("/public/wedding/guests")
-        .body_json(&json!({ "name": "   ", "companions": 0 }))
+        .body_json(&json!({ "name": "   ", "companions": 0, "visit_hour": 12 }))
         .send()
         .await
         .assert_status(StatusCode::BAD_REQUEST);
@@ -83,7 +83,7 @@ async fn rsvp_rejects_invalid_payloads() {
     // 21자 이름 (바이트가 아니라 문자 수로 세는지 확인)
     client
         .post("/public/wedding/guests")
-        .body_json(&json!({ "name": "가".repeat(21), "companions": 0 }))
+        .body_json(&json!({ "name": "가".repeat(21), "companions": 0, "visit_hour": 12 }))
         .send()
         .await
         .assert_status(StatusCode::BAD_REQUEST);
@@ -91,7 +91,7 @@ async fn rsvp_rejects_invalid_payloads() {
     // 20자 이름은 통과해야 한다
     client
         .post("/public/wedding/guests")
-        .body_json(&json!({ "name": "가".repeat(20), "companions": 0 }))
+        .body_json(&json!({ "name": "가".repeat(20), "companions": 0, "visit_hour": 12 }))
         .send()
         .await
         .assert_status_is_ok();
@@ -99,10 +99,42 @@ async fn rsvp_rejects_invalid_payloads() {
     for companions in [-1, 11] {
         client
             .post("/public/wedding/guests")
-            .body_json(&json!({ "name": "김하객", "companions": companions }))
+            .body_json(&json!({ "name": "김하객", "companions": companions, "visit_hour": 12 }))
             .send()
             .await
             .assert_status(StatusCode::BAD_REQUEST);
+    }
+}
+
+#[tokio::test]
+async fn rsvp_rejects_missing_or_out_of_range_visit_hour() {
+    let client = TestClient::new(create_wedding_app(create_test_state().await));
+
+    // 시간대를 아예 보내지 않은 경우
+    client
+        .post("/public/wedding/guests")
+        .body_json(&json!({ "name": "김하객", "companions": 0 }))
+        .send()
+        .await
+        .assert_status(StatusCode::BAD_REQUEST);
+
+    // 전시 시간(12~17시) 밖. 16은 4-5시 칸의 시작이라 유효한 마지막 값이다.
+    for visit_hour in [11, 17] {
+        client
+            .post("/public/wedding/guests")
+            .body_json(&json!({ "name": "김하객", "companions": 0, "visit_hour": visit_hour }))
+            .send()
+            .await
+            .assert_status(StatusCode::BAD_REQUEST);
+    }
+
+    for visit_hour in [12, 16] {
+        client
+            .post("/public/wedding/guests")
+            .body_json(&json!({ "name": "김하객", "companions": 0, "visit_hour": visit_hour }))
+            .send()
+            .await
+            .assert_status_is_ok();
     }
 }
 
@@ -128,10 +160,10 @@ async fn guest_list_requires_admin() {
 async fn guest_list_returns_totals_for_admin() {
     let client = TestClient::new(create_wedding_app(create_test_state().await));
 
-    for (name, companions) in [("김하객", 2), ("이하객", 0)] {
+    for (name, companions, visit_hour) in [("김하객", 2, 13), ("이하객", 0, 16)] {
         client
             .post("/public/wedding/guests")
-            .body_json(&json!({ "name": name, "companions": companions }))
+            .body_json(&json!({ "name": name, "companions": companions, "visit_hour": visit_hour }))
             .send()
             .await
             .assert_status_is_ok();
@@ -157,4 +189,10 @@ async fn guest_list_returns_totals_for_admin() {
     assert!(guests
         .iter()
         .any(|guest| guest.object().get("name").string() == "김하객"));
+
+    let kim = guests
+        .iter()
+        .find(|guest| guest.object().get("name").string() == "김하객")
+        .expect("김하객이 명단에 있어야 한다");
+    assert_eq!(kim.object().get("visit_hour").i64(), 13);
 }

@@ -20,7 +20,7 @@ pub async fn get_wedding_guests(
 ) -> Result<Json<CustomResponse<WeddingGuestListResponse>>, Error> {
     let guests = query_as::<_, WeddingGuest>(
         r#"
-        SELECT guest_id, name, companions, created_at
+        SELECT guest_id, name, companions, visit_hour, created_at
         FROM wedding_guests
         ORDER BY created_at DESC, guest_id DESC
         "#,

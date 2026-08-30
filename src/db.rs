@@ -1,5 +1,5 @@
-use poem::{Result, error::InternalServerError};
-use sqlx::{SqlitePool, query};
+use poem::{error::InternalServerError, Result};
+use sqlx::{query, SqlitePool};
 
 pub async fn init_db(pool: &SqlitePool) -> Result<()> {
     // posts
@@ -153,6 +153,7 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
             guest_id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             companions INTEGER NOT NULL DEFAULT 0,
+            visit_hour INTEGER,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
         "#,
@@ -160,6 +161,30 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
     .execute(pool)
     .await
     .map_err(InternalServerError)?;
+
+    // visit_hour는 테이블을 만든 뒤에 추가한 컬럼이다. 이미 돌고 있는 배포본의 테이블에는
+    // CREATE TABLE IF NOT EXISTS가 아무 일도 하지 않으므로 없을 때만 따로 붙여준다.
+    // 기존 행은 NULL로 남고, 그건 "시간을 받기 전에 접수된 하객"을 뜻한다.
+    let has_visit_hour = query(
+        r#"
+        SELECT 1 FROM pragma_table_info('wedding_guests') WHERE name = 'visit_hour'
+        "#,
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(InternalServerError)?
+    .is_some();
+
+    if !has_visit_hour {
+        query(
+            r#"
+            ALTER TABLE wedding_guests ADD COLUMN visit_hour INTEGER
+            "#,
+        )
+        .execute(pool)
+        .await
+        .map_err(InternalServerError)?;
+    }
 
     Ok(())
 }
