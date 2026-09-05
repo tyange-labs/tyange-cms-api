@@ -97,11 +97,6 @@ pub struct LoginRequest {
     pub password: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct GoogleLoginRequest {
-    pub id_token: String,
-}
-
 #[derive(Debug, Serialize, Object)]
 pub struct LoginResponse {
     pub access_token: String,
@@ -338,45 +333,6 @@ pub struct TagWithCategory {
 #[derive(Deserialize)]
 pub struct SearchPostsWithWriter {
     pub writer_id: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PushSubscriptionKeysRequest {
-    pub p256dh: String,
-    pub auth: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct UpsertPushSubscriptionRequest {
-    pub endpoint: String,
-    pub keys: PushSubscriptionKeysRequest,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct DeletePushSubscriptionRequest {
-    pub endpoint: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct WebPushSubscriptionResponse {
-    pub push_subscription_id: i64,
-    pub endpoint: String,
-    pub user_agent: Option<String>,
-    pub created_at: String,
-    pub last_success_at: Option<String>,
-    pub last_failure_at: Option<String>,
-    pub failure_count: i64,
-    pub revoked_at: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct WebPushSubscriptionListResponse {
-    pub subscriptions: Vec<WebPushSubscriptionResponse>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct PublicPushKeyResponse {
-    pub public_key: String,
 }
 
 #[derive(Debug, Deserialize)]

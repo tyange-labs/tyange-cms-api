@@ -1,16 +1,20 @@
 use std::{env, sync::Arc};
 
 use reqwest::{
-    header::{ACCEPT, AUTHORIZATION, USER_AGENT},
+    header::{AUTHORIZATION, USER_AGENT},
     Client, StatusCode,
 };
 use serde::Serialize;
 
-const DEFAULT_API_BASE: &str = "https://api.github.com";
-const DEFAULT_REPO: &str = "tyange/tyange-blog";
-const DEFAULT_EVENT_TYPE: &str = "cms-content-changed";
+// GitHub의 repository_dispatch(커스텀 이벤트 + 임의 워크플로 리스닝)에 대응하는 기능이
+// Forgejo(v16.0.3 기준)엔 없다. 대신 "workflow_dispatch 이벤트를 API로 발생시키는" 엔드포인트를
+// 쓴다 — 대상 워크플로 파일명을 URL에 직접 명시해야 하고, GitHub처럼 event_type으로
+// 여러 워크플로에 브로드캐스트하는 개념이 없다.
+const DEFAULT_API_BASE: &str = "https://git.tyange.com/api/v1";
+const DEFAULT_REPO: &str = "tyange-labs/tyange-blog";
+const DEFAULT_WORKFLOW_FILENAME: &str = "deploy.yml";
+const DEFAULT_REF: &str = "master";
 const SOURCE_NAME: &str = "tyange-cms-api";
-const GITHUB_API_VERSION: &str = "2022-11-28";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BlogContentEvent {
@@ -55,7 +59,7 @@ enum BlogRedeployMode {
     Disabled {
         reason: Arc<str>,
     },
-    GitHub {
+    Forgejo {
         config: Arc<BlogRedeployConfig>,
     },
     #[cfg(test)]
@@ -68,19 +72,20 @@ enum BlogRedeployMode {
 struct BlogRedeployConfig {
     api_base: String,
     repo: String,
-    event_type: String,
+    workflow_filename: String,
+    git_ref: String,
     token: String,
 }
 
 #[derive(Debug, Serialize)]
-struct RepositoryDispatchRequest<'a> {
-    event_type: &'a str,
-    client_payload: RepositoryDispatchPayload<'a>,
+struct WorkflowDispatchRequest<'a> {
+    #[serde(rename = "ref")]
+    git_ref: &'a str,
+    inputs: WorkflowDispatchInputs<'a>,
 }
 
 #[derive(Debug, Serialize)]
-struct RepositoryDispatchPayload<'a> {
-    source: &'a str,
+struct WorkflowDispatchInputs<'a> {
     content_event: &'a str,
     post_id: &'a str,
     visibility: &'a str,
@@ -101,7 +106,7 @@ impl BlogRedeployService {
         let config = BlogRedeployConfig::from_env();
 
         let mode = match config {
-            Some(config) => BlogRedeployMode::GitHub {
+            Some(config) => BlogRedeployMode::Forgejo {
                 config: Arc::new(config),
             },
             None => BlogRedeployMode::Disabled {
@@ -130,11 +135,10 @@ impl BlogRedeployService {
                     message: reason.to_string(),
                 });
             }
-            BlogRedeployMode::GitHub { config } => {
-                let payload = RepositoryDispatchRequest {
-                    event_type: &config.event_type,
-                    client_payload: RepositoryDispatchPayload {
-                        source: SOURCE_NAME,
+            BlogRedeployMode::Forgejo { config } => {
+                let payload = WorkflowDispatchRequest {
+                    git_ref: &config.git_ref,
+                    inputs: WorkflowDispatchInputs {
                         content_event: content_event.as_str(),
                         post_id,
                         visibility: visibility.as_str(),
@@ -142,25 +146,28 @@ impl BlogRedeployService {
                 };
 
                 let url = format!(
-                    "{}/repos/{}/dispatches",
+                    "{}/repos/{}/actions/workflows/{}/dispatches",
                     config.api_base.trim_end_matches('/'),
-                    config.repo
+                    config.repo,
+                    config.workflow_filename
                 );
 
+                // Forgejo 토큰 인증은 GitHub의 `Bearer`가 아니라 `token` 접두어를 쓴다.
                 match self
                     .client
                     .post(url)
-                    .header(ACCEPT, "application/vnd.github+json")
-                    .header(AUTHORIZATION, format!("Bearer {}", config.token))
-                    .header("X-GitHub-Api-Version", GITHUB_API_VERSION)
+                    .header(AUTHORIZATION, format!("token {}", config.token))
                     .header(USER_AGENT, SOURCE_NAME)
                     .json(&payload)
                     .send()
                     .await
                 {
-                    Ok(response) if response.status() == StatusCode::NO_CONTENT => {
+                    // return_run_info를 안 보내면 204, 보내면 201 — 어느 쪽이든 성공이라 상태
+                    // 코드를 정확히 매칭하지 않고 2xx 전체를 성공으로 취급한다(예전 GitHub
+                    // 버전은 204만 성공 처리해서 201이 오면 오판할 여지가 있었다).
+                    Ok(response) if response.status().is_success() => {
                         println!(
-                            "blog redeploy dispatch accepted: content_event={}, post_id={}, visibility={}, github_status={}",
+                            "blog redeploy dispatch accepted: content_event={}, post_id={}, visibility={}, forgejo_status={}",
                             content_event.as_str(),
                             post_id,
                             visibility.as_str(),
@@ -176,11 +183,10 @@ impl BlogRedeployService {
                             visibility,
                             status: Some(status),
                             message: if body.is_empty() {
-                                "GitHub repository_dispatch 호출이 204를 반환하지 않았습니다."
-                                    .to_string()
+                                "Forgejo workflow dispatch 호출이 실패했습니다.".to_string()
                             } else {
                                 format!(
-                                    "GitHub repository_dispatch 호출이 204를 반환하지 않았습니다. body={}",
+                                    "Forgejo workflow dispatch 호출이 실패했습니다. body={}",
                                     body
                                 )
                             },
@@ -208,7 +214,7 @@ impl BlogRedeployService {
 
     fn log_failure(&self, failure: DispatchFailureLog) {
         eprintln!(
-            "blog redeploy dispatch failed: content_event={}, post_id={}, visibility={}, github_status={}, error={}",
+            "blog redeploy dispatch failed: content_event={}, post_id={}, visibility={}, forgejo_status={}, error={}",
             failure.content_event.as_str(),
             failure.post_id,
             failure.visibility.as_str(),
@@ -248,11 +254,17 @@ impl BlogRedeployConfig {
             .filter(|value| !value.is_empty())
             .unwrap_or_else(|| DEFAULT_REPO.to_string());
 
-        let event_type = env::var("TYANGE_BLOG_REDEPLOY_EVENT_TYPE")
+        let workflow_filename = env::var("TYANGE_BLOG_REDEPLOY_WORKFLOW_FILENAME")
             .ok()
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty())
-            .unwrap_or_else(|| DEFAULT_EVENT_TYPE.to_string());
+            .unwrap_or_else(|| DEFAULT_WORKFLOW_FILENAME.to_string());
+
+        let git_ref = env::var("TYANGE_BLOG_REDEPLOY_REF")
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| DEFAULT_REF.to_string());
 
         let api_base = env::var("TYANGE_BLOG_REDEPLOY_API_BASE")
             .ok()
@@ -263,7 +275,8 @@ impl BlogRedeployConfig {
         Some(Self {
             api_base,
             repo,
-            event_type,
+            workflow_filename,
+            git_ref,
             token,
         })
     }
@@ -346,7 +359,7 @@ impl MockBlogRedeployHandle {
             let message = failure.message.clone();
             self.failures.lock().await.push(failure);
             eprintln!(
-                "blog redeploy dispatch failed: content_event={}, post_id={}, visibility={}, github_status={}, error={}",
+                "blog redeploy dispatch failed: content_event={}, post_id={}, visibility={}, forgejo_status={}, error={}",
                 content_event.as_str(),
                 post_id,
                 visibility.as_str(),

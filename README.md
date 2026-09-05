@@ -8,9 +8,9 @@ Rust + Poem + SQLite로 만든 개인용 CMS API 서버입니다.
 이 API는 크게 다음을 해결하기 위해 만들어졌습니다.
 
 - 블로그 운영: 포스트/태그/이미지/포트폴리오 데이터를 CMS 형태로 관리
-- 알림: 브라우저 Web Push 구독 관리 및 VAPID 서명 발송 인프라
+- 자동 재배포: 포스트 변경 시 `tyange-blog`를 Forgejo Actions로 재배포 트리거
 
-즉, "공용 SaaS형 CMS"보다는 "개인 콘텐츠 + 개인용 알림"에 최적화된 구조입니다.
+즉, "공용 SaaS형 CMS"보다는 "개인 콘텐츠 + 개인 인프라 연동"에 최적화된 구조입니다.
 
 ## Tech Stack
 
@@ -20,20 +20,16 @@ Rust + Poem + SQLite로 만든 개인용 CMS API 서버입니다.
 - Tokio
 - JWT (`jsonwebtoken`)
 - bcrypt
-- `web-push` (VAPID Web Push 발송)
-- `reqwest` (Google `tokeninfo`, GitHub `repository_dispatch` 호출)
+- `reqwest` (Forgejo `workflow_dispatch` API 호출)
 
 ## 빠른 시작
-
-Google 로그인/Web Push 없이 CMS 연동만 로컬에서 확인하면 되는 경우:
 
 ```bash
 ./dev.sh
 ```
 
-`.env`가 없으면 개발용 더미 JWT 시크릿으로 하나 만들고(`GOOGLE_CLIENT_ID`/`VAPID_*`는
-건너뜀 — 없어도 해당 기능만 우아하게 꺼짐) `cargo run -q`를 실행한다. 이미 `.env`가
-있으면 손대지 않는다. 그 외 환경변수까지 필요하면 아래를 따라 직접 설정한다.
+`.env`가 없으면 개발용 더미 JWT 시크릿으로 하나 만들고 `cargo run -q`를 실행한다.
+이미 `.env`가 있으면 손대지 않는다. 그 외 환경변수까지 필요하면 아래를 따라 직접 설정한다.
 
 ### 1) 환경변수 설정
 
@@ -48,15 +44,6 @@ UPLOAD_MAX_BYTES=20971520
 # JWT
 JWT_ACCESS_SECRET=replace-with-access-secret
 JWT_REFRESH_SECRET=replace-with-refresh-secret
-
-# Google Login
-GOOGLE_CLIENT_ID=replace-with-google-oauth-client-id
-
-# Web Push (브라우저 푸시)
-VAPID_PUBLIC_KEY=replace-with-vapid-public-key
-VAPID_PRIVATE_KEY=replace-with-vapid-private-key
-VAPID_SUBJECT=mailto:you@example.com
-
 ```
 
 `DATABASE_PATH`, `UPLOAD_PATH`는 절대 경로로 직접 지정해도 됩니다.
@@ -68,25 +55,22 @@ UPLOAD_PATH=/Users/yourname/data/tyange/uploads/images
 UPLOAD_MAX_BYTES=20971520
 ```
 
-### Web Push 환경변수
+### 블로그 자동 재배포 환경변수 (선택)
 
-브라우저 푸시를 사용하려면 아래 환경변수를 함께 설정해야 합니다.
-
-- `VAPID_PUBLIC_KEY`: `GET /push/public-key`가 대시보드에 공개하는 브라우저 등록용 공개키
-- `VAPID_PRIVATE_KEY`: 실제 Web Push 발송 시 VAPID 서명을 만드는 비공개키
-- `VAPID_SUBJECT`: Web Push VAPID `sub` claim에 넣는 연락처. 일반적으로 `mailto:...` 또는 HTTPS URL
-
-동작 방식은 다음과 같습니다.
-
-- `VAPID_PUBLIC_KEY`가 없거나 빈 문자열이면 `GET /push/public-key`는 `503 Service Unavailable`을 반환합니다.
-
-로컬 개발 예시는 아래와 같습니다.
+포스트 publish/update/delete 후 `tyange-blog`를 재배포하려면 아래를 설정합니다.
+`TYANGE_BLOG_REDEPLOY_TOKEN`이 비어 있으면 이 기능 전체가 조용히 꺼집니다(로그만 남김).
 
 ```env
-VAPID_PUBLIC_KEY=your-generated-public-key
-VAPID_PRIVATE_KEY=your-generated-private-key
-VAPID_SUBJECT=mailto:dev@example.com
+TYANGE_BLOG_REDEPLOY_TOKEN=replace-with-forgejo-api-token
+# 아래는 기본값이 있어 보통 설정할 필요 없음
+# TYANGE_BLOG_REDEPLOY_REPO=tyange-labs/tyange-blog
+# TYANGE_BLOG_REDEPLOY_API_BASE=https://git.tyange.com/api/v1
+# TYANGE_BLOG_REDEPLOY_WORKFLOW_FILENAME=deploy.yml
+# TYANGE_BLOG_REDEPLOY_REF=master
 ```
+
+`TYANGE_BLOG_REDEPLOY_TOKEN`은 GitHub PAT가 아니라 `tyange-labs/tyange-blog` 저장소의
+Actions 실행 권한을 가진 **Forgejo API 토큰**이어야 합니다.
 
 ### 2) 실행
 
@@ -120,10 +104,6 @@ CORS preflight(OPTIONS)는 `Cors` 미들웨어가 전담한다. 별도의 캐치
 
 - `POST /login`
 사용자 로그인 후 access/refresh 토큰 발급.
-
-- `POST /login/google`
-프론트엔드가 Google Sign-In 후 받은 `id_token`을 전달하면, 서버가 토큰을 검증한 뒤 access/refresh 토큰을 발급합니다.
-동일 이메일의 기존 로컬 계정이 있으면 해당 계정에 Google 로그인을 연결합니다.
 
 - `POST /admin/add-user` (JWT)
 신규 사용자 계정 추가(비밀번호 해시 저장).
@@ -180,16 +160,7 @@ blog 대상 포스트 판정은 `status != draft` 이고 `dev` 태그가 없는 
 ### Me / Profile
 
 - `GET /me` (JWT) — 현재 로그인 사용자 정보.
-- `PUT /me/profile` (JWT) — 프로필 수정 (display_name, avatar, bio 등). Google 로그인 직후 기본값 자동 병합.
-
-### Web Push
-
-- `GET /push/public-key` — VAPID 공개키 반환. 환경변수가 비어 있으면 503.
-- `GET /push/subscriptions` (JWT) — 현재 유저의 Web Push 구독 목록.
-- `POST /push/subscriptions` (JWT) — 브라우저의 PushSubscription upsert.
-- `DELETE /push/subscriptions` (JWT) — 구독 해제.
-
-구독 관리와 VAPID 서명 발송 헬퍼(`web_push.rs`)만 유지하며, 현재 자동 발송 트리거는 없다.
+- `PUT /me/profile` (JWT) — 프로필 수정 (display_name, avatar, bio 등).
 
 ## 테스트
 
@@ -209,20 +180,11 @@ curl -sS -X POST http://127.0.0.1:8080/login \
   -d '{"user_id":"me@example.com","password":"secret"}'
 ```
 
-### Google 로그인 후 JWT 획득
-
-```bash
-curl -sS -X POST http://127.0.0.1:8080/login/google \
-  -H 'Content-Type: application/json' \
-  -d '{"id_token":"GOOGLE_ID_TOKEN_FROM_FRONTEND"}'
-```
-
 ## 설계 메모
 
 - **권한 스코핑**: 모든 수정/조회 API는 미들웨어로 `current_user()`를 주입받아 `user_id` 소유권을 일관되게 검증한다. 관리자 전용 엔드포인트는 `AdminOnly` 미들웨어가 role까지 확인한다.
 - **포트폴리오 DB 마이그레이션**: 초기에는 `portfolio_documents`에 단일 JSON을 저장했으나, 섹션 단위 편집 UX가 필요해지면서 `portfolio_section(section_key, content_json)` 테이블로 분리. 응답 스키마는 기존 클라이언트 호환성을 위해 런타임에 섹션들을 병합해 단일 문서로 내린다.
-- **블로그 재배포 트리거**: 포스트 publish/update/delete 후 `dev` 태그가 없는 경우에 한해 `tyange-blog` 저장소의 GitHub `repository_dispatch`(`event_type=cms-content-changed`)를 호출해 블로그를 재배포한다. dispatch 호출 실패는 로그만 남기고 CMS 저장은 유지한다.
-- **Web Push 옵셔널 구동**: `VAPID_PUBLIC_KEY`가 없으면 공개키 엔드포인트가 503으로 응답한다. 발송 헬퍼(`send_push_message`)는 VAPID 환경변수 3종이 모두 설정된 경우에만 사용할 수 있다.
+- **블로그 재배포 트리거**: 포스트 publish/update/delete 후 `dev` 태그가 없는 경우에 한해 `tyange-blog` 저장소의 Forgejo `workflow_dispatch` API(`POST /repos/{owner}/{repo}/actions/workflows/{file}/dispatches`, `Authorization: token <TOKEN>`)를 호출해 블로그를 재배포한다. dispatch 호출 실패는 로그만 남기고 CMS 저장은 유지한다. (2026-09 이전에는 GitHub `repository_dispatch`를 썼으나, Forgejo엔 대응 기능이 없어 이식했다.)
 
 ## 테스트 커버리지 하이라이트
 

@@ -6,7 +6,6 @@ mod openapi;
 mod routes;
 mod services;
 mod utils;
-mod web_push;
 
 use dotenv::dotenv;
 use middlewares::admin_middleware::AdminOnly;
@@ -15,16 +14,12 @@ use middlewares::rate_limit::RateLimit;
 use std::{env, fs, sync::Arc, time::Duration};
 
 use crate::routes::create_wedding_guest::create_wedding_guest;
-use crate::routes::delete_push_subscription::delete_push_subscription;
 use crate::routes::get_count_with_tags::get_count_with_tags;
 use crate::routes::get_posts_with_tags::get_posts_with_tags;
-use crate::routes::get_push_public_key::get_push_public_key;
-use crate::routes::get_push_subscriptions::get_push_subscriptions;
 use crate::routes::me::me;
 use crate::routes::signup::signup;
 use crate::routes::update_my_profile::update_my_profile;
 use crate::routes::upload_image::upload_image;
-use crate::routes::upsert_push_subscription::upsert_push_subscription;
 use crate::{models::AppState, routes::add_user::add_user};
 use db::init_db;
 use openapi::{ImagesApi, PortfolioApi, PostsApi, TagsApi, WeddingApi};
@@ -38,7 +33,7 @@ use poem::{
     post, put, EndpointExt, Response, Route, Server,
 };
 use poem_openapi::OpenApiService;
-use routes::{login::login, login_google::login_google};
+use routes::login::login;
 use sqlx::SqlitePool;
 
 #[handler]
@@ -143,18 +138,9 @@ async fn main() -> Result<(), std::io::Error> {
                     .with(Auth),
             )
             .at("/login", post(login))
-            .at("/login/google", post(login_google))
             .at("/signup", post(signup))
             .at("/me", get(me).with(Auth))
             .at("/me/profile", put(update_my_profile).with(Auth))
-            .at(
-                "/push/subscriptions",
-                get(get_push_subscriptions)
-                    .post(upsert_push_subscription)
-                    .delete(delete_push_subscription)
-                    .with(Auth),
-            )
-            .at("/push/public-key", get(get_push_public_key))
             .at(
                 "/public/wedding/guests",
                 post(create_wedding_guest)

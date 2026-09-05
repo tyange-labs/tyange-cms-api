@@ -97,7 +97,6 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
             password TEXT,
             user_role TEXT NOT NULL,
             auth_provider TEXT NOT NULL DEFAULT 'local',
-            google_sub TEXT,
             display_name TEXT,
             avatar_url TEXT,
             bio TEXT
@@ -108,16 +107,15 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
     .await
     .map_err(InternalServerError)?;
 
-    query(
-        r#"
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub
-        ON users(google_sub)
-        WHERE google_sub IS NOT NULL
-        "#,
-    )
-    .execute(pool)
-    .await
-    .map_err(InternalServerError)?;
+    // Google 로그인 기능 제거(2026-09) — 실사용 안 해서 로그인 경로만 걷어냄.
+    // auth_provider 컬럼은 범용이라 유지(항상 'local'이 됨). google_sub는 그 로그인
+    // 전용 컬럼이라 같이 제거. 이미 배포된 DB 정리용 DROP — 반복 실행해도 안전.
+    let _ = query("DROP INDEX IF EXISTS idx_users_google_sub")
+        .execute(pool)
+        .await;
+    let _ = query("ALTER TABLE users DROP COLUMN google_sub")
+        .execute(pool)
+        .await;
 
     // portfolio (master)
     query(
@@ -151,37 +149,15 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
     .await
     .map_err(InternalServerError)?;
 
-    // web_push_subscriptions
-    query(
-        r#"
-        CREATE TABLE IF NOT EXISTS web_push_subscriptions (
-            push_subscription_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT NOT NULL,
-            endpoint TEXT NOT NULL UNIQUE,
-            p256dh TEXT NOT NULL,
-            auth TEXT NOT NULL,
-            user_agent TEXT,
-            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            last_success_at DATETIME,
-            last_failure_at DATETIME,
-            failure_count INTEGER NOT NULL DEFAULT 0,
-            revoked_at DATETIME
-        )
-        "#,
-    )
-    .execute(pool)
-    .await
-    .map_err(InternalServerError)?;
-
-    query(
-        r#"
-        CREATE INDEX IF NOT EXISTS idx_web_push_subscriptions_user_revoked
-        ON web_push_subscriptions(user_id, revoked_at)
-        "#,
-    )
-    .execute(pool)
-    .await
-    .map_err(InternalServerError)?;
+    // Web Push 기능 제거(2026-09) — 실사용 안 해서 라우트/구독 테이블 전부 걷어냄.
+    // 이미 배포된 DB에 남아있을 테이블/인덱스를 정리한다. DROP은 실패해도(이미
+    // 지워졌으면) 무시 — 반복 실행해도 안전.
+    let _ = query("DROP INDEX IF EXISTS idx_web_push_subscriptions_user_revoked")
+        .execute(pool)
+        .await;
+    let _ = query("DROP TABLE IF EXISTS web_push_subscriptions")
+        .execute(pool)
+        .await;
 
     // wedding_guests (lovelog RSVP)
     query(

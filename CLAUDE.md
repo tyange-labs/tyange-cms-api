@@ -24,10 +24,10 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
   `/posts`(원래 있던 거 겸사겸사), `/admin/posts`, `/post/:id`, `/post/upload`,
   `/post/update/:id`, `/post/delete/:id`, `/tags-with-category`, `/portfolio`(GET/PUT/DELETE),
   `/portfolio/update`, `/portfolio/sections/:key`, `/upload-image`, `/admin/wedding/guests`.
-  `/login`, `/login/google`, `/signup`, `/me`, `/me/profile`, `/admin/add-user`,
-  `/public/wedding/guests`, push 관련 라우트는 plain poem으로 그대로 남아있다
-  (tyange-cms가 안 쓰거나, RateLimit처럼 오퍼레이션 단위 미들웨어가 필요해서 OpenApi 변환과
-  안 맞음). `/login`은 tyange-cms 자체에 dev bypass가 있어서 우선순위가 낮았다.
+  `/login`, `/signup`, `/me`, `/me/profile`, `/admin/add-user`, `/public/wedding/guests`는
+  plain poem으로 그대로 남아있다(tyange-cms가 안 쓰거나, RateLimit처럼 오퍼레이션 단위
+  미들웨어가 필요해서 OpenApi 변환과 안 맞음). `/login`은 tyange-cms 자체에 dev bypass가
+  있어서 우선순위가 낮았다.
 - `src/routes/*.rs`의 원래 핸들러는 **지운 게 아니라 등록만 뺐다** — `post_authorization_test`,
   `portfolio_routes_test`, `upload_image_test`, `wedding_guest_test`, `signup_test`가 여전히
   그 함수들을 직접 참조해서(TestClient로 단일 핸들러만 떼어 테스트) 지우면 테스트가 깨진다.
@@ -93,3 +93,20 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
   `SSH_PRIVATE_KEY`/`JWT_ACCESS_SECRET` 등, tyange-cms와 이름 체계가 다름 — 언더스코어
   없는 `USERNAME` 등 그대로 유지)는 자동으로 안 넘어와서 웹 UI에서 재등록 필요,
   Settings → Units → Overview의 Actions 체크박스도 켜야 함 — 둘 다 아직 확인 안 함
+- Google 로그인 / Web Push 기능 완전 제거 (2026-09) — 실사용 안 해서 걷어냄.
+  `auth/google.rs`, `routes/login_google.rs`, `web_push.rs`, push 라우트 4개 삭제.
+  `users.google_sub` 컬럼과 `web_push_subscriptions` 테이블은 `init_db()`에서
+  `DROP COLUMN`/`DROP TABLE`로 정리(반복 실행해도 안전). `users.auth_provider`는 범용
+  컬럼이라 유지(항상 'local'). `Cargo.toml`에서 `web-push` 의존성 제거(`reqwest`는
+  blog_redeploy가 계속 써서 유지).
+- 블로그 자동 재배포를 GitHub `repository_dispatch`에서 Forgejo `workflow_dispatch` API로
+  이식 (2026-09) — Forgejo(v16.0.3)엔 GitHub의 repository_dispatch(커스텀 이벤트 + 임의
+  워크플로 리스닝)에 대응하는 기능이 없다. 대신
+  `POST /repos/{owner}/{repo}/actions/workflows/{file}/dispatches`
+  (body: `{ref, inputs: {content_event, post_id, visibility}}`,
+  인증 헤더는 `Bearer`가 아니라 `Authorization: token <TOKEN>`)를 쓴다. `tyange-blog`의
+  기존 워크플로에 이미 `on: workflow_dispatch` + 동일한 inputs 스키마가 있어서 그쪽은
+  트리거 정의(`repository_dispatch` 블록)만 빼면 됐다. 성공 판정도 정확히 204만 보던 것에서
+  `is_success()`(2xx 전체)로 일반화 — `return_run_info`에 따라 204/201이 갈릴 수 있어서.
+  `TYANGE_BLOG_REDEPLOY_TOKEN`은 이제 GitHub PAT가 아니라 해당 저장소의 Actions 실행 권한을
+  가진 Forgejo API 토큰이어야 한다.

@@ -46,10 +46,8 @@ jobs:
         run: |
           echo JWT_ACCESS_SECRET=${{ secrets.JWT_ACCESS_SECRET }} > .env
           echo JWT_REFRESH_SECRET=${{ secrets.JWT_REFRESH_SECRET }} >> .env
-          echo GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }} >> .env
-          echo VAPID_PUBLIC_KEY=${{ secrets.VAPID_PUBLIC_KEY }} >> .env
-          echo VAPID_PRIVATE_KEY=${{ secrets.VAPID_PRIVATE_KEY }} >> .env
-          echo VAPID_SUBJECT=${{ secrets.VAPID_SUBJECT }} >> .env
+          # TYANGE_BLOG_REDEPLOY_TOKEN은 이제 Forgejo API 토큰이어야 한다(해당 저장소의
+          # Actions 실행 권한 필요) — 예전 GitHub PAT는 안 통한다.
           echo TYANGE_BLOG_REDEPLOY_TOKEN=${{ secrets.TYANGE_BLOG_REDEPLOY_TOKEN }} >> .env
           echo TRUST_PROXY_FORWARDED_FOR=true >> .env
           echo UPLOAD_PATH=${{ vars.UPLOAD_PATH }} >> .env
@@ -68,7 +66,7 @@ jobs:
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           script: |
             sudo systemctl stop tyange-cms-api.service
 
@@ -84,7 +82,7 @@ jobs:
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           source: "deploy/*"
           target: ${{ vars.SERVICE_PATH }}
           strip_components: 1
@@ -96,6 +94,6 @@ jobs:
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           script: |
             sudo systemctl start tyange-cms-api.service
