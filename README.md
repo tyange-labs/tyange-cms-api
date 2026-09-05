@@ -25,6 +25,16 @@ Rust + Poem + SQLite로 만든 개인용 CMS API 서버입니다.
 
 ## 빠른 시작
 
+Google 로그인/Web Push 없이 CMS 연동만 로컬에서 확인하면 되는 경우:
+
+```bash
+./dev.sh
+```
+
+`.env`가 없으면 개발용 더미 JWT 시크릿으로 하나 만들고(`GOOGLE_CLIENT_ID`/`VAPID_*`는
+건너뜀 — 없어도 해당 기능만 우아하게 꺼짐) `cargo run -q`를 실행한다. 이미 `.env`가
+있으면 손대지 않는다. 그 외 환경변수까지 필요하면 아래를 따라 직접 설정한다.
+
 ### 1) 환경변수 설정
 
 프로젝트 루트 `.env`에 아래 값을 설정하세요.
@@ -103,8 +113,8 @@ cargo run -q
 - `GET /health-check`
 서버 생존 확인용 대체 헬스체크.
 
-- `OPTIONS /*path`
-CORS preflight 처리.
+CORS preflight(OPTIONS)는 `Cors` 미들웨어가 전담한다. 별도의 캐치올 라우트는 없다
+(poem-openapi 도입 시 `/*path` 캐치올이 OpenApiService의 root nest와 충돌해서 제거함).
 
 ### Auth
 
