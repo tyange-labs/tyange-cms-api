@@ -52,6 +52,43 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
         let _ = query(stmt).execute(pool).await;
     }
 
+    // tags / post_tags
+    // 예전엔 posts.tags(TEXT)에 태그를 직접 박아 쓰다가 이 정규화 테이블로 옮겼는데,
+    // 그 마이그레이션 SQL이 여기 init_db()에는 반영이 안 돼 있었다. 운영 DB는 이미
+    // 수동으로 테이블이 있어서 안 겪었지만, 새 DB(로컬 개발 등)로 시작하면 태그가
+    // 걸린 쿼리가 전부 "no such table" 500을 낸다.
+    // name UNIQUE인 이유: update_post/upload_post의 `INSERT OR IGNORE INTO tags
+    // (name, category) VALUES (?, ?)`가 같은 이름이면 새로 안 만들고 기존 걸 재사용하길
+    // 기대하는데, name에 유니크 제약이 없으면 INSERT OR IGNORE가 아무것도 걸러내지 못하고
+    // 매번 중복 행을 쌓는다.
+    query(
+        r#"
+        CREATE TABLE IF NOT EXISTS tags (
+            tag_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            category TEXT NOT NULL
+        )
+        "#,
+    )
+    .execute(pool)
+    .await
+    .map_err(InternalServerError)?;
+
+    query(
+        r#"
+        CREATE TABLE IF NOT EXISTS post_tags (
+            post_id TEXT NOT NULL,
+            tag_id INTEGER NOT NULL,
+            PRIMARY KEY (post_id, tag_id),
+            FOREIGN KEY (post_id) REFERENCES posts(post_id),
+            FOREIGN KEY (tag_id) REFERENCES tags(tag_id)
+        )
+        "#,
+    )
+    .execute(pool)
+    .await
+    .map_err(InternalServerError)?;
+
     // users
     query(
         r#"
