@@ -80,4 +80,16 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
   - wedding_guests 테이블: guest_id, name, companions, created_at
   - RateLimit 미들웨어 부활 (ce46308 구현 그대로): IP당 5회/분 + 30회/시간, 본문 4KB 상한
   - 리버스 프록시(tyange.com/api/cms) 뒤라 IP 식별에 TRUST_PROXY_FORWARDED_FOR=true 필요.
-    워크플로가 배포마다 .env를 덮어쓰므로 workflow.yml의 .env 생성 블록에 넣어야 유지된다
+    워크플로가 배포마다 .env를 덮어쓰므로 `.forgejo/workflows/deploy.yml`의 .env 생성
+    블록에 넣어야 유지된다
+- CI를 GitHub Actions에서 Forgejo Actions로 전환 (2026-09) — `.github/workflows` 삭제,
+  `.forgejo/workflows/deploy.yml`로 이전. 원래 워크플로가 `deploy on tyange-home-server`
+  environment를 썼는데, 이건 조직 러너가 도는 EC2/lightsail 서버와는 다른(SSH로만 접속하는)
+  별도 배포 대상이다. `runs-on: self-hosted`는 Docker 격리 없는 host 라벨(tyange-dev와
+  동일 패턴)을 가리키는데, **이 러너 호스트에 Rust가 깔려 있는지 확인 안 됨** — 워크플로에
+  `cargo` 없으면 rustup으로 설치하는 방어 스텝을 넣어뒀다. `uses:`는 전부
+  `https://github.com/...` 완전한 URL 사용(data.forgejo.org 기본 레지스트리엔
+  `appleboy/*` 서드파티 액션이 없음). Forgejo 쪽 secrets/vars(`HOST`/`USERNAME`/
+  `SSH_PRIVATE_KEY`/`JWT_ACCESS_SECRET` 등, tyange-cms와 이름 체계가 다름 — 언더스코어
+  없는 `USERNAME` 등 그대로 유지)는 자동으로 안 넘어와서 웹 UI에서 재등록 필요,
+  Settings → Units → Overview의 Actions 체크박스도 켜야 함 — 둘 다 아직 확인 안 함

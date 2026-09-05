@@ -1,9 +1,10 @@
 name: workflow
+
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
   workflow_dispatch:
     inputs:
       skip_tests:
@@ -16,14 +17,31 @@ on:
         required: false
         default: false
         type: boolean
+
 env:
   CARGO_TERM_COLOR: always
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # forgejo-runner를 `--label self-hosted:host`로 띄웠다는 전제 — Docker 없이
+    # 러너를 구동하는 서버(EC2/lightsail)에서 직접 실행된다(격리 없음).
+    # tyange-dev/tyange-cms의 워크플로와 같은 패턴.
+    # 조직 스코프 러너에 등록된 docker 라벨(node:lts-bookworm)에는 Rust가 없어서
+    # 그쪽을 쓰면 cargo 자체가 없다 — bare host 라벨을 쓰고, 혹시 몰라 Rust
+    # 설치 여부도 매번 확인한다.
+    runs-on: self-hosted
     environment: deploy on tyange-home-server
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: https://github.com/actions/checkout@v4
+
+      - name: Ensure Rust toolchain
+        run: |
+          if ! command -v cargo >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
       - name: Create .env file
         run: |
           echo JWT_ACCESS_SECRET=${{ secrets.JWT_ACCESS_SECRET }} > .env
@@ -47,7 +65,7 @@ jobs:
         run: cargo test --verbose
 
       - name: Stop service
-        uses: appleboy/ssh-action@v1.0.3
+        uses: https://github.com/appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
@@ -63,7 +81,7 @@ jobs:
           cp .env deploy/
 
       - name: Deploy files via SCP
-        uses: appleboy/scp-action@v0.1.7
+        uses: https://github.com/appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
@@ -75,7 +93,7 @@ jobs:
           debug: true
 
       - name: Start service
-        uses: appleboy/ssh-action@v1.0.3
+        uses: https://github.com/appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
