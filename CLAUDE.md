@@ -4,12 +4,59 @@ Rust + Poem 프레임워크. cargo 사용.
 
 ## 기술 스택
 - Rust
-- Poem (HTTP 프레임워크)
+- Poem (HTTP 프레임워크) + poem-openapi (OpenAPI 스펙 자동 생성)
 - SQLite + sqlx
 
 ## 연결 프로젝트
-- 프론트엔드: `tyange-cms` (Nuxt 3 + Vue)
+- 프론트엔드: `tyange-cms` (Nuxt 4 + Vue)
 - API 변경 시 반드시 tyange-cms와 동기화 필요
+
+## OpenAPI 스펙 (2026-09)
+
+tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하려면 스펙이 필요해서 도입했다.
+`poem`은 그대로 두고 `poem-openapi`만 얹었다 — Axum 마이그레이션 등 프레임워크 교체는 하지 않았다.
+
+- `src/openapi.rs`: `#[OpenApi]`로 다시 짠 라우트들. 도메인별 struct(`PostsApi`, `TagsApi`,
+  `PortfolioApi`, `ImagesApi`, `WeddingApi`)마다 `state: Arc<AppState>`를 필드로 들고 있다.
+  `main.rs`에서 튜플로 묶어 `OpenApiService::new((...))`로 root("/")에 nest — 실제 서빙 경로가
+  기존과 완전히 동일하게 유지된다(`/posts`, `/portfolio`, `/admin/posts` 등).
+- **전부 옮기지 않았다.** tyange-cms가 실제로 호출하는 엔드포인트만 옮겼다:
+  `/posts`(원래 있던 거 겸사겸사), `/admin/posts`, `/post/:id`, `/post/upload`,
+  `/post/update/:id`, `/post/delete/:id`, `/tags-with-category`, `/portfolio`(GET/PUT/DELETE),
+  `/portfolio/update`, `/portfolio/sections/:key`, `/upload-image`, `/admin/wedding/guests`.
+  `/login`, `/login/google`, `/signup`, `/me`, `/me/profile`, `/admin/add-user`,
+  `/public/wedding/guests`, push 관련 라우트는 plain poem으로 그대로 남아있다
+  (tyange-cms가 안 쓰거나, RateLimit처럼 오퍼레이션 단위 미들웨어가 필요해서 OpenApi 변환과
+  안 맞음). `/login`은 tyange-cms 자체에 dev bypass가 있어서 우선순위가 낮았다.
+- `src/routes/*.rs`의 원래 핸들러는 **지운 게 아니라 등록만 뺐다** — `post_authorization_test`,
+  `portfolio_routes_test`, `upload_image_test`, `wedding_guest_test`, `signup_test`가 여전히
+  그 함수들을 직접 참조해서(TestClient로 단일 핸들러만 떼어 테스트) 지우면 테스트가 깨진다.
+  실제로 살아있는 라우팅 테이블(`main.rs`)에는 안 걸리니 죽은 코드처럼 보이는 dead_code
+  경고가 몇 개 뜨는데 의도된 것이다.
+- 인증: `Auth`/`AdminOnly` 미들웨어 대신 `auth::authorization::AuthGuard`
+  (`#[derive(SecurityScheme)]`, `Authorization` 헤더의 raw 토큰을 그대로 검증 — Bearer 아님)를
+  씀. JWT 검증 로직 자체는 `middlewares::auth_middleware`와 동일한 걸 재사용. Admin 전용
+  라우트는 `AuthGuard`로 인증만 받고 핸들러 안에서 기존 `ensure_admin()`을 그대로 호출해서
+  401(미인증)과 403(권한 없음) 구분을 그대로 유지한다.
+- `CustomResponse<T>`(기존 응답 envelope)에 `Object`를 직접 derive 못 했다 —
+  `CustomResponse<()>`처럼 스키마로 표현 안 되는 인스턴스화가 이미 있어서(add_user 등),
+  거기에 derive를 걸면 아직 안 옮긴 라우트가 전부 깨진다. 그래서 필드가 완전히 동일한
+  `ApiResponse<T>`를 새로 만들어 OpenApi 라우트만 그쪽을 쓴다 — JSON 응답 포맷은 동일.
+- `update_portfolio_section`의 `content` 필드는 `section_key`에 따라 다른 스키마로 런타임
+  검증하는 진짜 다형적 필드라 OpenAPI로 정적 표현이 안 된다 —
+  `poem_openapi::types::Any<serde_json::Value>`로 스펙상 "any"로 노출하고, 런타임 검증
+  (`validate_portfolio_section`)은 그대로 뒀다.
+- `ImagesApi::upload_image`에는 원래 `/upload-image`에 걸려있던 `SizeLimit` 미들웨어가 없다.
+  poem의 `SizeLimit`은 `Content-Length` 헤더가 없는 요청을 전부 411로 거부해서 OpenApiService
+  전체(GET 포함)에 걸 수 없고, OpenApiService는 오퍼레이션 단위 미들웨어도 지원 안 한다.
+  게다가 `poem_openapi::types::multipart::Upload`는 크기 제한 없이 통째로 임시 파일에 먼저
+  써버려서 핸들러 안에서 체크해도 늦다. 인증은 필수라 위험은 제한적이지만 완전한 하위 호환은
+  아니다 — 옛 `/images/upload`(plain poem, SizeLimit 유지)는 그대로 뒀다.
+- `services::image_storage::store_image`는 poem-openapi의 `Upload` 타입을 받도록 시그니처가
+  바뀌었다. plain poem 쪽(`routes::upload_image`, 아직 테스트가 참조)은 `store_image_field`
+  (`poem::web::Field` 버전)를 대신 쓴다 — 실제 저장 로직은 `store_image_from_reader`를 공유.
+- 스펙은 서버를 띄운 채 `GET /api-docs/openapi.json`으로 받는다. Swagger UI는 `/api-docs`.
+  별도 export 전용 바이너리는 안 만들었다 — DB 연결 없이 뽑고 싶어지면 그때 추가.
 
 ## 현재 상태
 - 운영 중

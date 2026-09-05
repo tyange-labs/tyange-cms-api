@@ -1,6 +1,7 @@
 use std::path::Path;
 
-use poem::{http::StatusCode, web::Field, Error};
+use poem::{http::StatusCode, Error};
+use poem_openapi::types::multipart::Upload;
 use sqlx::{query, SqlitePool};
 use tokio::{fs, io::AsyncReadExt};
 use uuid::Uuid;
@@ -127,19 +128,46 @@ impl From<ImageStoreError> for Error {
 /// - 저장 확장자와 mime_type은 판별된 실제 포맷에서만 도출 (유저 입력 미사용)
 /// - web_prefix는 정적 서빙 기준 경로 (예: "/images", "/images/public")
 pub async fn store_image(
-    field: Field,
+    field: Upload,
     policy: &ImageUploadPolicy,
     db: &SqlitePool,
     record: ImageRecord,
     upload_dir: &Path,
     web_prefix: &str,
 ) -> Result<StoredImage, ImageStoreError> {
-    let origin_filename = field
-        .file_name()
-        .map(|name| name.to_owned())
-        .unwrap_or_default();
+    let origin_filename = field.file_name().map(|name| name.to_owned());
+    let reader = field.into_async_read();
+    store_image_from_reader(origin_filename, reader, policy, db, record, upload_dir, web_prefix)
+        .await
+}
 
-    let mut reader = field.into_async_read();
+/// plain poem 라우트(`routes::upload_image`, 아직 테스트가 참조 중)용 진입점.
+/// `#[OpenApi]`로 옮긴 쪽은 위 `store_image`(poem_openapi::types::multipart::Upload)를 쓴다.
+/// 두 진입점 모두 실제 저장 로직은 `store_image_from_reader`를 공유한다.
+pub async fn store_image_field(
+    field: poem::web::Field,
+    policy: &ImageUploadPolicy,
+    db: &SqlitePool,
+    record: ImageRecord,
+    upload_dir: &Path,
+    web_prefix: &str,
+) -> Result<StoredImage, ImageStoreError> {
+    let origin_filename = field.file_name().map(|name| name.to_owned());
+    let reader = field.into_async_read();
+    store_image_from_reader(origin_filename, reader, policy, db, record, upload_dir, web_prefix)
+        .await
+}
+
+async fn store_image_from_reader(
+    origin_filename: Option<String>,
+    mut reader: impl tokio::io::AsyncRead + Unpin,
+    policy: &ImageUploadPolicy,
+    db: &SqlitePool,
+    record: ImageRecord,
+    upload_dir: &Path,
+    web_prefix: &str,
+) -> Result<StoredImage, ImageStoreError> {
+    let origin_filename = origin_filename.unwrap_or_default();
     let mut file_bytes: Vec<u8> = Vec::new();
     let mut buf = [0u8; 64 * 1024];
     loop {

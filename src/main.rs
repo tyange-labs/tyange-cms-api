@@ -2,6 +2,7 @@ mod blog_redeploy;
 mod db;
 mod middlewares;
 mod models;
+mod openapi;
 mod routes;
 mod services;
 mod utils;
@@ -14,27 +15,19 @@ use middlewares::rate_limit::RateLimit;
 use std::{env, fs, sync::Arc, time::Duration};
 
 use crate::routes::create_wedding_guest::create_wedding_guest;
-use crate::routes::delete_portfolio::delete_portfolio;
-use crate::routes::delete_post::delete_post;
 use crate::routes::delete_push_subscription::delete_push_subscription;
-use crate::routes::get_all_posts::get_all_posts;
 use crate::routes::get_count_with_tags::get_count_with_tags;
-use crate::routes::get_portfolio::get_portfolio;
 use crate::routes::get_posts_with_tags::get_posts_with_tags;
 use crate::routes::get_push_public_key::get_push_public_key;
 use crate::routes::get_push_subscriptions::get_push_subscriptions;
-use crate::routes::get_tags_with_category::get_tags_with_category;
-use crate::routes::get_wedding_guests::get_wedding_guests;
 use crate::routes::me::me;
 use crate::routes::signup::signup;
 use crate::routes::update_my_profile::update_my_profile;
-use crate::routes::update_portfolio::update_portfolio;
-use crate::routes::update_portfolio_section::update_portfolio_section;
-use crate::routes::update_post::update_post;
 use crate::routes::upload_image::upload_image;
 use crate::routes::upsert_push_subscription::upsert_push_subscription;
 use crate::{models::AppState, routes::add_user::add_user};
 use db::init_db;
+use openapi::{ImagesApi, PortfolioApi, PostsApi, TagsApi, WeddingApi};
 use poem::{
     delete,
     endpoint::StaticFilesEndpoint,
@@ -42,12 +35,10 @@ use poem::{
     http::StatusCode,
     listener::TcpListener,
     middleware::{Cors, SizeLimit},
-    options, post, put, EndpointExt, Response, Route, Server,
+    post, put, EndpointExt, Response, Route, Server,
 };
-use routes::{
-    get_post::get_post, get_posts::get_posts, login::login, login_google::login_google,
-    upload_post::upload_post,
-};
+use poem_openapi::OpenApiService;
+use routes::{login::login, login_google::login_google};
 use sqlx::SqlitePool;
 
 #[handler]
@@ -96,41 +87,55 @@ async fn main() -> Result<(), std::io::Error> {
 
     let state = Arc::new(AppState::new(db));
 
-    fn configure_routes() -> Route {
+    fn configure_routes(state: &Arc<AppState>) -> Route {
         let upload_base_path = env::var("UPLOAD_PATH").unwrap_or(String::from(".uploads/images"));
         let upload_max_bytes = upload_size_limit();
+
+        // #[OpenApi]로 옮긴 라우트. 오퍼레이션 path(`#[oai(path = "/posts")]`)가 그대로
+        // 서빙 경로가 되도록 root("/")에 nest한다 — tyange-cms/lovelog가 부르는 URL이
+        // 바뀌면 안 되기 때문. 스펙/문서는 별도 경로(/api-docs)에서만 노출한다.
+        //
+        // ImagesApi::upload_image에는 원래 /upload-image에 걸려있던 SizeLimit이 없다.
+        // poem::middleware::SizeLimit은 Content-Length 헤더가 없는 요청을 전부 411로
+        // 거부해서 OpenApiService 전체(GET 포함)에 걸면 다른 오퍼레이션이 깨지고,
+        // OpenApiService는 오퍼레이션 단위로 미들웨어를 걸 수도 없다. 게다가
+        // poem_openapi::types::multipart::Upload는 크기 제한 없이 통째로 임시 파일에
+        // 먼저 써버려서, 핸들러 안에서 policy.max_bytes를 체크해도 그 시점엔 이미 늦다.
+        // 이 엔드포인트는 인증(AuthGuard) 필수라 무제한 업로드 노출 위험은 제한적이지만,
+        // 완전한 하위 호환은 아니다 — 크기 제한이 꼭 필요하면 옛 `/images/upload`
+        // (plain poem, SizeLimit 그대로 유지)를 쓴다.
+        let api_service = OpenApiService::new(
+            (
+                PostsApi {
+                    state: state.clone(),
+                },
+                TagsApi {
+                    state: state.clone(),
+                },
+                PortfolioApi {
+                    state: state.clone(),
+                },
+                ImagesApi {
+                    state: state.clone(),
+                },
+                WeddingApi {
+                    state: state.clone(),
+                },
+            ),
+            "tyange-cms-api",
+            "1.0",
+        );
+        let api_docs = api_service.swagger_ui();
+        let api_spec = api_service.spec_endpoint();
 
         Route::new()
             .at("/health", get(return_str))
             .at("/health-check", get(return_str))
-            .at("/posts", get(get_posts))
+            .nest("/", api_service)
+            .nest("/api-docs", api_docs)
+            .at("/api-docs/openapi.json", api_spec)
             .at("/posts/search-with-tags", get(get_posts_with_tags))
-            .at("/post/:post_id", get(get_post))
-            .at("/post/upload", post(upload_post).with(Auth))
-            .at("/post/update/:post_id", put(update_post).with(Auth))
-            .at("/post/delete/:post_id", delete(delete_post).with(Auth))
             .at("/tags", get(get_count_with_tags))
-            .at("/tags-with-category", get(get_tags_with_category))
-            .at(
-                "/portfolio",
-                get(get_portfolio)
-                    .put(update_portfolio.with(AdminOnly).with(Auth))
-                    .delete(delete_portfolio.with(AdminOnly).with(Auth)),
-            )
-            .at(
-                "/portfolio/update",
-                put(update_portfolio).with(AdminOnly).with(Auth),
-            )
-            .at(
-                "/portfolio/sections/:section_key",
-                put(update_portfolio_section).with(AdminOnly).with(Auth),
-            )
-            .at(
-                "/upload-image",
-                post(upload_image)
-                    .with(SizeLimit::new(upload_max_bytes))
-                    .with(Auth),
-            )
             .at(
                 "/images/upload",
                 post(upload_image)
@@ -158,19 +163,10 @@ async fn main() -> Result<(), std::io::Error> {
                     .with(RateLimit::new(30, Duration::from_secs(60 * 60))),
             )
             .at("/admin/add-user", post(add_user).with(AdminOnly).with(Auth))
-            .at(
-                "/admin/wedding/guests",
-                get(get_wedding_guests).with(AdminOnly).with(Auth),
-            )
-            .at(
-                "/admin/posts",
-                get(get_all_posts).with(AdminOnly).with(Auth),
-            )
             .nest("/images", StaticFilesEndpoint::new(upload_base_path))
-            .at("/*path", options(options_handler))
     }
 
-    let app = configure_routes().data(state).with(
+    let app = configure_routes(&state).data(state).with(
         Cors::new()
             .allow_origin("http://localhost:3001")
             .allow_origin("http://localhost:3000")

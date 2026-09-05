@@ -1,3 +1,4 @@
+use poem_openapi::Object;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Pool, Sqlite};
 
@@ -29,7 +30,26 @@ pub struct CustomResponse<T> {
     pub message: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+/// `CustomResponse<T>`와 필드가 완전히 동일한 poem-openapi용 응답 envelope.
+/// `CustomResponse<T>`는 `CustomResponse<()>`처럼 스키마로 표현 안 되는 인스턴스화도 쓰이고
+/// 있어서(예: add_user), 거기에 `Object`를 바로 derive하면 아직 안 옮긴 plain poem
+/// 라우트까지 전부 깨진다. 그래서 `#[OpenApi]`로 옮긴 라우트는 이 타입을 대신 쓴다 —
+/// 필드 이름/순서가 같으니 프론트가 받는 JSON은 완전히 동일하다.
+#[derive(Debug, Serialize, Object)]
+#[oai(rename_all = "snake_case")]
+pub struct ApiResponse<
+    T: poem_openapi::types::Type
+        + poem_openapi::types::ParseFromJSON
+        + poem_openapi::types::ToJSON
+        + Send
+        + Sync,
+> {
+    pub status: bool,
+    pub data: Option<T>,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Serialize, Object)]
 pub struct Post {
     pub post_id: String,
     pub title: String,
@@ -40,7 +60,7 @@ pub struct Post {
     pub status: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Object)]
 pub struct PostItem {
     pub post_id: String,
     pub title: String,
@@ -50,18 +70,18 @@ pub struct PostItem {
     pub status: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Object)]
 pub struct UploadPostResponse {
     pub post_id: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Object)]
 pub struct Tag {
     pub tag: String,
     pub category: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Object)]
 pub struct UploadPostRequest {
     pub title: String,
     pub description: String,
@@ -71,7 +91,7 @@ pub struct UploadPostRequest {
     pub status: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Object)]
 pub struct LoginRequest {
     pub user_id: String,
     pub password: String,
@@ -82,7 +102,7 @@ pub struct GoogleLoginRequest {
     pub id_token: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Object)]
 pub struct LoginResponse {
     pub access_token: String,
     pub refresh_token: String,
@@ -116,12 +136,12 @@ pub struct PostResponseDb {
     pub tags: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Object)]
 pub struct PostsResponse {
     pub posts: Vec<PostItem>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Object)]
 pub struct UpdatePostRequest {
     pub title: String,
     pub description: String,
@@ -131,12 +151,12 @@ pub struct UpdatePostRequest {
     pub status: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Object)]
 pub struct DeletePostResponse {
     pub post_id: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Object)]
 pub struct UploadImageResponse {
     pub image_path: String,
 }
@@ -160,43 +180,47 @@ pub struct SignupRequest {
     pub password: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Object)]
 pub struct PortfolioLink {
     pub label: String,
     pub url: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Object)]
 pub struct PortfolioIdentity {
     pub name: String,
     pub email: String,
     pub github_url: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Object)]
 pub struct PortfolioProject {
     pub slug: String,
     pub title: String,
     pub period: String,
     pub summary: String,
     #[serde(default)]
+    #[oai(default = "Vec::<String>::new")]
     pub stack: Vec<String>,
     #[serde(default)]
+    #[oai(default = "Vec::<String>::new")]
     pub highlights: Vec<String>,
     #[serde(default)]
+    #[oai(default = "Vec::<PortfolioLink>::new")]
     pub links: Vec<PortfolioLink>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Object)]
 pub struct PortfolioCareerItem {
     pub title: String,
     #[serde(default)]
     pub period: Option<String>,
     #[serde(default)]
+    #[oai(default = "Vec::<String>::new")]
     pub bullets: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Object)]
 pub struct PortfolioCareerCompany {
     pub company: String,
     pub period: String,
@@ -204,42 +228,46 @@ pub struct PortfolioCareerCompany {
     pub role: String,
     pub position: String,
     #[serde(default)]
+    #[oai(default = "Vec::<PortfolioCareerItem>::new")]
     pub items: Vec<PortfolioCareerItem>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Object)]
 pub struct PortfolioCareerSection {
     pub summary_label: String,
     pub summary_value: String,
     #[serde(default)]
+    #[oai(default = "Vec::<PortfolioCareerCompany>::new")]
     pub companies: Vec<PortfolioCareerCompany>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Object)]
 pub struct PortfolioTechStackItem {
     pub name: String,
     pub icon_url: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Object)]
 pub struct PortfolioIntroSection {
     pub content: String,
     #[serde(default)]
+    #[oai(default = "Vec::<PortfolioTechStackItem>::new")]
     pub tech_stack: Vec<PortfolioTechStackItem>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Object)]
 pub struct PortfolioMeta {
     pub slug: String,
     pub version: i32,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Object)]
 pub struct PortfolioDocument {
     pub slug: String,
     pub version: i32,
     pub identity: PortfolioIdentity,
     #[serde(default)]
+    #[oai(default = "Vec::<PortfolioProject>::new")]
     pub featured_projects: Vec<PortfolioProject>,
     #[serde(default)]
     pub career: Option<PortfolioCareerSection>,
@@ -264,7 +292,7 @@ pub struct PortfolioSectionRow {
     pub updated_at: String,
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, Object)]
 pub struct PortfolioResponse {
     pub portfolio_id: i32,
     pub slug: String,
@@ -273,7 +301,7 @@ pub struct PortfolioResponse {
     pub updated_at: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Object)]
 pub struct UpdatePortfolioRequest {
     pub content: PortfolioDocument,
 }
@@ -295,13 +323,13 @@ pub struct CountWithTag {
     pub count: i64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Object)]
 pub struct TagsWithCategory {
     pub category: String,
     pub tags: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Object)]
 pub struct TagWithCategory {
     pub tag: String,
     pub category: String,
@@ -367,7 +395,7 @@ pub struct CreateWeddingGuestResponse {
     pub guest_id: i64,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, Object)]
 pub struct WeddingGuest {
     pub guest_id: i64,
     pub name: String,
@@ -377,7 +405,7 @@ pub struct WeddingGuest {
     pub created_at: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Object)]
 pub struct WeddingGuestListResponse {
     pub guests: Vec<WeddingGuest>,
     pub total_guests: i64,
