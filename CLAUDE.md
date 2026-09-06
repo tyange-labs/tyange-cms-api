@@ -110,3 +110,29 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
   `is_success()`(2xx 전체)로 일반화 — `return_run_info`에 따라 204/201이 갈릴 수 있어서.
   `TYANGE_BLOG_REDEPLOY_TOKEN`은 이제 GitHub PAT가 아니라 해당 저장소의 Actions 실행 권한을
   가진 Forgejo API 토큰이어야 한다.
+- 포트폴리오 죽은 라우트/테스트 정리 + markdown 필드 도입 (2026-09) — tyange-cms의
+  포트폴리오 편집 UX가 너무 힘들다는 문제(중첩 폼, `highlights`/`bullets` 배열을
+  textarea에서 `join('\n')`/`split('\n')`으로 왕복시키다 마지막 줄 Enter가 씹히는
+  버그)를 markdown 기반 편집으로 풀었다.
+  - 선행 정리: `src/routes/{get,update,update_section,delete}_portfolio.rs`(등록만
+    안 된 죽은 사본, `openapi.rs::PortfolioApi`가 실제 서빙)와 그걸 테스트하던
+    `portfolio_routes_test.rs`(즉 cargo test가 통과해도 실서비스 라우트는 검증 안
+    됐음)를 정리 — 테스트를 실제 `PortfolioApi`(OpenApiService를 TestClient에 직접
+    물림) 대상으로 재작성.
+  - `PortfolioProject.highlights: Vec<String>` → `highlights_markdown: String`,
+    `PortfolioCareerItem.bullets: Vec<String>` → `bullets_markdown: String`으로 변경.
+    배열 파싱 왕복 자체가 없어져서 그 버그가 구조적으로 해결됨. `summary`/
+    `intro.content`는 타입 변경 없이(이미 `String`) "markdown일 수 있음"으로 의미
+    전환만 — 백엔드는 여전히 markdown을 파싱하지 않고 문자열 그대로 저장/반환한다
+    (렌더링은 프론트엔드 담당, 새 markdown 관련 의존성 추가 없음).
+  - `validate_portfolio_section`이 원본 JSON이 아니라 **파싱된 구조체를 재직렬화**
+    하도록 수정 — 예전엔 스키마에 없는 키(`identity.role`/`location`/`availability`
+    등 레거시)가 원본 값 그대로 재저장돼서 운영 DB에 죽은 필드가 계속 쌓였다.
+  - `update_portfolio`/`delete_portfolio`의 여러 SQL을 `pool.begin()`/`commit()`
+    트랜잭션으로 묶음 — 예전엔 각 statement가 독립 커밋돼서 중간 실패 시 반쪽짜리
+    문서가 남을 수 있었다. `upsert_portfolio_section` 헬퍼도 `sqlx::Executor`
+    제네릭으로 바꿔서 pool/트랜잭션 양쪽에서 재사용 가능하게 함.
+  - 운영 DB의 실제 데이터(레거시 `identity` 키, `highlights`/`bullets` 배열 모양,
+    남아있을 수 있는 `portfolio_documents` 테이블)는 코드 마이그레이션이 아니라
+    `scripts/migrate_portfolio_markdown.py`를 SSH로 직접 실행해 변환했다 — 자세한
+    내용과 백업 절차는 그 스크립트 커밋 메시지 참고.

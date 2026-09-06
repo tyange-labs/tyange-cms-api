@@ -148,11 +148,18 @@ blog 대상 포스트 판정은 `status != draft` 이고 `dev` 태그가 없는 
 - `GET /portfolio`
 포트폴리오 콘텐츠 조회. DB 스키마는 `portfolio_section` 테이블로 분리되어 있지만, 응답은 기존 단일 문서 형태로 병합되어 호환성을 유지한다.
 
-- `PUT /portfolio` / `PUT /portfolio/update` (JWT, Admin)
-포트폴리오 콘텐츠 전체 수정. `/portfolio/update`는 레거시 경로.
+- `PUT /portfolio/update` (JWT, Admin)
+포트폴리오 콘텐츠 전체 수정. 최초 생성 시에만 쓰고 이후는 섹션별 저장(`/portfolio/sections/:section_key`)을 쓴다. (`PUT /portfolio`라는 경로는 없다 — 과거 문서에 오기재돼 있었음.)
 
 - `PUT /portfolio/sections/:section_key` (JWT, Admin)
 포트폴리오 섹션(`intro`, `career`, `featured_projects` 등)만 부분 업데이트. 단일 JSON을 통째로 덮어쓰지 않고 섹션 단위로 저장해 동시 편집 충돌과 요청 크기를 줄인다.
+
+**Markdown 필드**: `intro.content`, `featured_projects[].summary`, `featured_projects[].highlights_markdown`,
+`career.companies[].items[].bullets_markdown`은 markdown 문자열이다. 백엔드는 이 필드들을
+파싱하지 않고 문자열 그대로 저장·반환만 한다 — 렌더링은 프론트엔드(tyange-cms 미리보기,
+tyange-dev)가 담당한다. `highlights_markdown`/`bullets_markdown`은 각각 예전
+`highlights: string[]`/`bullets: string[]`을 대체한 필드로, 불릿 리스트를
+`- 항목\n- 항목` 형태의 markdown 텍스트로 담는다(2026-09).
 
 - `DELETE /portfolio` (JWT, Admin)
 포트폴리오 초기화.
@@ -183,7 +190,8 @@ curl -sS -X POST http://127.0.0.1:8080/login \
 ## 설계 메모
 
 - **권한 스코핑**: 모든 수정/조회 API는 미들웨어로 `current_user()`를 주입받아 `user_id` 소유권을 일관되게 검증한다. 관리자 전용 엔드포인트는 `AdminOnly` 미들웨어가 role까지 확인한다.
-- **포트폴리오 DB 마이그레이션**: 초기에는 `portfolio_documents`에 단일 JSON을 저장했으나, 섹션 단위 편집 UX가 필요해지면서 `portfolio_section(section_key, content_json)` 테이블로 분리. 응답 스키마는 기존 클라이언트 호환성을 위해 런타임에 섹션들을 병합해 단일 문서로 내린다.
+- **포트폴리오 DB 마이그레이션**: 초기에는 `portfolio_documents`에 단일 JSON을 저장했으나, 섹션 단위 편집 UX가 필요해지면서 `portfolio_section(section_key, content)` 테이블로 분리. 응답 스키마는 기존 클라이언트 호환성을 위해 런타임에 섹션들을 병합해 단일 문서로 내린다. `portfolio_section.content`는 각 섹션의 JSON을 그대로 문자열로 담는 TEXT 컬럼(컬럼명은 `content_json`이 아니라 `content`).
+- **포트폴리오 markdown 필드 검증**: `PUT /portfolio/sections/:key`는 섹션 키마다 다른 구조체로 파싱해서 검증한 뒤, **파싱된 구조체를 재직렬화**해 저장한다(원본 JSON을 그대로 저장하지 않음) — 그래야 스키마에 없는 키가 DB에 남지 않는다. markdown 필드(`intro.content` 등) 자체는 여전히 파싱 없이 문자열로만 검증된다.
 - **블로그 재배포 트리거**: 포스트 publish/update/delete 후 `dev` 태그가 없는 경우에 한해 `tyange-blog` 저장소의 Forgejo `workflow_dispatch` API(`POST /repos/{owner}/{repo}/actions/workflows/{file}/dispatches`, `Authorization: token <TOKEN>`)를 호출해 블로그를 재배포한다. dispatch 호출 실패는 로그만 남기고 CMS 저장은 유지한다. (2026-09 이전에는 GitHub `repository_dispatch`를 썼으나, Forgejo엔 대응 기능이 없어 이식했다.)
 
 ## 테스트 커버리지 하이라이트

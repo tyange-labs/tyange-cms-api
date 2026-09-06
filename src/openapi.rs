@@ -1,10 +1,11 @@
 //! `#[OpenApi]`로 옮긴 라우트들. OpenAPI 스펙 자동 생성이 목적이라 poem 프레임워크
 //! 자체는 그대로 쓰고, 라우트 등록 방식만 `#[handler]` 대신 `#[OpenApi]`를 쓴다.
 //!
-//! `src/routes/*.rs`의 원래 핸들러는 그대로 남겨두고(테스트가 그쪽을 참조할 수 있어서),
-//! 여기서는 같은 DB 쿼리/응답 조립 로직을 `#[oai(...)]` 메서드 시그니처에 맞게 옮겨 적는다.
-//! 아직 옮기지 않은 라우트(공개 하객 명단 접수, 웹푸시 등)는 `main.rs`에서 여전히
-//! plain poem 라우트로 등록된다.
+//! `src/routes/*.rs`에 원래 핸들러가 남아있는 라우트도 있다(테스트가 그쪽을 참조해서
+//! 등록만 빼고 지우진 않은 것 — post/portfolio/wedding/image 계열). 포트폴리오는
+//! 2026-09에 죽은 사본과 테스트를 정리해서 이 파일의 `PortfolioApi`만 남았다.
+//! 아직 옮기지 않은 라우트(공개 하객 명단 접수 등)는 `main.rs`에서 여전히 plain poem
+//! 라우트로 등록된다.
 
 use std::sync::Arc;
 
@@ -726,45 +727,54 @@ struct UpdateSectionResponse {
     updated_at: String,
 }
 
+// 파싱에 성공한 "구조체"를 재직렬화한다 — 원본 value를 그대로 재직렬화하면 스키마에
+// 없는 키(예전 identity.role/location/availability처럼)가 계속 살아남는다. 구조체를
+// 거쳐 다시 직렬화하면 알려진 필드만 남고, serde(default)가 채운 값도 일관되게 저장된다.
 fn validate_portfolio_section(section_key: &str, value: &serde_json::Value) -> Result<String, String> {
     use crate::models::{PortfolioCareerSection, PortfolioIdentity, PortfolioIntroSection, PortfolioMeta, PortfolioProject};
 
     match section_key {
         "meta" => {
-            let _: PortfolioMeta =
-                serde_json::from_value(value.clone()).map_err(|e| format!("meta 검증 실패: {}", e))?;
-            serde_json::to_string(value).map_err(|e| e.to_string())
+            let parsed: PortfolioMeta = serde_json::from_value(value.clone())
+                .map_err(|e| format!("meta 검증 실패: {}", e))?;
+            serde_json::to_string(&parsed).map_err(|e| e.to_string())
         }
         "identity" => {
-            let _: PortfolioIdentity = serde_json::from_value(value.clone())
+            let parsed: PortfolioIdentity = serde_json::from_value(value.clone())
                 .map_err(|e| format!("identity 검증 실패: {}", e))?;
-            serde_json::to_string(value).map_err(|e| e.to_string())
+            serde_json::to_string(&parsed).map_err(|e| e.to_string())
         }
         "featured_projects" => {
-            let _: Vec<PortfolioProject> = serde_json::from_value(value.clone())
+            let parsed: Vec<PortfolioProject> = serde_json::from_value(value.clone())
                 .map_err(|e| format!("featured_projects 검증 실패: {}", e))?;
-            serde_json::to_string(value).map_err(|e| e.to_string())
+            serde_json::to_string(&parsed).map_err(|e| e.to_string())
         }
         "career" => {
-            let _: PortfolioCareerSection = serde_json::from_value(value.clone())
+            let parsed: PortfolioCareerSection = serde_json::from_value(value.clone())
                 .map_err(|e| format!("career 검증 실패: {}", e))?;
-            serde_json::to_string(value).map_err(|e| e.to_string())
+            serde_json::to_string(&parsed).map_err(|e| e.to_string())
         }
         "intro" => {
-            let _: PortfolioIntroSection = serde_json::from_value(value.clone())
+            let parsed: PortfolioIntroSection = serde_json::from_value(value.clone())
                 .map_err(|e| format!("intro 검증 실패: {}", e))?;
-            serde_json::to_string(value).map_err(|e| e.to_string())
+            serde_json::to_string(&parsed).map_err(|e| e.to_string())
         }
         _ => Err(format!("알 수 없는 섹션: {}", section_key)),
     }
 }
 
-async fn upsert_portfolio_section(
-    pool: &sqlx::SqlitePool,
+// pool과 트랜잭션(&mut *tx) 양쪽에서 다 쓸 수 있도록 Executor로 제네릭화했다 —
+// update_portfolio/delete_portfolio가 여러 statement를 트랜잭션 하나로 묶으면서
+// 이 헬퍼도 트랜잭션 안에서 호출해야 했다.
+async fn upsert_portfolio_section<'e, E>(
+    executor: E,
     portfolio_id: i32,
     section_key: &str,
     content: &str,
-) -> Result<(), sqlx::Error> {
+) -> Result<(), sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = Sqlite>,
+{
     query(
         r#"
         INSERT INTO portfolio_section (portfolio_id, section_key, content, created_at, updated_at)
@@ -777,7 +787,7 @@ async fn upsert_portfolio_section(
     .bind(portfolio_id)
     .bind(section_key)
     .bind(content)
-    .execute(pool)
+    .execute(executor)
     .await?;
     Ok(())
 }
@@ -943,6 +953,16 @@ impl PortfolioApi {
         let slug = content.slug.trim();
         let slug = if slug.is_empty() { "dev" } else { slug };
 
+        // 아래 여러 INSERT/UPDATE/DELETE가 이 트랜잭션 하나로 묶인다 — 예전엔 각각
+        // 독립적으로 커밋돼서 중간에 실패하면(예: featured_projects 저장 성공,
+        // career 저장 실패) 문서가 반쪽짜리 상태로 남을 수 있었다.
+        let mut tx = self.state.db.begin().await.map_err(|err| {
+            poem::Error::from_string(
+                format!("트랜잭션 시작 실패: {}", err),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?;
+
         query(
             r#"
             INSERT INTO portfolio (slug, created_at)
@@ -951,7 +971,7 @@ impl PortfolioApi {
             "#,
         )
         .bind(slug)
-        .execute(&self.state.db)
+        .execute(&mut *tx)
         .await
         .map_err(|err| {
             poem::Error::from_string(
@@ -962,7 +982,7 @@ impl PortfolioApi {
 
         let portfolio_id: i32 = sqlx::query_scalar("SELECT portfolio_id FROM portfolio WHERE slug = ?")
             .bind(slug)
-            .fetch_one(&self.state.db)
+            .fetch_one(&mut *tx)
             .await
             .map_err(|err| {
                 poem::Error::from_string(
@@ -1013,9 +1033,7 @@ impl PortfolioApi {
                 )
             })?;
 
-        let pool = &self.state.db;
-
-        upsert_portfolio_section(pool, portfolio_id, "meta", &meta_json)
+        upsert_portfolio_section(&mut *tx, portfolio_id, "meta", &meta_json)
             .await
             .map_err(|err| {
                 poem::Error::from_string(
@@ -1023,7 +1041,7 @@ impl PortfolioApi {
                     StatusCode::INTERNAL_SERVER_ERROR,
                 )
             })?;
-        upsert_portfolio_section(pool, portfolio_id, "identity", &identity_json)
+        upsert_portfolio_section(&mut *tx, portfolio_id, "identity", &identity_json)
             .await
             .map_err(|err| {
                 poem::Error::from_string(
@@ -1031,7 +1049,7 @@ impl PortfolioApi {
                     StatusCode::INTERNAL_SERVER_ERROR,
                 )
             })?;
-        upsert_portfolio_section(pool, portfolio_id, "featured_projects", &projects_json)
+        upsert_portfolio_section(&mut *tx, portfolio_id, "featured_projects", &projects_json)
             .await
             .map_err(|err| {
                 poem::Error::from_string(
@@ -1041,7 +1059,7 @@ impl PortfolioApi {
             })?;
 
         if let Some(career_str) = &career_json {
-            upsert_portfolio_section(pool, portfolio_id, "career", career_str)
+            upsert_portfolio_section(&mut *tx, portfolio_id, "career", career_str)
                 .await
                 .map_err(|err| {
                     poem::Error::from_string(
@@ -1052,7 +1070,7 @@ impl PortfolioApi {
         } else {
             query("DELETE FROM portfolio_section WHERE portfolio_id = ? AND section_key = 'career'")
                 .bind(portfolio_id)
-                .execute(pool)
+                .execute(&mut *tx)
                 .await
                 .map_err(|err| {
                     poem::Error::from_string(
@@ -1063,7 +1081,7 @@ impl PortfolioApi {
         }
 
         if let Some(intro_str) = &intro_json {
-            upsert_portfolio_section(pool, portfolio_id, "intro", intro_str)
+            upsert_portfolio_section(&mut *tx, portfolio_id, "intro", intro_str)
                 .await
                 .map_err(|err| {
                     poem::Error::from_string(
@@ -1074,7 +1092,7 @@ impl PortfolioApi {
         } else {
             query("DELETE FROM portfolio_section WHERE portfolio_id = ? AND section_key = 'intro'")
                 .bind(portfolio_id)
-                .execute(pool)
+                .execute(&mut *tx)
                 .await
                 .map_err(|err| {
                     poem::Error::from_string(
@@ -1087,7 +1105,7 @@ impl PortfolioApi {
         let updated_at: String =
             sqlx::query_scalar("SELECT MAX(updated_at) FROM portfolio_section WHERE portfolio_id = ?")
                 .bind(portfolio_id)
-                .fetch_one(pool)
+                .fetch_one(&mut *tx)
                 .await
                 .map_err(|err| {
                     poem::Error::from_string(
@@ -1098,7 +1116,7 @@ impl PortfolioApi {
         let created_at: String =
             sqlx::query_scalar("SELECT created_at FROM portfolio WHERE portfolio_id = ?")
                 .bind(portfolio_id)
-                .fetch_one(pool)
+                .fetch_one(&mut *tx)
                 .await
                 .map_err(|err| {
                     poem::Error::from_string(
@@ -1106,6 +1124,13 @@ impl PortfolioApi {
                         StatusCode::INTERNAL_SERVER_ERROR,
                     )
                 })?;
+
+        tx.commit().await.map_err(|err| {
+            poem::Error::from_string(
+                format!("트랜잭션 커밋 실패: {}", err),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?;
 
         Ok(Json(ApiResponse {
             status: true,
@@ -1220,9 +1245,16 @@ impl PortfolioApi {
             )
         })?;
 
+        let mut tx = self.state.db.begin().await.map_err(|err| {
+            poem::Error::from_string(
+                format!("트랜잭션 시작 실패: {}", err),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?;
+
         query("DELETE FROM portfolio_section WHERE portfolio_id = ?")
             .bind(portfolio_id)
-            .execute(&self.state.db)
+            .execute(&mut *tx)
             .await
             .map_err(|err| {
                 poem::Error::from_string(
@@ -1232,7 +1264,7 @@ impl PortfolioApi {
             })?;
         query("DELETE FROM portfolio WHERE portfolio_id = ?")
             .bind(portfolio_id)
-            .execute(&self.state.db)
+            .execute(&mut *tx)
             .await
             .map_err(|err| {
                 poem::Error::from_string(
@@ -1240,6 +1272,13 @@ impl PortfolioApi {
                     StatusCode::INTERNAL_SERVER_ERROR,
                 )
             })?;
+
+        tx.commit().await.map_err(|err| {
+            poem::Error::from_string(
+                format!("트랜잭션 커밋 실패: {}", err),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?;
 
         Ok(DeletePortfolioResponse::NoContent)
     }

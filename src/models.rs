@@ -193,13 +193,19 @@ pub struct PortfolioProject {
     pub slug: String,
     pub title: String,
     pub period: String,
+    /// Markdown. 프론트엔드(tyange-dev)가 렌더링한다 — 백엔드는 문자열 그대로
+    /// 저장/반환만 하고 파싱하지 않는다(PortfolioIntroSection.content와 동일 취급).
     pub summary: String,
     #[serde(default)]
     #[oai(default = "Vec::<String>::new")]
     pub stack: Vec<String>,
+    /// Markdown 불릿 리스트(`- 항목` 줄바꿈). 예전엔 `highlights: Vec<String>`이었으나
+    /// 프론트엔드에서 `join('\n')`/`split('\n')`으로 왕복시키는 로직에 버그가 있었고
+    /// (마지막 줄 Enter가 씹힘), 편집 경험도 나빴다. markdown 문자열로 그대로
+    /// 저장/렌더링하는 쪽이 배열 파싱 왕복 자체를 없애 더 간단하고 안전하다.
     #[serde(default)]
-    #[oai(default = "Vec::<String>::new")]
-    pub highlights: Vec<String>,
+    #[oai(default)]
+    pub highlights_markdown: String,
     #[serde(default)]
     #[oai(default = "Vec::<PortfolioLink>::new")]
     pub links: Vec<PortfolioLink>,
@@ -210,9 +216,11 @@ pub struct PortfolioCareerItem {
     pub title: String,
     #[serde(default)]
     pub period: Option<String>,
+    /// Markdown 불릿 리스트. `PortfolioProject.highlights_markdown`과 같은 이유로
+    /// `Vec<String>`에서 전환.
     #[serde(default)]
-    #[oai(default = "Vec::<String>::new")]
-    pub bullets: Vec<String>,
+    #[oai(default)]
+    pub bullets_markdown: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Object)]
@@ -244,6 +252,8 @@ pub struct PortfolioTechStackItem {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Object)]
 pub struct PortfolioIntroSection {
+    /// Markdown. 프론트엔드(tyange-dev)가 렌더링한다 — 백엔드는 파싱하지 않고
+    /// 문자열 그대로 저장/반환만 한다.
     pub content: String,
     #[serde(default)]
     #[oai(default = "Vec::<PortfolioTechStackItem>::new")]
