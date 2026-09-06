@@ -1,20 +1,22 @@
-use std::sync::Arc;
+// 이 테스트는 실제로 서빙되는 openapi.rs::PortfolioApi를 대상으로 한다.
+// 예전엔 등록만 안 된 src/routes/{get,update,delete}_portfolio.rs(죽은 코드)를
+// 테스트하고 있어서, cargo test가 통과해도 실서비스 라우트는 전혀 검증이 안 됐다
+// (CLAUDE.md에 기록된 기술부채, 2026-09 정리). PortfolioApi는 poem-openapi
+// OpenApiService로 감싸져 있어 OpenApiService 자체를 TestClient에 바로 물린다 —
+// main.rs가 실제로 nest하는 것과 동일한 조립.
+use std::{env, sync::Arc};
 
-use poem::{EndpointExt, Route, get, http::StatusCode, put, test::TestClient};
+use poem::{http::StatusCode, test::TestClient};
+use poem_openapi::OpenApiService;
 use serde_json::json;
 use sqlx::{SqlitePool, query_scalar};
 
-use crate::{
-    db::init_db,
-    models::AppState,
-    routes::{
-        delete_portfolio::delete_portfolio, get_portfolio::get_portfolio,
-        update_portfolio::update_portfolio,
-        update_portfolio_section::update_portfolio_section,
-    },
-};
+use crate::{db::init_db, models::AppState, openapi::PortfolioApi};
+use tyange_cms_api::auth::jwt::Claims;
 
 async fn create_state() -> Arc<AppState> {
+    env::set_var("JWT_ACCESS_SECRET", "test-access-secret");
+
     let db = SqlitePool::connect("sqlite::memory:")
         .await
         .expect("failed to connect sqlite");
@@ -22,55 +24,67 @@ async fn create_state() -> Arc<AppState> {
     Arc::new(AppState::new(db))
 }
 
+fn create_portfolio_app(state: Arc<AppState>) -> OpenApiService<PortfolioApi, ()> {
+    OpenApiService::new(PortfolioApi { state }, "test", "1.0")
+}
+
+fn admin_token() -> String {
+    Claims::create_access_token("admin@example.com", "admin", b"test-access-secret")
+        .expect("failed to create admin token")
+}
+
+fn user_token() -> String {
+    Claims::create_access_token("member@example.com", "user", b"test-access-secret")
+        .expect("failed to create user token")
+}
+
+fn sample_portfolio_payload() -> serde_json::Value {
+    json!({
+        "content": {
+            "slug": "dev",
+            "version": 1,
+            "identity": {
+                "name": "TYANGE",
+                "email": "usun16@gmail.com",
+                "github_url": "https://github.com/tyange"
+            },
+            "featured_projects": [],
+            "career": {
+                "summary_label": "경력",
+                "summary_value": "4년",
+                "companies": [
+                    {
+                        "company": "테스트 회사",
+                        "period": "2020.01 - 2022.12",
+                        "employment_type": "정규직",
+                        "role": "프론트엔드 개발",
+                        "position": "사원",
+                        "items": [
+                            {
+                                "title": "서비스 운영",
+                                "period": "2021.01 - 2022.12",
+                                "bullets": ["React 운영", "TypeScript 전환"]
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    })
+}
+
 #[tokio::test]
 async fn get_portfolio_returns_not_found_initially_and_put_creates_and_updates_it() {
     let state = create_state().await;
-    let cli = TestClient::new(
-        Route::new()
-            .at("/portfolio", get(get_portfolio).put(update_portfolio))
-            .data(state),
-    );
+    let cli = TestClient::new(create_portfolio_app(state));
 
     let initial = cli.get("/portfolio").send().await;
     initial.assert_status(StatusCode::NOT_FOUND);
 
     let created = cli
-        .put("/portfolio")
-        .body_json(&json!({
-            "content": {
-                "slug": "dev",
-                "version": 1,
-                "identity": {
-                    "name": "TYANGE",
-                    "role": "프론트엔드 개발자",
-                    "location": "서울, 대한민국",
-                    "availability": "브랜딩과 제품 완성도가 중요한 작업을 선별해 진행합니다",
-                    "email": "usun16@gmail.com",
-                    "github_url": "https://github.com/tyange"
-                },
-                "featured_projects": [],
-                "career": {
-                    "summary_label": "경력",
-                    "summary_value": "4년",
-                    "companies": [
-                        {
-                            "company": "테스트 회사",
-                            "period": "2020.01 - 2022.12",
-                            "employment_type": "정규직",
-                            "role": "프론트엔드 개발",
-                            "position": "사원",
-                            "items": [
-                                {
-                                    "title": "서비스 운영",
-                                    "period": "2021.01 - 2022.12",
-                                    "bullets": ["React 운영", "TypeScript 전환"]
-                                }
-                            ]
-                        }
-                    ]
-                }
-            }
-        }))
+        .put("/portfolio/update")
+        .header("Authorization", admin_token())
+        .body_json(&sample_portfolio_payload())
         .send()
         .await;
 
@@ -138,40 +152,37 @@ async fn get_portfolio_returns_not_found_initially_and_put_creates_and_updates_i
 }
 
 #[tokio::test]
+async fn update_portfolio_rejects_non_admin_user() {
+    let state = create_state().await;
+    let cli = TestClient::new(create_portfolio_app(state));
+
+    let response = cli
+        .put("/portfolio/update")
+        .header("Authorization", user_token())
+        .body_json(&sample_portfolio_payload())
+        .send()
+        .await;
+
+    response.assert_status(StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
 async fn delete_portfolio_removes_document() {
     let state = create_state().await;
-    let cli = TestClient::new(
-        Route::new()
-            .at(
-                "/portfolio",
-                get(get_portfolio)
-                    .put(update_portfolio)
-                    .delete(delete_portfolio),
-            )
-            .data(state.clone()),
-    );
+    let cli = TestClient::new(create_portfolio_app(state.clone()));
 
-    cli.put("/portfolio")
-        .body_json(&json!({
-            "content": {
-                "slug": "dev",
-                "version": 1,
-                "identity": {
-                    "name": "Test",
-                    "role": "dev",
-                    "location": "Seoul",
-                    "availability": "",
-                    "email": "",
-                    "github_url": ""
-                },
-                "featured_projects": []
-            }
-        }))
+    cli.put("/portfolio/update")
+        .header("Authorization", admin_token())
+        .body_json(&sample_portfolio_payload())
         .send()
         .await
         .assert_status_is_ok();
 
-    let deleted = cli.delete("/portfolio").send().await;
+    let deleted = cli
+        .delete("/portfolio")
+        .header("Authorization", admin_token())
+        .send()
+        .await;
     deleted.assert_status(StatusCode::NO_CONTENT);
 
     let remaining: Option<String> = query_scalar("SELECT slug FROM portfolio WHERE slug = ?")
@@ -182,11 +193,10 @@ async fn delete_portfolio_removes_document() {
 
     assert!(remaining.is_none());
 
-    let section_count: i32 =
-        query_scalar("SELECT COUNT(*) FROM portfolio_section")
-            .fetch_one(&state.db)
-            .await
-            .expect("failed to count sections");
+    let section_count: i32 = query_scalar("SELECT COUNT(*) FROM portfolio_section")
+        .fetch_one(&state.db)
+        .await
+        .expect("failed to count sections");
 
     assert_eq!(section_count, 0);
 }
@@ -194,24 +204,16 @@ async fn delete_portfolio_removes_document() {
 #[tokio::test]
 async fn update_section_updates_individual_section() {
     let state = create_state().await;
-    let cli = TestClient::new(
-        Route::new()
-            .at("/portfolio", get(get_portfolio).put(update_portfolio))
-            .at("/portfolio/sections/:section_key", put(update_portfolio_section))
-            .data(state),
-    );
+    let cli = TestClient::new(create_portfolio_app(state));
 
-    // Create initial portfolio
-    cli.put("/portfolio")
+    cli.put("/portfolio/update")
+        .header("Authorization", admin_token())
         .body_json(&json!({
             "content": {
                 "slug": "dev",
                 "version": 1,
                 "identity": {
                     "name": "Before",
-                    "role": "dev",
-                    "location": "Seoul",
-                    "availability": "",
                     "email": "old@example.com",
                     "github_url": ""
                 },
@@ -225,12 +227,10 @@ async fn update_section_updates_individual_section() {
     // Update only the identity section
     let section_updated = cli
         .put("/portfolio/sections/identity")
+        .header("Authorization", admin_token())
         .body_json(&json!({
             "content": {
                 "name": "After",
-                "role": "frontend",
-                "location": "Seoul",
-                "availability": "",
                 "email": "new@example.com",
                 "github_url": "https://github.com/tyange"
             }
@@ -266,4 +266,26 @@ async fn update_section_updates_individual_section() {
         .object()
         .get("name")
         .assert_string("After");
+}
+
+#[tokio::test]
+async fn update_portfolio_section_rejects_unknown_section_key() {
+    let state = create_state().await;
+    let cli = TestClient::new(create_portfolio_app(state));
+
+    cli.put("/portfolio/update")
+        .header("Authorization", admin_token())
+        .body_json(&sample_portfolio_payload())
+        .send()
+        .await
+        .assert_status_is_ok();
+
+    let response = cli
+        .put("/portfolio/sections/unknown_section")
+        .header("Authorization", admin_token())
+        .body_json(&json!({ "content": {} }))
+        .send()
+        .await;
+
+    response.assert_status(StatusCode::BAD_REQUEST);
 }
