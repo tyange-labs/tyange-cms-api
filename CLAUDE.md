@@ -85,14 +85,21 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
 - CI를 GitHub Actions에서 Forgejo Actions로 전환 (2026-09) — `.github/workflows` 삭제,
   `.forgejo/workflows/deploy.yml`로 이전. 원래 워크플로가 `deploy on tyange-home-server`
   environment를 썼는데, 이건 조직 러너가 도는 EC2/lightsail 서버와는 다른(SSH로만 접속하는)
-  별도 배포 대상이다. `runs-on: self-hosted`는 Docker 격리 없는 host 라벨(tyange-dev와
-  동일 패턴)을 가리키는데, **이 러너 호스트에 Rust가 깔려 있는지 확인 안 됨** — 워크플로에
-  `cargo` 없으면 rustup으로 설치하는 방어 스텝을 넣어뒀다. `uses:`는 전부
-  `https://github.com/...` 완전한 URL 사용(data.forgejo.org 기본 레지스트리엔
-  `appleboy/*` 서드파티 액션이 없음). Forgejo 쪽 secrets/vars(`HOST`/`USERNAME`/
-  `SSH_PRIVATE_KEY`/`JWT_ACCESS_SECRET` 등, tyange-cms와 이름 체계가 다름 — 언더스코어
-  없는 `USERNAME` 등 그대로 유지)는 자동으로 안 넘어와서 웹 UI에서 재등록 필요,
-  Settings → Units → Overview의 Actions 체크박스도 켜야 함 — 둘 다 아직 확인 안 함
+  별도 배포 대상이다. `runs-on: self-hosted`는 (한때 Docker 격리 없는 host 라벨로
+  알고 있었으나, 2026-09-06에 `docker ps`/`docker top`으로 직접 확인해보니 실제로는
+  **매 실행마다 새로 뜨는 `node:lts-bookworm` 컨테이너**였다 — 조직 러너가
+  `self-hosted:docker://node:lts-bookworm` 하나로만 등록돼 있고 로그엔 라벨 이름만
+  찍혀서 헷갈렸음) — 즉 Rust도 cargo 캐시도 컨테이너와 함께 매번 사라진다. 워크플로에
+  `cargo` 없으면 rustup으로 설치하는 방어 스텝과, `~/.cargo/registry`·`target`을
+  캐싱하는 `actions/cache` 스텝을 넣어뒀다(캐시 안 맞으면 이 서버 사양으로 콜드
+  빌드에 30~40분 걸림 — 실측함). `uses:`는 전부 `https://github.com/...` 완전한
+  URL 사용(data.forgejo.org 기본 레지스트리엔 `appleboy/*`/`actions/cache` 같은
+  서드파티 액션이 없음). Forgejo 쪽 secrets/vars(`HOST`/`USERNAME`/
+  `LIGHTSAIL_SSH_KEY`/`JWT_ACCESS_SECRET`/`DATABASE_PATH`/`UPLOAD_PATH`/
+  `SERVICE_PATH` 등)는 자동으로 안 넘어와서 웹 UI에서 재등록 필요 — 2026-09-06에
+  사용자가 등록함(tyange-cms의 `DEPLOY_PATH` 등 vars 일부는 처음에 빠뜨려서 배포가
+  SCP 단계에서 실패했었고, 그 뒤 채워 넣어 해결). Settings → Units → Overview의
+  Actions 체크박스도 켜야 함.
 - Google 로그인 / Web Push 기능 완전 제거 (2026-09) — 실사용 안 해서 걷어냄.
   `auth/google.rs`, `routes/login_google.rs`, `web_push.rs`, push 라우트 4개 삭제.
   `users.google_sub` 컬럼과 `web_push_subscriptions` 테이블은 `init_db()`에서

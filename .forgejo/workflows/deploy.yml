@@ -23,17 +23,34 @@ env:
 
 jobs:
   build:
-    # forgejo-runner를 `--label self-hosted:host`로 띄웠다는 전제 — Docker 없이
-    # 러너를 구동하는 서버(EC2/lightsail)에서 직접 실행된다(격리 없음).
-    # tyange-dev/tyange-cms의 워크플로와 같은 패턴.
-    # 조직 스코프 러너에 등록된 docker 라벨(node:lts-bookworm)에는 Rust가 없어서
-    # 그쪽을 쓰면 cargo 자체가 없다 — bare host 라벨을 쓰고, 혹시 몰라 Rust
-    # 설치 여부도 매번 확인한다.
+    # 정정(2026-09-06): 예전엔 self-hosted가 bare host 라벨이라고 적어뒀는데,
+    # 실제로 `docker ps`/`docker top`으로 확인해보니 이 라벨도 `node:lts-bookworm`
+    # 컨테이너 안에서 돈다(조직 스코프 러너가 `self-hosted:docker://node:lts-bookworm`
+    # 하나로만 등록돼 있고, 로그엔 콜론 뒤 이미지 지정 없이 그냥 "[self-hosted]"로만
+    # 찍혀서 헷갈렸음). 즉 **매 실행마다 완전히 새 컨테이너**라 Rust도, cargo 캐시도
+    # 하나도 안 남는다 — 그래서 "Ensure Rust toolchain"이 매번 실제로 rustup을
+    # 새로 설치하고, 위 캐시 스텝이 없으면 의존성도 매번 처음부터 컴파일된다.
     runs-on: self-hosted
     environment: deploy on tyange-home-server
 
     steps:
       - uses: https://github.com/actions/checkout@v4
+
+      # 러너가 매 실행마다 새 컨테이너(node:lts-bookworm)를 띄우는 구조라 캐시가
+      # 없으면 의존성 크레이트를 전부 처음부터 컴파일한다(이 서버 사양으로 30~40분).
+      # Cargo.lock이 안 바뀌었으면 이 캐시로 대부분 건너뛸 수 있다. Forgejo가
+      # actions/cache 백엔드를 지원 안 하면 이 스텝은 조용히 스킵되고(에러 아님)
+      # 이후 스텝은 그냥 콜드 빌드로 진행된다.
+      - name: Cache cargo registry and build artifacts
+        uses: https://github.com/actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
       - name: Ensure Rust toolchain
         run: |
