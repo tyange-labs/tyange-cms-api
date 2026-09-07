@@ -166,3 +166,10 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
   (항목별 `## {title}` + `_{period}_` + bullets를 빈 줄로 이어붙임, 멱등). tyange-cms
   에디터는 회사별 마크다운 필드 하나로, tyange-dev는 `company.career_items_markdown`를
   한 번 렌더하도록 동기화.
+- featured_projects: `stack` 제거 + `folder` 도입 (2026-09) — `PortfolioProject`에서
+  `stack: Vec<String>` 삭제(tyange-dev에서 더 이상 노출 안 함), `folder: String` 추가.
+  같은 `folder` 값을 가진 프로젝트끼리 tyange-dev에서 한 묶음(라벨 아래 카드 그리드)으로
+  렌더된다 — 예전엔 tyange-dev가 slug를 하드코딩해 그룹을 만들었다(`pickGrouped("tyange-cms")`).
+  운영 DB는 `scripts/migrate_featured_folders.py`로 변환: `stack` 키 삭제 + slug→folder
+  시드(tyange-cms/tyange-cms-api→"CMS 시스템", tyange-blog/tyange-dev→"개인 사이트",
+  나머지는 "" = 단독). 멱등. tyange-cms 에디터는 Stack(TagsInput) → Folder(텍스트) 교체.

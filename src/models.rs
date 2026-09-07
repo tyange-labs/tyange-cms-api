@@ -195,9 +195,6 @@ pub struct PortfolioProject {
     /// Markdown. 프론트엔드(tyange-dev)가 렌더링한다 — 백엔드는 문자열 그대로
     /// 저장/반환만 하고 파싱하지 않는다(PortfolioIntroSection.content와 동일 취급).
     pub summary: String,
-    #[serde(default)]
-    #[oai(default = "Vec::<String>::new")]
-    pub stack: Vec<String>,
     /// Markdown 불릿 리스트(`- 항목` 줄바꿈). 예전엔 `highlights: Vec<String>`이었으나
     /// 프론트엔드에서 `join('\n')`/`split('\n')`으로 왕복시키는 로직에 버그가 있었고
     /// (마지막 줄 Enter가 씹힘), 편집 경험도 나빴다. markdown 문자열로 그대로
@@ -208,6 +205,13 @@ pub struct PortfolioProject {
     #[serde(default)]
     #[oai(default = "Vec::<PortfolioLink>::new")]
     pub links: Vec<PortfolioLink>,
+    /// 이 프로젝트가 속한 폴더 이름. 같은 값끼리 tyange-dev에서 한 묶음(라벨 아래
+    /// 카드 그리드)으로 렌더된다. 빈 문자열이면 단독 카드. 예전엔 tyange-dev가
+    /// slug를 하드코딩해 그룹을 만들었는데(`pickGrouped("tyange-cms")` 등) 그걸
+    /// 데이터로 옮겼다. `stack: Vec<String>` 필드는 같은 시점에 제거(2026-09).
+    #[serde(default)]
+    #[oai(default)]
+    pub folder: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Object)]
