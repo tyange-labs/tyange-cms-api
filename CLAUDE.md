@@ -156,20 +156,21 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
     제네릭으로 바꿔서 pool/트랜잭션 양쪽에서 재사용 가능하게 함.
   - 운영 DB의 실제 데이터(레거시 `identity` 키, `highlights`/`bullets` 배열 모양,
     남아있을 수 있는 `portfolio_documents` 테이블)는 코드 마이그레이션이 아니라
-    `scripts/migrate_portfolio_markdown.py`를 SSH로 직접 실행해 변환했다 — 자세한
-    내용과 백업 절차는 그 스크립트 커밋 메시지 참고.
+    일회성 스크립트를 SSH로 직접 실행해 변환했다 — 변환 내용과 백업 절차는 그
+    커밋 메시지 참고(스크립트는 Python이라 이후 제거, 2026-09).
 - career 세부 항목을 구조체 배열 → 단일 Markdown으로 (2026-09) — 편집 UX(회사 안에
   항목마다 title/period/bullets를 또 Accordion으로 접는 3중 중첩)가 싫다는 요청.
   `PortfolioCareerItem` 구조체 제거, `PortfolioCareerCompany.items: Vec<PortfolioCareerItem>`
   → `career_items_markdown: String`. 회사 스칼라 필드(company/period/employment_type/
-  role/position)는 그대로. 운영 DB는 `scripts/migrate_career_items_markdown.py`로 변환
-  (항목별 `## {title}` + `_{period}_` + bullets를 빈 줄로 이어붙임, 멱등). tyange-cms
+  role/position)는 그대로. 운영 DB는 일회성 스크립트로 변환(항목별 `## {title}` +
+  `_{period}_` + bullets를 빈 줄로 이어붙임, 멱등 — Python이라 이후 제거, 커밋 메시지 참고). tyange-cms
   에디터는 회사별 마크다운 필드 하나로, tyange-dev는 `company.career_items_markdown`를
   한 번 렌더하도록 동기화.
 - featured_projects: `stack` 제거 + `folder` 도입 (2026-09) — `PortfolioProject`에서
   `stack: Vec<String>` 삭제(tyange-dev에서 더 이상 노출 안 함), `folder: String` 추가.
   같은 `folder` 값을 가진 프로젝트끼리 tyange-dev에서 한 묶음(라벨 아래 카드 그리드)으로
   렌더된다 — 예전엔 tyange-dev가 slug를 하드코딩해 그룹을 만들었다(`pickGrouped("tyange-cms")`).
-  운영 DB는 `scripts/migrate_featured_folders.py`로 변환: `stack` 키 삭제 + slug→folder
-  시드(tyange-cms/tyange-cms-api→"CMS 시스템", tyange-blog/tyange-dev→"개인 사이트",
-  나머지는 "" = 단독). 멱등. tyange-cms 에디터는 Stack(TagsInput) → Folder(텍스트) 교체.
+  운영 DB는 `scripts/migrate_featured_folders.sh`(bash + jq + sqlite3)로 변환: `stack` 키
+  삭제 + slug→folder 시드(tyange-cms/tyange-cms-api→"CMS 시스템", tyange-blog/tyange-dev→
+  "개인 사이트", 나머지는 "" = 단독). 멱등. tyange-cms 에디터는 Stack(TagsInput) → Folder(텍스트) 교체.
+  (마이그레이션 스크립트는 Python → bash로 전환 — 저장소에 Python 안 둠, 2026-09.)
