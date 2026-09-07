@@ -211,27 +211,18 @@ pub struct PortfolioProject {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Object)]
-pub struct PortfolioCareerItem {
-    pub title: String,
-    #[serde(default)]
-    pub period: Option<String>,
-    /// Markdown 불릿 리스트. `PortfolioProject.highlights_markdown`과 같은 이유로
-    /// `Vec<String>`에서 전환.
-    #[serde(default)]
-    #[oai(default)]
-    pub bullets_markdown: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Object)]
 pub struct PortfolioCareerCompany {
     pub company: String,
     pub period: String,
     pub employment_type: String,
     pub role: String,
     pub position: String,
+    /// 회사별 세부 경력을 통째로 담는 Markdown. 예전엔 `items: Vec<PortfolioCareerItem>`
+    /// (title/period/bullets 구조체 배열)였는데, 편집 UX 때문에 자유 Markdown 하나로
+    /// 전환했다(`highlights_markdown`/`bullets_markdown`과 같은 방향).
     #[serde(default)]
-    #[oai(default = "Vec::<PortfolioCareerItem>::new")]
-    pub items: Vec<PortfolioCareerItem>,
+    #[oai(default)]
+    pub career_items_markdown: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Object)]

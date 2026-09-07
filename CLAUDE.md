@@ -158,3 +158,11 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
     남아있을 수 있는 `portfolio_documents` 테이블)는 코드 마이그레이션이 아니라
     `scripts/migrate_portfolio_markdown.py`를 SSH로 직접 실행해 변환했다 — 자세한
     내용과 백업 절차는 그 스크립트 커밋 메시지 참고.
+- career 세부 항목을 구조체 배열 → 단일 Markdown으로 (2026-09) — 편집 UX(회사 안에
+  항목마다 title/period/bullets를 또 Accordion으로 접는 3중 중첩)가 싫다는 요청.
+  `PortfolioCareerItem` 구조체 제거, `PortfolioCareerCompany.items: Vec<PortfolioCareerItem>`
+  → `career_items_markdown: String`. 회사 스칼라 필드(company/period/employment_type/
+  role/position)는 그대로. 운영 DB는 `scripts/migrate_career_items_markdown.py`로 변환
+  (항목별 `## {title}` + `_{period}_` + bullets를 빈 줄로 이어붙임, 멱등). tyange-cms
+  에디터는 회사별 마크다운 필드 하나로, tyange-dev는 `company.career_items_markdown`를
+  한 번 렌더하도록 동기화.

@@ -59,13 +59,7 @@ fn sample_portfolio_payload() -> serde_json::Value {
                         "employment_type": "정규직",
                         "role": "프론트엔드 개발",
                         "position": "사원",
-                        "items": [
-                            {
-                                "title": "서비스 운영",
-                                "period": "2021.01 - 2022.12",
-                                "bullets_markdown": "- React 운영\n- TypeScript 전환"
-                            }
-                        ]
+                        "career_items_markdown": "## 서비스 운영\n\n- React 운영\n- TypeScript 전환"
                     }
                 ]
             }
@@ -125,12 +119,8 @@ async fn get_portfolio_returns_not_found_initially_and_put_creates_and_updates_i
         .array()
         .get(0)
         .object()
-        .get("items")
-        .array()
-        .get(0)
-        .object()
-        .get("bullets_markdown")
-        .assert_string("- React 운영\n- TypeScript 전환");
+        .get("career_items_markdown")
+        .assert_string("## 서비스 운영\n\n- React 운영\n- TypeScript 전환");
 
     // GET should return the saved document
     let fetched = cli.get("/portfolio").send().await;
