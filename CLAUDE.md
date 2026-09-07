@@ -174,3 +174,8 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
   삭제 + slug→folder 시드(tyange-cms/tyange-cms-api→"CMS 시스템", tyange-blog/tyange-dev→
   "개인 사이트", 나머지는 "" = 단독). 멱등. tyange-cms 에디터는 Stack(TagsInput) → Folder(텍스트) 교체.
   (마이그레이션 스크립트는 Python → bash로 전환 — 저장소에 Python 안 둠, 2026-09.)
+- featured_projects: `summary` + `highlights_markdown` → `body_markdown` 하나로 병합 (2026-09) —
+  편집 UX상 문단/불릿을 한 마크다운으로(career_items_markdown과 같은 방향). `PortfolioProject`에서
+  두 필드 삭제, `body_markdown: String` 추가. 운영 DB는 `scripts/migrate_featured_body.sh`로
+  변환: `trim(summary) + "\n\n" + trim(highlights_markdown)` (한쪽 비면 나머지만), 두 옛 키 삭제, 멱등.
+  tyange-cms 에디터는 두 PortfolioMarkdownField → 하나로, tyange-dev는 `bodyHtml` 한 번 렌더.
