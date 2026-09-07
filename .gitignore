@@ -8,3 +8,4 @@
 .uploads
 .http
 test_samples/
+scripts/__pycache__/
