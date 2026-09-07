@@ -90,9 +90,7 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
   **매 실행마다 새로 뜨는 `node:lts-bookworm` 컨테이너**였다 — 조직 러너가
   `self-hosted:docker://node:lts-bookworm` 하나로만 등록돼 있고 로그엔 라벨 이름만
   찍혀서 헷갈렸음) — 즉 Rust도 cargo 캐시도 컨테이너와 함께 매번 사라진다. 워크플로에
-  `cargo` 없으면 rustup으로 설치하는 방어 스텝과, `~/.cargo/registry`·`target`을
-  캐싱하는 `actions/cache` 스텝을 넣어뒀다(캐시 안 맞으면 이 서버 사양으로 콜드
-  빌드에 30~40분 걸림 — 실측함). `uses:`는 전부 `https://github.com/...` 완전한
+  `cargo` 없으면 rustup으로 설치하는 방어 스텝을 넣어뒀다. `uses:`는 전부 `https://github.com/...` 완전한
   URL 사용(data.forgejo.org 기본 레지스트리엔 `appleboy/*`/`actions/cache` 같은
   서드파티 액션이 없음). Forgejo 쪽 secrets/vars(`HOST`/`USERNAME`/
   `LIGHTSAIL_SSH_KEY`/`JWT_ACCESS_SECRET`/`DATABASE_PATH`/`UPLOAD_PATH`/
@@ -100,6 +98,23 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
   사용자가 등록함(tyange-cms의 `DEPLOY_PATH` 등 vars 일부는 처음에 빠뜨려서 배포가
   SCP 단계에서 실패했었고, 그 뒤 채워 넣어 해결). Settings → Units → Overview의
   Actions 체크박스도 켜야 함.
+- CI 빌드 캐시를 러너 볼륨 마운트로 (2026-09) — `actions/cache`는 이 Forgejo 러너
+  (forgejo-runner v13.1.0, config 없이 기본값)에서 컨테이너에 `ACTIONS_CACHE_URL`이
+  안 주입돼 **한 번도 저장된 적이 없었다**(멀티홈 박스라 cache-host 자동탐지 실패로 추정).
+  매 빌드가 콜드였고 run #7이 2h3m. 대신 **Lightsail 박스**(러너·Forgejo·배포 대상이
+  전부 여기 = `100.96.219.103`, tailnet `cms`)에:
+  - `/home/ubuntu/forgejo-runner/config.yaml` — `container.options`로
+    `/home/ubuntu/ci-cache/{dot-cargo,dot-rustup,cms-api-target}`를 각각
+    `/root/.cargo`, `/root/.rustup`, `/ci-target`에 bind mount. `valid_volumes`로
+    그 경로 허용. `runner.capacity=1`(기본)이라 잡 직렬 → 공유 안전.
+  - systemd drop-in `/etc/systemd/system/forgejo-runner.service.d/10-config.conf` —
+    `ExecStart`에 `--config` 추가(기본 unit은 CLI 플래그만 씀).
+  - 워크플로: `CARGO_TARGET_DIR=/ci-target`, `cargo test`에 `--release`(Build의
+    release 산출물 재사용, 안 그러면 디버그로 전체 재컴파일), deploy는
+    `$CARGO_TARGET_DIR/release/`에서 복사. `actions/cache` 스텝 제거.
+  - 박스에 swap 2GB 추가(`/swapfile`, `vm.swappiness=10`) — RAM 1.9GB뿐이라 콜드
+    빌드 중 OOM 위험이 있었다.
+  첫 빌드만 콜드, 이후 웜. config.yaml·drop-in·`ci-cache/`는 버전관리 밖(박스에만 있음).
 - Google 로그인 / Web Push 기능 완전 제거 (2026-09) — 실사용 안 해서 걷어냄.
   `auth/google.rs`, `routes/login_google.rs`, `web_push.rs`, push 라우트 4개 삭제.
   `users.google_sub` 컬럼과 `web_push_subscriptions` 테이블은 `init_db()`에서

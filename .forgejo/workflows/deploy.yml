@@ -20,6 +20,10 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # 러너 config.yaml의 container.options가 /ci-target 를 호스트
+  # (/home/ubuntu/ci-cache/cms-api-target)로 마운트한다. 빌드 산출물이 컨테이너 밖에
+  # 남아 다음 실행에서 재사용됨. ~/.cargo·~/.rustup도 같은 방식으로 영속화돼 있다.
+  CARGO_TARGET_DIR: /ci-target
 
 jobs:
   build:
@@ -36,21 +40,12 @@ jobs:
     steps:
       - uses: https://github.com/actions/checkout@v4
 
-      # 러너가 매 실행마다 새 컨테이너(node:lts-bookworm)를 띄우는 구조라 캐시가
-      # 없으면 의존성 크레이트를 전부 처음부터 컴파일한다(이 서버 사양으로 30~40분).
-      # Cargo.lock이 안 바뀌었으면 이 캐시로 대부분 건너뛸 수 있다. Forgejo가
-      # actions/cache 백엔드를 지원 안 하면 이 스텝은 조용히 스킵되고(에러 아님)
-      # 이후 스텝은 그냥 콜드 빌드로 진행된다.
-      - name: Cache cargo registry and build artifacts
-        uses: https://github.com/actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+      # 캐시는 actions/cache가 아니라 러너 config.yaml의 container.options 볼륨
+      # 마운트로 한다(actions/cache는 이 Forgejo 러너에서 ACTIONS_CACHE_URL이 안
+      # 주입돼 무동작이었음 — 2026-09 확인). /root/.cargo, /root/.rustup, /ci-target
+      # (CARGO_TARGET_DIR)이 호스트 /home/ubuntu/ci-cache/* 로 마운트돼 컨테이너가
+      # 새로 떠도 남는다. 첫 실행만 콜드, 이후 웜(2~5분). runner.capacity=1이라
+      # 잡이 직렬 실행되므로 공유 안전.
 
       - name: Ensure Rust toolchain
         run: |
@@ -75,7 +70,9 @@ jobs:
 
       - name: Run tests
         if: ${{ !inputs.skip_tests && !inputs.deploy_only }}
-        run: cargo test --verbose
+        # --release: 바로 위 Build가 만든 target/release deps를 재사용한다. 없으면
+        # 디버그 프로파일로 전체 트리를 처음부터 또 컴파일함(이 박스에서 30~40분).
+        run: cargo test --release --verbose
 
       - name: Stop service
         uses: https://github.com/appleboy/ssh-action@v1.0.3
@@ -90,7 +87,7 @@ jobs:
         if: ${{ !inputs.deploy_only }}
         run: |
           mkdir -p deploy
-          cp target/release/tyange-cms-api deploy/
+          cp "$CARGO_TARGET_DIR/release/tyange-cms-api" deploy/
           cp .env deploy/
 
       - name: Deploy files via SCP
