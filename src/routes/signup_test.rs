@@ -19,7 +19,6 @@ use tyange_cms_api::auth::jwt::Claims;
 
 async fn create_test_state() -> Arc<AppState> {
     env::set_var("JWT_ACCESS_SECRET", "test-access-secret");
-    env::set_var("JWT_REFRESH_SECRET", "test-refresh-secret");
 
     let db = SqlitePool::connect("sqlite::memory:")
         .await
@@ -150,7 +149,6 @@ async fn signup_user_can_login_with_email_as_user_id() {
     let json = response.json().await;
     json.value().object().get("user_role").assert_string("user");
     json.value().object().get("access_token").assert_not_null();
-    json.value().object().get("refresh_token").assert_not_null();
 }
 
 #[tokio::test]

@@ -27,16 +27,6 @@ pub fn issue_login_response(user_id: &str, user_role: &str) -> Result<LoginRespo
             ));
         }
     };
-    let refresh_token_secret = match env::var("JWT_REFRESH_SECRET") {
-        Ok(value) => value,
-        Err(e) => {
-            eprintln!("Server configuration error: {:?}", e);
-            return Err(poem::Error::from_string(
-                "Server configuration error.",
-                StatusCode::INTERNAL_SERVER_ERROR,
-            ));
-        }
-    };
 
     let access_token_secret_bytes = access_token_secret.as_bytes();
     let access_token = Claims::create_access_token(user_id, user_role, access_token_secret_bytes)
@@ -48,21 +38,8 @@ pub fn issue_login_response(user_id: &str, user_role: &str) -> Result<LoginRespo
         )
     })?;
 
-    let refresh_token_secret_bytes = refresh_token_secret.as_bytes();
-    let refresh_token =
-        Claims::create_refresh_token(user_id, user_role, refresh_token_secret_bytes).map_err(
-            |e| {
-                eprintln!("Server configuration error: {:?}", e);
-                poem::Error::from_string(
-                    "Can not create refresh token.",
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                )
-            },
-        )?;
-
     Ok(LoginResponse {
         access_token,
-        refresh_token,
         user_role: user_role.to_string(),
     })
 }

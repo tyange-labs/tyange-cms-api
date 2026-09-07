@@ -9,11 +9,14 @@ pub struct Claims {
     pub role: String,
     pub exp: usize,
     pub iat: usize,
-    pub token_type: String,
 }
 
+// access token 수명 1년. 네트워크 도달은 Tailscale이 막으므로 앱 세션은 길게 잡는다.
+// refresh token은 검증 경로(/refresh)가 없어서 제거했다 (2026-09).
+const ACCESS_TOKEN_TTL_MINUTES: i64 = 365 * 24 * 60;
+
 impl Claims {
-    pub fn new(user_id: &str, role: &str, token_type: &str, expires_in_minutes: i64) -> Self {
+    pub fn new(user_id: &str, role: &str, expires_in_minutes: i64) -> Self {
         let expiration = Utc::now()
             .checked_add_signed(Duration::minutes(expires_in_minutes))
             .expect("유효한 타임 스탬프를 생성할 수 없습니다.")
@@ -26,7 +29,6 @@ impl Claims {
             role: role.to_owned(),
             exp: expiration,
             iat,
-            token_type: token_type.to_owned(),
         }
     }
 
@@ -80,12 +82,7 @@ impl Claims {
     }
 
     pub fn create_access_token(user_id: &str, role: &str, secret: &[u8]) -> Result<String, Error> {
-        let claims = Self::new(user_id, role, "access", 600);
-        claims.to_token(secret)
-    }
-
-    pub fn create_refresh_token(user_id: &str, role: &str, secret: &[u8]) -> Result<String, Error> {
-        let claims = Self::new(user_id, role, "refresh", 7 * 24 * 60);
+        let claims = Self::new(user_id, role, ACCESS_TOKEN_TTL_MINUTES);
         claims.to_token(secret)
     }
 }

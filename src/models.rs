@@ -100,7 +100,6 @@ pub struct LoginRequest {
 #[derive(Debug, Serialize, Object)]
 pub struct LoginResponse {
     pub access_token: String,
-    pub refresh_token: String,
     pub user_role: String,
 }
 

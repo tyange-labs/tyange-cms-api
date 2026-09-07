@@ -62,7 +62,6 @@ jobs:
       - name: Create .env file
         run: |
           echo JWT_ACCESS_SECRET=${{ secrets.JWT_ACCESS_SECRET }} > .env
-          echo JWT_REFRESH_SECRET=${{ secrets.JWT_REFRESH_SECRET }} >> .env
           # TYANGE_BLOG_REDEPLOY_TOKEN은 이제 Forgejo API 토큰이어야 한다(해당 저장소의
           # Actions 실행 권한 필요) — 예전 GitHub PAT는 안 통한다.
           echo TYANGE_BLOG_REDEPLOY_TOKEN=${{ secrets.TYANGE_BLOG_REDEPLOY_TOKEN }} >> .env

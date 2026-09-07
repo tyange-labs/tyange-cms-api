@@ -15,7 +15,6 @@ use tyange_cms_api::auth::jwt::Claims;
 
 async fn create_test_state() -> Arc<AppState> {
     env::set_var("JWT_ACCESS_SECRET", "test-access-secret");
-    env::set_var("JWT_REFRESH_SECRET", "test-refresh-secret");
 
     let db = SqlitePool::connect("sqlite::memory:")
         .await
