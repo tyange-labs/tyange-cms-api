@@ -19,7 +19,6 @@ UPLOAD_PATH=.uploads/images
 UPLOAD_MAX_BYTES=20971520
 
 JWT_ACCESS_SECRET=$(openssl rand -hex 32)
-JWT_REFRESH_SECRET=$(openssl rand -hex 32)
 EOF
   echo "[dev.sh] .env 생성 완료"
 fi

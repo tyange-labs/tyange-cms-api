@@ -43,7 +43,6 @@ UPLOAD_MAX_BYTES=20971520
 
 # JWT
 JWT_ACCESS_SECRET=replace-with-access-secret
-JWT_REFRESH_SECRET=replace-with-refresh-secret
 ```
 
 `DATABASE_PATH`, `UPLOAD_PATH`는 절대 경로로 직접 지정해도 됩니다.
@@ -103,7 +102,7 @@ CORS preflight(OPTIONS)는 `Cors` 미들웨어가 전담한다. 별도의 캐치
 ### Auth
 
 - `POST /login`
-사용자 로그인 후 access/refresh 토큰 발급.
+사용자 로그인 후 access 토큰 발급(exp 1년, refresh token 없음).
 
 - `POST /admin/add-user` (JWT)
 신규 사용자 계정 추가(비밀번호 해시 저장).
@@ -154,12 +153,14 @@ blog 대상 포스트 판정은 `status != draft` 이고 `dev` 태그가 없는 
 - `PUT /portfolio/sections/:section_key` (JWT, Admin)
 포트폴리오 섹션(`intro`, `career`, `featured_projects` 등)만 부분 업데이트. 단일 JSON을 통째로 덮어쓰지 않고 섹션 단위로 저장해 동시 편집 충돌과 요청 크기를 줄인다.
 
-**Markdown 필드**: `intro.content`, `featured_projects[].summary`, `featured_projects[].highlights_markdown`,
-`career.companies[].items[].bullets_markdown`은 markdown 문자열이다. 백엔드는 이 필드들을
+**Markdown 필드**: `intro.content`, `featured_projects[].body_markdown`,
+`career.companies[].career_items_markdown`은 markdown 문자열이다. 백엔드는 이 필드들을
 파싱하지 않고 문자열 그대로 저장·반환만 한다 — 렌더링은 프론트엔드(tyange-cms 미리보기,
-tyange-dev)가 담당한다. `highlights_markdown`/`bullets_markdown`은 각각 예전
-`highlights: string[]`/`bullets: string[]`을 대체한 필드로, 불릿 리스트를
-`- 항목\n- 항목` 형태의 markdown 텍스트로 담는다(2026-09).
+tyange-dev)가 담당한다. `body_markdown`은 예전 `summary`(문단) + `highlights_markdown`
+(불릿 리스트)을 합친 필드, `career_items_markdown`은 예전
+`items: { title, period, bullets }[]` 구조체 배열을 대체한 필드다(둘 다 2026-09).
+`featured_projects[].folder`는 같은 값끼리 tyange-dev에서 한 묶음으로 묶어 렌더하는 필드로,
+같은 시점에 제거된 `stack: string[]`을 대체했다.
 
 - `DELETE /portfolio` (JWT, Admin)
 포트폴리오 초기화.
@@ -168,6 +169,13 @@ tyange-dev)가 담당한다. `highlights_markdown`/`bullets_markdown`은 각각 
 
 - `GET /me` (JWT) — 현재 로그인 사용자 정보.
 - `PUT /me/profile` (JWT) — 프로필 수정 (display_name, avatar, bio 등).
+
+### Wedding Guests
+
+lovelog(모바일 청첩장) RSVP 연동. 하객 실명이 담기므로 조회는 반드시 인증을 유지한다.
+
+- `POST /public/wedding/guests` — 인증 없는 공개 쓰기(RateLimit: IP당 5회/분 + 30회/시간, 본문 4KB 상한). `name`(trim 후 1~20자), `companions`(0~10, 기본 0), `visit_hour`(필수, 12~16 — 전시 운영시간 12~17시를 한 시간 단위로 끊은 시작 시각).
+- `GET /admin/wedding/guests` (JWT, Admin) — 하객 목록 조회.
 
 ## 테스트
 

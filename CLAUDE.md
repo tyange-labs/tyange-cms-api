@@ -75,7 +75,8 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
 - lovelog(모바일 청첩장) RSVP 연동 (2026-08-24)
   - CORS에 https://lovelog.tyange.com 추가 (lovelog는 순수 정적 SPA라 브라우저에서 직접 호출)
   - love.tyange.com / dev.tyange.com은 각각 SvelteKit adapter-static + prerender, Next.js output:"export"라 빌드 타임에만 호출 → CORS 불필요
-  - POST /public/wedding/guests: 인증 없는 공개 쓰기. name(trim 후 1~20자), companions(0~10, 기본 0)
+  - POST /public/wedding/guests: 인증 없는 공개 쓰기. name(trim 후 1~20자), companions(0~10, 기본 0),
+    visit_hour(필수, 12~16 — 전시가 12시에 열고 5시에 닫아 한 시간짜리 시간대의 시작 시각. 생략하면 400)
   - GET /admin/wedding/guests: AdminOnly + Auth. 하객 실명이 담기므로 반드시 인증 유지
   - wedding_guests 테이블: guest_id, name, companions, created_at
   - RateLimit 미들웨어 부활 (ce46308 구현 그대로): IP당 5회/분 + 30회/시간, 본문 4KB 상한
