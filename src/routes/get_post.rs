@@ -22,6 +22,7 @@ pub async fn get_post(
     let result = query_as::<Sqlite, PostResponseDb>(
         r#"
         SELECT p.post_id, p.title, p.description, p.published_at,
+               COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', p.created_at), '') AS created_at,
         p.content, p.status,
         IFNULL(GROUP_CONCAT(t.category || '::' || t.name, ','), '') AS tags
         FROM posts p
@@ -42,6 +43,7 @@ pub async fn get_post(
                 title: db_post.title,
                 description: db_post.description,
                 published_at: db_post.published_at,
+                created_at: db_post.created_at,
                 tags: parse_tags(&db_post.tags),
                 content: db_post.content,
                 status: db_post.status,

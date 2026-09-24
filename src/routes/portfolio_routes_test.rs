@@ -9,7 +9,7 @@ use std::{env, sync::Arc};
 use poem::{http::StatusCode, test::TestClient};
 use poem_openapi::OpenApiService;
 use serde_json::json;
-use sqlx::{SqlitePool, query_scalar};
+use sqlx::{query_scalar, SqlitePool};
 
 use crate::{db::init_db, models::AppState, openapi::PortfolioApi};
 use tyange_cms_api::auth::jwt::Claims;

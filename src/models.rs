@@ -55,6 +55,7 @@ pub struct Post {
     pub title: String,
     pub description: String,
     pub published_at: String,
+    pub created_at: String,
     pub tags: Vec<TagWithCategory>,
     pub content: String,
     pub status: String,
@@ -66,6 +67,7 @@ pub struct PostItem {
     pub title: String,
     pub description: String,
     pub published_at: String,
+    pub created_at: String,
     pub tags: Vec<TagWithCategory>,
     pub status: String,
 }
@@ -125,6 +127,7 @@ pub struct PostResponseDb {
     pub title: String,
     pub description: String,
     pub published_at: String,
+    pub created_at: String,
     pub content: String,
     pub status: String,
     pub tags: String,

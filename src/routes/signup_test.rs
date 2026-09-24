@@ -261,7 +261,10 @@ async fn update_my_profile_persists_and_returns_profile_fields() {
 
     let response = cli
         .put("/me/profile")
-        .header("Authorization", issue_access_token("profile@example.com", "user"))
+        .header(
+            "Authorization",
+            issue_access_token("profile@example.com", "user"),
+        )
         .body_json(&json!({
             "display_name": "프로필 이름",
             "avatar_url": "https://example.com/profile.png",
@@ -272,8 +275,14 @@ async fn update_my_profile_persists_and_returns_profile_fields() {
 
     response.assert_status_is_ok();
     let json = response.json().await;
-    json.value().object().get("display_name").assert_string("프로필 이름");
-    json.value().object().get("avatar_url").assert_string("https://example.com/profile.png");
+    json.value()
+        .object()
+        .get("display_name")
+        .assert_string("프로필 이름");
+    json.value()
+        .object()
+        .get("avatar_url")
+        .assert_string("https://example.com/profile.png");
     json.value().object().get("bio").assert_string("소개 문장");
 
     let row = query("SELECT display_name, avatar_url, bio FROM users WHERE user_id = ?")
@@ -282,12 +291,17 @@ async fn update_my_profile_persists_and_returns_profile_fields() {
         .await
         .expect("failed to fetch updated profile");
 
-    let display_name: Option<String> = row.try_get("display_name").expect("display_name should exist");
+    let display_name: Option<String> = row
+        .try_get("display_name")
+        .expect("display_name should exist");
     let avatar_url: Option<String> = row.try_get("avatar_url").expect("avatar_url should exist");
     let bio: Option<String> = row.try_get("bio").expect("bio should exist");
 
     assert_eq!(display_name.as_deref(), Some("프로필 이름"));
-    assert_eq!(avatar_url.as_deref(), Some("https://example.com/profile.png"));
+    assert_eq!(
+        avatar_url.as_deref(),
+        Some("https://example.com/profile.png")
+    );
     assert_eq!(bio.as_deref(), Some("소개 문장"));
 }
 
@@ -311,7 +325,10 @@ async fn update_my_profile_clears_fields_when_blank() {
     .expect("failed to seed profile");
 
     cli.put("/me/profile")
-        .header("Authorization", issue_access_token("clear@example.com", "user"))
+        .header(
+            "Authorization",
+            issue_access_token("clear@example.com", "user"),
+        )
         .body_json(&json!({
             "display_name": "   ",
             "avatar_url": "",
@@ -327,7 +344,9 @@ async fn update_my_profile_clears_fields_when_blank() {
         .await
         .expect("failed to fetch cleared profile");
 
-    let display_name: Option<String> = row.try_get("display_name").expect("display_name should exist");
+    let display_name: Option<String> = row
+        .try_get("display_name")
+        .expect("display_name should exist");
     let avatar_url: Option<String> = row.try_get("avatar_url").expect("avatar_url should exist");
     let bio: Option<String> = row.try_get("bio").expect("bio should exist");
 

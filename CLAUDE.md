@@ -60,6 +60,12 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
 
 ## 현재 상태
 - 운영 중
+- 포스트 응답(`PostItem`/`Post` — `/posts`, `/admin/posts`, `/posts/search-with-tags`, `/post/:id`,
+  수정 응답)에 `created_at` 추가 (2026-09). lovelog가 하루에 여러 개 올라가는 짧은 글에 시각을
+  찍으려고 쓴다(`published_at`은 날짜뿐이고 블로그·dev·love가 그 모양에 기대고 있어 건드리지 않음).
+  SQLite `CURRENT_TIMESTAMP`(UTC)를 `strftime`으로 `2026-09-24T10:18:26Z` 모양으로 내보내고,
+  파싱 안 되는 옛 값은 `''`로 떨어뜨린다 — 한 행 때문에 목록 전체가 디코드 실패하지 않게.
+  글을 처음 저장한 시각이라 수정할 수 없다.
 - 포트폴리오 DB를 단일 JSON(content TEXT) → 섹션 테이블(portfolio_section)로 분리 (2026-04-13)
   - portfolio (마스터): portfolio_id, slug, created_at
   - portfolio_section: section_id, portfolio_id, section_key, content(JSON), created_at, updated_at

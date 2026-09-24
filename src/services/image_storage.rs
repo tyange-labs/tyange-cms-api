@@ -75,10 +75,15 @@ pub struct ImageRecord {
 #[derive(Debug)]
 pub enum ImageStoreError {
     Empty,
-    TooLarge { max_bytes: usize },
+    TooLarge {
+        max_bytes: usize,
+    },
     UnsupportedFormat,
     Read(std::io::Error),
-    CreateDir { path: String, source: std::io::Error },
+    CreateDir {
+        path: String,
+        source: std::io::Error,
+    },
     WriteFile(std::io::Error),
     Db(sqlx::Error),
 }
@@ -137,8 +142,16 @@ pub async fn store_image(
 ) -> Result<StoredImage, ImageStoreError> {
     let origin_filename = field.file_name().map(|name| name.to_owned());
     let reader = field.into_async_read();
-    store_image_from_reader(origin_filename, reader, policy, db, record, upload_dir, web_prefix)
-        .await
+    store_image_from_reader(
+        origin_filename,
+        reader,
+        policy,
+        db,
+        record,
+        upload_dir,
+        web_prefix,
+    )
+    .await
 }
 
 /// plain poem 라우트(`routes::upload_image`, 아직 테스트가 참조 중)용 진입점.
@@ -154,8 +167,16 @@ pub async fn store_image_field(
 ) -> Result<StoredImage, ImageStoreError> {
     let origin_filename = field.file_name().map(|name| name.to_owned());
     let reader = field.into_async_read();
-    store_image_from_reader(origin_filename, reader, policy, db, record, upload_dir, web_prefix)
-        .await
+    store_image_from_reader(
+        origin_filename,
+        reader,
+        policy,
+        db,
+        record,
+        upload_dir,
+        web_prefix,
+    )
+    .await
 }
 
 async fn store_image_from_reader(

@@ -9,7 +9,9 @@ use poem::{
 use tyange_cms_api::auth::authorization::current_user;
 
 use crate::models::{AppState, CustomResponse, UploadImageQueryParmas, UploadImageResponse};
-use crate::services::image_storage::{store_image_field, ImageFormat, ImageRecord, ImageUploadPolicy};
+use crate::services::image_storage::{
+    store_image_field, ImageFormat, ImageRecord, ImageUploadPolicy,
+};
 
 const AUTHENTICATED_UPLOAD_POLICY: ImageUploadPolicy = ImageUploadPolicy {
     max_bytes: 10 * 1024 * 1024,

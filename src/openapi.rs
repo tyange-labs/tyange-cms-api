@@ -20,8 +20,8 @@ use tyange_cms_api::auth::authorization::{ensure_admin, ensure_post_owner, AuthG
 
 use crate::blog_redeploy::{is_blog_redeploy_target, BlogContentEvent, BlogVisibility};
 use crate::models::{
-    ApiResponse, AppState, DeletePostResponse, Post, PostItem, PostResponseDb, PostsResponse,
-    Tag, TagWithCategory, UpdatePostRequest, UploadPostRequest, UploadPostResponse,
+    ApiResponse, AppState, DeletePostResponse, Post, PostItem, PostResponseDb, PostsResponse, Tag,
+    TagWithCategory, UpdatePostRequest, UploadPostRequest, UploadPostResponse,
 };
 use crate::utils::parse_tags;
 
@@ -39,7 +39,8 @@ impl PostsApi {
     ) -> poem::Result<Json<ApiResponse<PostsResponse>>> {
         let mut builder = QueryBuilder::new(
             r#"
-            SELECT p.post_id, p.title, p.description, p.published_at, p.status,
+            SELECT p.post_id, p.title, p.description, p.published_at,
+               COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', p.created_at), '') AS created_at, p.status,
             IFNULL(GROUP_CONCAT(t.category || '::' || t.name, ','), '') AS tags
             FROM posts p
             LEFT JOIN post_tags pt ON p.post_id = pt.post_id
@@ -88,6 +89,7 @@ impl PostsApi {
                         title: db_post.get("title"),
                         description: db_post.get("description"),
                         published_at: db_post.get("published_at"),
+                        created_at: db_post.get("created_at"),
                         tags: parse_tags(db_post.get("tags")),
                         status: db_post.get("status"),
                     })
@@ -107,7 +109,8 @@ impl PostsApi {
 
         let db_posts = query(
             r#"
-            SELECT p.post_id, p.title, p.description, p.published_at, p.status,
+            SELECT p.post_id, p.title, p.description, p.published_at,
+               COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', p.created_at), '') AS created_at, p.status,
             IFNULL(GROUP_CONCAT(t.category || '::' || t.name, ','), '') AS tags
             FROM posts p
             LEFT JOIN post_tags pt ON p.post_id = pt.post_id
@@ -145,6 +148,7 @@ impl PostsApi {
                         title: db_post.get("title"),
                         description: db_post.get("description"),
                         published_at: db_post.get("published_at"),
+                        created_at: db_post.get("created_at"),
                         tags: parse_tags(db_post.get("tags")),
                         status: db_post.get("status"),
                     })
@@ -160,6 +164,7 @@ impl PostsApi {
         let db_post = query_as::<Sqlite, PostResponseDb>(
             r#"
             SELECT p.post_id, p.title, p.description, p.published_at,
+               COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', p.created_at), '') AS created_at,
             p.content, p.status,
             IFNULL(GROUP_CONCAT(t.category || '::' || t.name, ','), '') AS tags
             FROM posts p
@@ -185,6 +190,7 @@ impl PostsApi {
                 title: db_post.title,
                 description: db_post.description,
                 published_at: db_post.published_at,
+                created_at: db_post.created_at,
                 tags: parse_tags(&db_post.tags),
                 content: db_post.content,
                 status: db_post.status,
@@ -285,7 +291,11 @@ impl PostsApi {
         ) {
             self.state
                 .blog_redeploy
-                .dispatch_content_change(BlogContentEvent::Publish, &post_id, BlogVisibility::Visible)
+                .dispatch_content_change(
+                    BlogContentEvent::Publish,
+                    &post_id,
+                    BlogVisibility::Visible,
+                )
                 .await;
         }
 
@@ -413,6 +423,7 @@ impl PostsApi {
                 title: payload.title,
                 description: payload.description,
                 published_at: payload.published_at,
+                created_at: existing_post.created_at,
                 tags: payload
                     .tags
                     .iter()
@@ -440,6 +451,7 @@ impl PostsApi {
         let existing_post = query_as::<Sqlite, PostResponseDb>(
             r#"
             SELECT p.post_id, p.title, p.description, p.published_at,
+               COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', p.created_at), '') AS created_at,
             p.content, p.status,
             IFNULL(GROUP_CONCAT(t.category || '::' || t.name, ','), '') AS tags
             FROM posts p
@@ -476,7 +488,9 @@ impl PostsApi {
 
         if is_blog_redeploy_target(
             &existing_post.status,
-            parse_tags(&existing_post.tags).iter().map(|tag| tag.tag.as_str()),
+            parse_tags(&existing_post.tags)
+                .iter()
+                .map(|tag| tag.tag.as_str()),
         ) {
             self.state
                 .blog_redeploy
@@ -499,6 +513,7 @@ struct ExistingPostSnapshot {
     title: String,
     description: String,
     published_at: String,
+    created_at: String,
     content: String,
     status: String,
     tags: Vec<(String, String)>,
@@ -511,6 +526,7 @@ async fn fetch_existing_post(
     let existing = query_as::<Sqlite, PostResponseDb>(
         r#"
         SELECT p.post_id, p.title, p.description, p.published_at,
+               COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', p.created_at), '') AS created_at,
         p.content, p.status,
         IFNULL(GROUP_CONCAT(t.category || '::' || t.name, ','), '') AS tags
         FROM posts p
@@ -535,6 +551,7 @@ async fn fetch_existing_post(
         title: existing.title,
         description: existing.description,
         published_at: existing.published_at,
+        created_at: existing.created_at,
         content: existing.content,
         status: existing.status,
         tags: normalize_tags(
@@ -572,7 +589,10 @@ fn determine_redeploy_event(
     }
 }
 
-fn public_content_changed(existing_post: &ExistingPostSnapshot, payload: &UpdatePostRequest) -> bool {
+fn public_content_changed(
+    existing_post: &ExistingPostSnapshot,
+    payload: &UpdatePostRequest,
+) -> bool {
     existing_post.title != payload.title
         || existing_post.description != payload.description
         || existing_post.published_at != payload.published_at
@@ -730,8 +750,14 @@ struct UpdateSectionResponse {
 // 파싱에 성공한 "구조체"를 재직렬화한다 — 원본 value를 그대로 재직렬화하면 스키마에
 // 없는 키(예전 identity.role/location/availability처럼)가 계속 살아남는다. 구조체를
 // 거쳐 다시 직렬화하면 알려진 필드만 남고, serde(default)가 채운 값도 일관되게 저장된다.
-fn validate_portfolio_section(section_key: &str, value: &serde_json::Value) -> Result<String, String> {
-    use crate::models::{PortfolioCareerSection, PortfolioIdentity, PortfolioIntroSection, PortfolioMeta, PortfolioProject};
+fn validate_portfolio_section(
+    section_key: &str,
+    value: &serde_json::Value,
+) -> Result<String, String> {
+    use crate::models::{
+        PortfolioCareerSection, PortfolioIdentity, PortfolioIntroSection, PortfolioMeta,
+        PortfolioProject,
+    };
 
     match section_key {
         "meta" => {
@@ -980,23 +1006,27 @@ impl PortfolioApi {
             )
         })?;
 
-        let portfolio_id: i32 = sqlx::query_scalar("SELECT portfolio_id FROM portfolio WHERE slug = ?")
-            .bind(slug)
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(|err| {
-                poem::Error::from_string(
-                    format!("포트폴리오 조회 실패: {}", err),
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                )
-            })?;
+        let portfolio_id: i32 =
+            sqlx::query_scalar("SELECT portfolio_id FROM portfolio WHERE slug = ?")
+                .bind(slug)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(|err| {
+                    poem::Error::from_string(
+                        format!("포트폴리오 조회 실패: {}", err),
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                    )
+                })?;
 
         let meta = PortfolioMeta {
             slug: slug.to_string(),
             version: content.version,
         };
         let meta_json = serde_json::to_string(&meta).map_err(|err| {
-            poem::Error::from_string(format!("meta 직렬화 실패: {}", err), StatusCode::BAD_REQUEST)
+            poem::Error::from_string(
+                format!("meta 직렬화 실패: {}", err),
+                StatusCode::BAD_REQUEST,
+            )
         })?;
         let identity_json = serde_json::to_string(&content.identity).map_err(|err| {
             poem::Error::from_string(
@@ -1068,16 +1098,18 @@ impl PortfolioApi {
                     )
                 })?;
         } else {
-            query("DELETE FROM portfolio_section WHERE portfolio_id = ? AND section_key = 'career'")
-                .bind(portfolio_id)
-                .execute(&mut *tx)
-                .await
-                .map_err(|err| {
-                    poem::Error::from_string(
-                        format!("career 섹션 삭제 실패: {}", err),
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                    )
-                })?;
+            query(
+                "DELETE FROM portfolio_section WHERE portfolio_id = ? AND section_key = 'career'",
+            )
+            .bind(portfolio_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|err| {
+                poem::Error::from_string(
+                    format!("career 섹션 삭제 실패: {}", err),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                )
+            })?;
         }
 
         if let Some(intro_str) = &intro_json {
@@ -1102,17 +1134,18 @@ impl PortfolioApi {
                 })?;
         }
 
-        let updated_at: String =
-            sqlx::query_scalar("SELECT MAX(updated_at) FROM portfolio_section WHERE portfolio_id = ?")
-                .bind(portfolio_id)
-                .fetch_one(&mut *tx)
-                .await
-                .map_err(|err| {
-                    poem::Error::from_string(
-                        format!("updated_at 조회 실패: {}", err),
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                    )
-                })?;
+        let updated_at: String = sqlx::query_scalar(
+            "SELECT MAX(updated_at) FROM portfolio_section WHERE portfolio_id = ?",
+        )
+        .bind(portfolio_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|err| {
+            poem::Error::from_string(
+                format!("updated_at 조회 실패: {}", err),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?;
         let created_at: String =
             sqlx::query_scalar("SELECT created_at FROM portfolio WHERE portfolio_id = ?")
                 .bind(portfolio_id)

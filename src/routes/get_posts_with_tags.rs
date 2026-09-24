@@ -14,7 +14,8 @@ pub async fn get_posts_with_tags(
 ) -> Result<Json<CustomResponse<PostsResponse>>, Error> {
     let mut builder = QueryBuilder::new(
         r#"
-        SELECT p.post_id, p.title, p.description, p.published_at, p.status,
+        SELECT p.post_id, p.title, p.description, p.published_at,
+               COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', p.created_at), '') AS created_at, p.status,
         IFNULL(GROUP_CONCAT(t2.category || '::' || t2.name, ','), '') AS tags
         FROM posts p
         LEFT JOIN post_tags pt2 ON p.post_id = pt2.post_id
@@ -71,6 +72,7 @@ pub async fn get_posts_with_tags(
                             title: db_post.get("title"),
                             description: db_post.get("description"),
                             published_at: db_post.get("published_at"),
+                            created_at: db_post.get("created_at"),
                             tags: parse_tags(db_post.get("tags")),
                             status: db_post.get("status"),
                         })

@@ -125,6 +125,7 @@ pub async fn update_post(
             title: payload.title,
             description: payload.description,
             published_at: payload.published_at,
+            created_at: existing_post.created_at,
             tags: payload
                 .tags
                 .iter()
@@ -145,6 +146,7 @@ struct ExistingPostSnapshot {
     title: String,
     description: String,
     published_at: String,
+    created_at: String,
     content: String,
     status: String,
     tags: Vec<(String, String)>,
@@ -157,6 +159,7 @@ async fn fetch_existing_post(
     let existing = query_as::<Sqlite, PostResponseDb>(
         r#"
         SELECT p.post_id, p.title, p.description, p.published_at,
+               COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', p.created_at), '') AS created_at,
         p.content, p.status,
         IFNULL(GROUP_CONCAT(t.category || '::' || t.name, ','), '') AS tags
         FROM posts p
@@ -181,6 +184,7 @@ async fn fetch_existing_post(
         title: existing.title,
         description: existing.description,
         published_at: existing.published_at,
+        created_at: existing.created_at,
         content: existing.content,
         status: existing.status,
         tags: normalize_tags(
