@@ -92,6 +92,7 @@ impl PostsApi {
                         created_at: db_post.get("created_at"),
                         tags: parse_tags(db_post.get("tags")),
                         status: db_post.get("status"),
+                        excerpt: None,
                     })
                     .collect(),
             }),
@@ -111,6 +112,7 @@ impl PostsApi {
             r#"
             SELECT p.post_id, p.title, p.description, p.published_at,
                COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', p.created_at), '') AS created_at, p.status,
+               COALESCE(substr(p.content, 1, 300), '') AS excerpt,
             IFNULL(GROUP_CONCAT(t.category || '::' || t.name, ','), '') AS tags
             FROM posts p
             LEFT JOIN post_tags pt ON p.post_id = pt.post_id
@@ -151,6 +153,7 @@ impl PostsApi {
                         created_at: db_post.get("created_at"),
                         tags: parse_tags(db_post.get("tags")),
                         status: db_post.get("status"),
+                        excerpt: Some(db_post.get("excerpt")),
                     })
                     .collect(),
             }),

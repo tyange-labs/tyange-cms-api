@@ -60,6 +60,7 @@ pub async fn get_posts(
                             created_at: db_post.get("created_at"),
                             tags: parse_tags(db_post.get("tags")),
                             status: db_post.get("status"),
+                            excerpt: None,
                         })
                         .collect(),
                 }),

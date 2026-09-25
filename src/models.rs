@@ -70,6 +70,11 @@ pub struct PostItem {
     pub created_at: String,
     pub tags: Vec<TagWithCategory>,
     pub status: String,
+    /// 본문 앞부분(마크다운 원문, 최대 300자). tyange-cms 목록에서 글을 구분하려고
+    /// `/admin/posts`만 채운다. 다른 목록 응답에는 필드 자체가 없다.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[oai(skip_serializing_if_is_none)]
+    pub excerpt: Option<String>,
 }
 
 #[derive(Debug, Serialize, Object)]

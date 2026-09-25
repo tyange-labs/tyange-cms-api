@@ -60,6 +60,9 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
 
 ## 현재 상태
 - 운영 중
+- `/admin/posts` 목록에만 `excerpt`(본문 앞 300자, 마크다운 원문) 추가 (2026-09). tyange-cms 목록에서
+  제목 없는 짧은 글을 구분하려고 쓴다. `PostItem.excerpt`는 `Option`이고 비어 있으면 JSON에서 빠지므로
+  `/posts`·`/posts/search-with-tags` 응답 모양은 그대로다.
 - 포스트 응답(`PostItem`/`Post` — `/posts`, `/admin/posts`, `/posts/search-with-tags`, `/post/:id`,
   수정 응답)에 `created_at` 추가 (2026-09). lovelog가 하루에 여러 개 올라가는 짧은 글에 시각을
   찍으려고 쓴다(`published_at`은 날짜뿐이고 블로그·dev·love가 그 모양에 기대고 있어 건드리지 않음).
