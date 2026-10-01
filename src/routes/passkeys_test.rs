@@ -410,3 +410,44 @@ async fn login_signed_for_a_different_origin_is_rejected() {
         .await
         .assert_status(poem::http::StatusCode::UNAUTHORIZED);
 }
+
+/// 브라우저(`PublicKeyCredential.toJSON()`, @simplewebauthn/browser)가 실제로 보내는 모양이
+/// 서버 타입으로 읽히는지. 소프트웨어 인증기 테스트는 서버 자신의 직렬화를 쓰므로 이 모양은
+/// 따로 확인해야 한다(camelCase 필드, clientExtensionResults, 서버가 모르는 필드).
+#[test]
+fn browser_tojson_shapes_deserialize_into_server_types() {
+    let registration: RegisterPublicKeyCredential = serde_json::from_value(json!({
+        "id": "AAAA",
+        "rawId": "AAAA",
+        "type": "public-key",
+        "authenticatorAttachment": "platform",
+        "response": {
+            "attestationObject": "AAAA",
+            "clientDataJSON": "AAAA",
+            "transports": ["internal", "hybrid", "usb", "nfc", "ble"],
+            "publicKeyAlgorithm": -7,
+            "authenticatorData": "AAAA"
+        },
+        "clientExtensionResults": {}
+    }))
+    .expect("registration JSON from a browser");
+    assert_eq!(registration.id, "AAAA");
+
+    for user_handle in [json!("AAAA"), json!(null)] {
+        let assertion: PublicKeyCredential = serde_json::from_value(json!({
+            "id": "AAAA",
+            "rawId": "AAAA",
+            "type": "public-key",
+            "authenticatorAttachment": "platform",
+            "response": {
+                "authenticatorData": "AAAA",
+                "clientDataJSON": "AAAA",
+                "signature": "AAAA",
+                "userHandle": user_handle
+            },
+            "clientExtensionResults": {}
+        }))
+        .expect("assertion JSON from a browser");
+        assert_eq!(assertion.id, "AAAA");
+    }
+}

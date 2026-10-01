@@ -200,6 +200,10 @@ async fn main() -> Result<(), std::io::Error> {
             .allow_origin("https://blog.tyange.com")
             .allow_origin("https://dashboard.tyange.com")
             .allow_origin("https://lovelog.tyange.com")
+            // gotolib은 nginx가 /api/cms/를 같은 출처로 프록시하지만, POST/PUT에는 브라우저가
+            // Origin 헤더를 붙이므로 허용 목록에 없으면 거부된다.
+            .allow_origin("https://gotolib.tyange.com")
+            .allow_origin("http://localhost:5199")
             .allow_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
             .allow_credentials(true)
             .allow_headers(vec!["authorization", "content-type", "accept"]),
