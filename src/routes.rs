@@ -10,7 +10,6 @@ pub mod get_tags_with_category;
 pub mod get_wedding_guests;
 pub mod login;
 pub mod me;
-pub mod signup;
 pub mod update_my_profile;
 pub mod update_post;
 pub mod upload_image;
@@ -21,7 +20,7 @@ mod portfolio_routes_test;
 #[cfg(test)]
 mod post_authorization_test;
 #[cfg(test)]
-mod signup_test;
+mod account_test;
 #[cfg(test)]
 mod upload_image_test;
 #[cfg(test)]

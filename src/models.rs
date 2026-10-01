@@ -176,12 +176,6 @@ pub struct AddUserRequest {
     pub user_role: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SignupRequest {
-    pub email: String,
-    pub password: String,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, Object)]
 pub struct PortfolioLink {
     pub label: String,

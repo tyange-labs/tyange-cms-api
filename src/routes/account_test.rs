@@ -11,7 +11,7 @@ use crate::{
     middlewares::auth_middleware::Auth,
     models::AppState,
     routes::{
-        add_user::add_user, login::login, me::me, signup::signup,
+        add_user::{add_user, create_user}, login::login, me::me,
         update_my_profile::update_my_profile,
     },
 };
@@ -29,7 +29,6 @@ async fn create_test_state() -> Arc<AppState> {
 
 fn create_auth_app(state: Arc<AppState>) -> impl Endpoint {
     Route::new()
-        .at("/signup", post(signup))
         .at("/login", post(login))
         .at("/me", get(me).with(Auth))
         .at("/me/profile", put(update_my_profile).with(Auth))
@@ -43,127 +42,13 @@ fn issue_access_token(user_id: &str, role: &str) -> String {
 }
 
 #[tokio::test]
-async fn signup_creates_user_role_account_with_hashed_password() {
+async fn login_and_me_return_current_user() {
     let state = create_test_state().await;
     let cli = TestClient::new(create_auth_app(state.clone()));
 
-    let response = cli
-        .post("/signup")
-        .body_json(&json!({
-            "email": "user@example.com",
-            "password": "password123"
-        }))
-        .send()
-        .await;
-
-    response.assert_status_is_ok();
-
-    let stored_hash: String = query_scalar("SELECT password FROM users WHERE user_id = ?")
-        .bind("user@example.com")
-        .fetch_one(&state.db)
+    create_user(&state.db, "me@example.com", "password123", "user")
         .await
-        .expect("failed to fetch stored password");
-    let stored_role: String = query_scalar("SELECT user_role FROM users WHERE user_id = ?")
-        .bind("user@example.com")
-        .fetch_one(&state.db)
-        .await
-        .expect("failed to fetch stored role");
-
-    assert_ne!(stored_hash, "password123");
-    assert!(verify("password123", &stored_hash).expect("password verify should work"));
-    assert_eq!(stored_role, "user");
-}
-
-#[tokio::test]
-async fn signup_rejects_duplicate_email() {
-    let state = create_test_state().await;
-    let cli = TestClient::new(create_auth_app(state));
-
-    cli.post("/signup")
-        .body_json(&json!({
-            "email": "duplicate@example.com",
-            "password": "password123"
-        }))
-        .send()
-        .await
-        .assert_status_is_ok();
-
-    cli.post("/signup")
-        .body_json(&json!({
-            "email": "duplicate@example.com",
-            "password": "password123"
-        }))
-        .send()
-        .await
-        .assert_status(StatusCode::CONFLICT);
-}
-
-#[tokio::test]
-async fn signup_rejects_invalid_email_and_short_password() {
-    let state = create_test_state().await;
-    let cli = TestClient::new(create_auth_app(state));
-
-    cli.post("/signup")
-        .body_json(&json!({
-            "email": "invalid-email",
-            "password": "password123"
-        }))
-        .send()
-        .await
-        .assert_status(StatusCode::BAD_REQUEST);
-
-    cli.post("/signup")
-        .body_json(&json!({
-            "email": "valid@example.com",
-            "password": "short"
-        }))
-        .send()
-        .await
-        .assert_status(StatusCode::BAD_REQUEST);
-}
-
-#[tokio::test]
-async fn signup_user_can_login_with_email_as_user_id() {
-    let state = create_test_state().await;
-    let cli = TestClient::new(create_auth_app(state));
-
-    cli.post("/signup")
-        .body_json(&json!({
-            "email": "login@example.com",
-            "password": "password123"
-        }))
-        .send()
-        .await
-        .assert_status_is_ok();
-
-    let response = cli
-        .post("/login")
-        .body_json(&json!({
-            "user_id": "login@example.com",
-            "password": "password123"
-        }))
-        .send()
-        .await;
-
-    response.assert_status_is_ok();
-    let json = response.json().await;
-    json.value().object().get("user_role").assert_string("user");
-    json.value().object().get("access_token").assert_not_null();
-}
-
-#[tokio::test]
-async fn login_and_me_return_current_user() {
-    let state = create_test_state().await;
-    let cli = TestClient::new(create_auth_app(state));
-
-    cli.post("/signup")
-        .body_json(&json!({
-            "email": "me@example.com",
-            "password": "password123"
-        }))
-        .send()
-        .await
-        .assert_status_is_ok();
+        .expect("failed to create user");
 
     let login_response = cli
         .post("/login")
@@ -250,14 +135,9 @@ async fn update_my_profile_persists_and_returns_profile_fields() {
     let state = create_test_state().await;
     let cli = TestClient::new(create_auth_app(state.clone()));
 
-    cli.post("/signup")
-        .body_json(&json!({
-            "email": "profile@example.com",
-            "password": "password123"
-        }))
-        .send()
+    create_user(&state.db, "profile@example.com", "password123", "user")
         .await
-        .assert_status_is_ok();
+        .expect("failed to create user");
 
     let response = cli
         .put("/me/profile")

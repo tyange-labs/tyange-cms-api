@@ -2,7 +2,7 @@
 
 현재 구현된 범위:
 
-- `POST /signup`
+- ~~`POST /signup`~~ — 제거(2026-10). 계정은 `POST /admin/add-user`로만 만든다
 - `POST /login`
 - `GET /me`
 - `POST /admin/add-user`

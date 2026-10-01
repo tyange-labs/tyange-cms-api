@@ -17,7 +17,6 @@ use crate::routes::create_wedding_guest::create_wedding_guest;
 use crate::routes::get_count_with_tags::get_count_with_tags;
 use crate::routes::get_posts_with_tags::get_posts_with_tags;
 use crate::routes::me::me;
-use crate::routes::signup::signup;
 use crate::routes::update_my_profile::update_my_profile;
 use crate::routes::upload_image::upload_image;
 use crate::{models::AppState, routes::add_user::add_user};
@@ -138,7 +137,6 @@ async fn main() -> Result<(), std::io::Error> {
                     .with(Auth),
             )
             .at("/login", post(login))
-            .at("/signup", post(signup))
             .at("/me", get(me).with(Auth))
             .at("/me/profile", put(update_my_profile).with(Auth))
             .at(

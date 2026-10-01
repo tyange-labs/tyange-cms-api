@@ -24,12 +24,12 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
   `/posts`(원래 있던 거 겸사겸사), `/admin/posts`, `/post/:id`, `/post/upload`,
   `/post/update/:id`, `/post/delete/:id`, `/tags-with-category`, `/portfolio`(GET/PUT/DELETE),
   `/portfolio/update`, `/portfolio/sections/:key`, `/upload-image`, `/admin/wedding/guests`.
-  `/login`, `/signup`, `/me`, `/me/profile`, `/admin/add-user`, `/public/wedding/guests`는
+  `/login`, `/me`, `/me/profile`, `/admin/add-user`, `/public/wedding/guests`는
   plain poem으로 그대로 남아있다(tyange-cms가 안 쓰거나, RateLimit처럼 오퍼레이션 단위
   미들웨어가 필요해서 OpenApi 변환과 안 맞음). `/login`은 tyange-cms 자체에 dev bypass가
   있어서 우선순위가 낮았다.
 - `src/routes/*.rs`의 원래 핸들러는 **지운 게 아니라 등록만 뺐다** — `post_authorization_test`,
-  `portfolio_routes_test`, `upload_image_test`, `wedding_guest_test`, `signup_test`가 여전히
+  `portfolio_routes_test`, `upload_image_test`, `wedding_guest_test`, `account_test`가 여전히
   그 함수들을 직접 참조해서(TestClient로 단일 핸들러만 떼어 테스트) 지우면 테스트가 깨진다.
   실제로 살아있는 라우팅 테이블(`main.rs`)에는 안 걸리니 죽은 코드처럼 보이는 dead_code
   경고가 몇 개 뜨는데 의도된 것이다.
