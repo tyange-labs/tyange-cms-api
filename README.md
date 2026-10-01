@@ -54,6 +54,21 @@ UPLOAD_PATH=/Users/yourname/data/tyange/uploads/images
 UPLOAD_MAX_BYTES=20971520
 ```
 
+### 패스키 환경변수 (선택)
+
+`PASSKEY_RP_ID`가 비어 있으면 패스키 기능 전체가 꺼진다(시작 로그에 이유를 남김).
+
+```env
+# RP ID는 등록 가능한 도메인. tyange.com이면 그 아래 서브도메인 어디서든 같은 패스키를 쓴다.
+PASSKEY_RP_ID=tyange.com
+# 패스키 의식을 시작하는 페이지의 origin. 쉼표로 여러 개, 첫 번째가 기본값.
+PASSKEY_RP_ORIGIN=https://gotolib.tyange.com
+# PASSKEY_RP_NAME=tyange
+```
+
+로컬 개발은 `PASSKEY_RP_ID=localhost`, `PASSKEY_RP_ORIGIN=http://localhost:5199`처럼 맞춘다.
+origin의 호스트는 RP ID와 같거나 그 하위 도메인이어야 한다.
+
 ### 블로그 자동 재배포 환경변수 (선택)
 
 포스트 publish/update/delete 후 `tyange-blog`를 재배포하려면 아래를 설정합니다.
@@ -105,7 +120,30 @@ CORS preflight(OPTIONS)는 `Cors` 미들웨어가 전담한다. 별도의 캐치
 사용자 로그인 후 access 토큰 발급(exp 1년, refresh token 없음).
 
 - `POST /admin/add-user` (JWT)
-신규 사용자 계정 추가(비밀번호 해시 저장).
+신규 사용자 계정 추가(비밀번호 해시 저장). 공개 회원가입(`POST /signup`)은 없다 — 계정은 관리자가
+만든다(2026-10 제거).
+
+### Passkeys (WebAuthn)
+
+비밀번호 로그인과 같은 JWT를 발급하는 패스키 로그인. 사용자명 없이(discoverable) 로그인한다.
+`PASSKEY_RP_ID`가 없으면 아래 엔드포인트는 전부 503이다(환경변수는 위 "패스키 환경변수" 참고).
+
+- `POST /passkeys/register/start` (JWT) → `{ challenge_id, options }` — 이 기기에 패스키 등록 시작.
+  `options`는 `navigator.credentials.create({ publicKey })`에 넘기는 값(`options.publicKey`).
+- `POST /passkeys/register/finish` (JWT) `{ challenge_id, label?, credential }` → `{ id, label }`
+- `POST /passkeys/login/start` → `{ challenge_id, options }` — 인증 불필요, IP당 분당 20회.
+- `POST /passkeys/login/finish` `{ challenge_id, credential }` → `{ access_token, user_role }`
+- `GET /passkeys` (JWT) 내 패스키 목록, `DELETE /passkeys/:id` (JWT) 삭제(내 것만)
+
+`challenge_id`는 서버가 start에서 만든 상태를 가리키는 일회용 키다(5분, 한 번 쓰면 폐기).
+`credential`은 브라우저의 `PublicKeyCredential.toJSON()` 모양 그대로 보낸다.
+
+### gotolib 동기화
+
+- `GET /gotolib/sync` (JWT) → `{ version, data, updated_at }` (처음이면 `version: 0, data: null`)
+- `PUT /gotolib/sync` (JWT) `{ base_version, data }` — `data`는 JSON 객체(1MB 이하). `base_version`이
+  서버의 현재 version과 같을 때만 저장하고 version을 1 올린다. 다르면 409와 함께 최신 문서를
+  돌려주므로 클라이언트가 합쳐서 다시 올린다. 서버는 내용을 해석하지 않는다.
 
 ### Posts / Tags (CMS)
 

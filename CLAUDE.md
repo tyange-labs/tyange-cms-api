@@ -60,6 +60,21 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
 
 ## 현재 상태
 - 운영 중
+- **패스키(WebAuthn) 로그인 + gotolib 동기화 추가** (2026-10, `feat/passkeys`). `webauthn-rs`(0.5,
+  `conditional-ui` feature = discoverable 로그인용). 로그인 검증이 끝나면 기존 `issue_login_response()`로
+  같은 JWT를 발급하므로 `Auth`/`AuthGuard`는 바뀐 게 없다. 모듈: `src/passkey.rs`(설정·진행 중인 의식
+  상태, `blog_redeploy`처럼 lib+bin 양쪽에 `mod` 선언 필요), `routes/passkeys.rs`, `routes/gotolib_sync.rs`.
+  - 의식 상태(`PasskeyRegistration`/`DiscoverableAuthentication`)는 **메모리**에 5분 보관하고 한 번 꺼내면
+    폐기한다. 단일 프로세스라 DB 직렬화(`danger-allow-state-serialisation`)를 쓰지 않았다 — 서버를
+    여러 대로 늘리면 `login/start`와 `finish`가 다른 인스턴스로 갈 수 있어 깨진다.
+  - 등록 옵션에 `residentKey: preferred`를 덧붙인다(webauthn-rs의 passkey 등록은 레지던트 키를 요구하지
+    않는다). 동기화 패스키(iCloud·Google·1Password)는 알아서 discoverable이지만 보안 키는 요청해야 만든다.
+    그래도 discoverable이 아닌 자격 증명은 사용자명 없는 로그인이 안 되므로 비밀번호 로그인은 복구용으로 남긴다.
+  - 테스트는 `webauthn-authenticator-rs`의 `SoftPasskey`(dev-dependency)로 실제 서명 검증을 거친다. 이
+    인증기는 레지던트 키가 없고 응답에 user handle을 안 채워서, 테스트가 allowCredentials와 user handle을
+    직접 채운다(`passkeys_test.rs` 주석). origin 불일치 거부는 변이 검사로 확인했다.
+  - `PASSKEY_RP_ID` 미설정이면 전부 503(기능 꺼짐). 운영 환경변수는 README "패스키 환경변수".
+- 공개 `POST /signup` 제거 (2026-10). 동기화 저장소가 생기므로 아무나 계정을 만들 수 없게 닫았다.
 - `portfolio_pdf` 포트폴리오 섹션 추가 (2026-10) — tyange-cms `/portfolio-pdf`(PDF 포트폴리오 편집기)가 쓰는 문서.
   `PUT /portfolio/sections/portfolio_pdf`로 저장하고, 새로 만든 **`GET /portfolio/sections/:section_key`**(관리자
   전용, `AuthGuard` + `ensure_admin`)로 읽는다. 공개 `GET /portfolio` 조립부는 알 수 없는 섹션을 무시해서

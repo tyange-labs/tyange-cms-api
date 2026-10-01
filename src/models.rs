@@ -3,10 +3,12 @@ use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Pool, Sqlite};
 
 use crate::blog_redeploy::BlogRedeployService;
+use crate::passkey::PasskeyService;
 
 pub struct AppState {
     pub db: Pool<Sqlite>,
     pub blog_redeploy: BlogRedeployService,
+    pub passkeys: PasskeyService,
 }
 
 impl AppState {
@@ -14,12 +16,26 @@ impl AppState {
         Self {
             db,
             blog_redeploy: BlogRedeployService::from_env(),
+            passkeys: PasskeyService::from_env(),
         }
     }
 
     #[cfg(test)]
     pub fn new_with_blog_redeploy(db: Pool<Sqlite>, blog_redeploy: BlogRedeployService) -> Self {
-        Self { db, blog_redeploy }
+        Self {
+            db,
+            blog_redeploy,
+            passkeys: PasskeyService::disabled(),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn new_with_passkeys(db: Pool<Sqlite>, passkeys: PasskeyService) -> Self {
+        Self {
+            db,
+            blog_redeploy: BlogRedeployService::from_env(),
+            passkeys,
+        }
     }
 }
 

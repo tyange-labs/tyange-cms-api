@@ -3,6 +3,7 @@ mod db;
 mod middlewares;
 mod models;
 mod openapi;
+mod passkey;
 mod routes;
 mod services;
 mod utils;
@@ -16,7 +17,11 @@ use std::{env, fs, sync::Arc, time::Duration};
 use crate::routes::create_wedding_guest::create_wedding_guest;
 use crate::routes::get_count_with_tags::get_count_with_tags;
 use crate::routes::get_posts_with_tags::get_posts_with_tags;
+use crate::routes::gotolib_sync::{get_sync, put_sync, MAX_SYNC_BYTES};
 use crate::routes::me::me;
+use crate::routes::passkeys::{
+    delete_passkey, list_passkeys, login_finish, login_start, register_finish, register_start,
+};
 use crate::routes::update_my_profile::update_my_profile;
 use crate::routes::upload_image::upload_image;
 use crate::{models::AppState, routes::add_user::add_user};
@@ -46,6 +51,12 @@ async fn options_handler() -> Response {
 }
 
 const DEFAULT_UPLOAD_MAX_BYTES: usize = 20 * 1024 * 1024;
+
+/// 패스키 등록·로그인 본문은 WebAuthn 응답 하나(수 KB)라 넉넉히 잡아도 16KB면 충분하다.
+const PASSKEY_MAX_BYTES: usize = 16 * 1024;
+
+/// 동기화 PUT 본문 = 문서(MAX_SYNC_BYTES 이하) + base_version 등 봉투.
+const SYNC_ENVELOPE_BYTES: usize = 4 * 1024;
 
 /// RSVP 본문은 name + companions 두 필드뿐이라 넉넉히 잡아도 4KB면 충분하다.
 const RSVP_MAX_BYTES: usize = 4 * 1024;
@@ -137,6 +148,36 @@ async fn main() -> Result<(), std::io::Error> {
                     .with(Auth),
             )
             .at("/login", post(login))
+            // 패스키: 등록은 로그인한 상태에서, 로그인은 사용자명 없이. 로그인 쪽은 인터넷에 열려
+            // 있으므로 IP별 rate limit을 건다. 본문은 WebAuthn 응답 하나라 작게 제한한다.
+            .at(
+                "/passkeys/login/start",
+                post(login_start).with(RateLimit::new(20, Duration::from_secs(60))),
+            )
+            .at(
+                "/passkeys/login/finish",
+                post(login_finish)
+                    .with(SizeLimit::new(PASSKEY_MAX_BYTES))
+                    .with(RateLimit::new(20, Duration::from_secs(60))),
+            )
+            .at("/passkeys/register/start", post(register_start).with(Auth))
+            .at(
+                "/passkeys/register/finish",
+                post(register_finish)
+                    .with(SizeLimit::new(PASSKEY_MAX_BYTES))
+                    .with(Auth),
+            )
+            .at("/passkeys", get(list_passkeys).with(Auth))
+            .at("/passkeys/:id", delete(delete_passkey).with(Auth))
+            // SizeLimit은 Content-Length 없는 요청(GET)을 411로 거부하므로 PUT에만 건다.
+            .at(
+                "/gotolib/sync",
+                get(get_sync.with(Auth)).put(
+                    put_sync
+                        .with(SizeLimit::new(MAX_SYNC_BYTES + SYNC_ENVELOPE_BYTES))
+                        .with(Auth),
+                ),
+            )
             .at("/me", get(me).with(Auth))
             .at("/me/profile", put(update_my_profile).with(Auth))
             .at(

@@ -37,9 +37,14 @@ tokio = { version = "1.44.1", features = [
     "rt-multi-thread",
     "time",
 ] }
+webauthn-rs = { version = "0.5.5", features = ["conditional-ui"] }
+webauthn-rs-proto = "0.5.5"
 [dependencies.uuid]
 version = "1.16.0"
 # Lets you generate random UUIDs
 features = [
     "v4",
 ]
+
+[dev-dependencies]
+webauthn-authenticator-rs = { version = "0.5.5", features = ["softpasskey"] }

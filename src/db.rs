@@ -199,5 +199,53 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
         .map_err(InternalServerError)?;
     }
 
+    // passkeys — WebAuthn 자격 증명. passkey 칼럼은 webauthn-rs `Passkey`를 JSON으로 직렬화한 값
+    // (공개키·서명 카운터 포함)이고, 로그인할 때마다 카운터가 바뀌면 갱신한다. user_handle은
+    // 사용자별로 고정된 WebAuthn user.id(UUID)로, 사용자명 없는 로그인에서 계정을 찾는 키다.
+    query(
+        r#"
+        CREATE TABLE IF NOT EXISTS passkeys (
+            credential_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            user_handle TEXT NOT NULL,
+            label TEXT NOT NULL,
+            passkey TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_used_at DATETIME,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
+        )
+        "#,
+    )
+    .execute(pool)
+    .await
+    .map_err(InternalServerError)?;
+
+    query("CREATE INDEX IF NOT EXISTS idx_passkeys_user_id ON passkeys(user_id)")
+        .execute(pool)
+        .await
+        .map_err(InternalServerError)?;
+    query("CREATE INDEX IF NOT EXISTS idx_passkeys_user_handle ON passkeys(user_handle)")
+        .execute(pool)
+        .await
+        .map_err(InternalServerError)?;
+
+    // gotolib_sync — gotolib(도서관 찾기 앱)의 기기 간 동기화 문서. 사용자당 한 행.
+    // 서버는 내용을 해석하지 않고(JSON 객체) 버전만 관리한다: version이 맞을 때만 쓸 수 있어서
+    // 두 기기가 동시에 올려도 한쪽이 다른 쪽을 조용히 덮어쓰지 못한다.
+    query(
+        r#"
+        CREATE TABLE IF NOT EXISTS gotolib_sync (
+            user_id TEXT PRIMARY KEY,
+            version INTEGER NOT NULL,
+            data TEXT NOT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
+        )
+        "#,
+    )
+    .execute(pool)
+    .await
+    .map_err(InternalServerError)?;
+
     Ok(())
 }
