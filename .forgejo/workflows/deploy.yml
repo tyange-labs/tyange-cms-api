@@ -61,6 +61,11 @@ jobs:
           # Actions 실행 권한 필요) — 예전 GitHub PAT는 안 통한다.
           echo TYANGE_BLOG_REDEPLOY_TOKEN=${{ secrets.TYANGE_BLOG_REDEPLOY_TOKEN }} >> .env
           echo TRUST_PROXY_FORWARDED_FOR=true >> .env
+          # 패스키(WebAuthn). 비밀이 아니라 값을 그대로 둔다. RP ID가 tyange.com이면 그 아래
+          # 서브도메인 어디서든 같은 패스키를 쓰고, ORIGIN은 패스키 의식을 시작하는 페이지다
+          # (쉼표로 추가). 이 줄들을 빼면 패스키 엔드포인트는 503이 된다.
+          echo PASSKEY_RP_ID=tyange.com >> .env
+          echo PASSKEY_RP_ORIGIN=https://gotolib.tyange.com >> .env
           echo UPLOAD_PATH=${{ vars.UPLOAD_PATH }} >> .env
           echo DATABASE_PATH=${{ vars.DATABASE_PATH }} >> .env
 
