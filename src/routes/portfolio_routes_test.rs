@@ -277,3 +277,123 @@ async fn update_portfolio_section_rejects_unknown_section_key() {
 
     response.assert_status(StatusCode::BAD_REQUEST);
 }
+
+async fn create_portfolio<E: poem::Endpoint>(cli: &TestClient<E>) {
+    cli.put("/portfolio/update")
+        .header("Authorization", admin_token())
+        .body_json(&sample_portfolio_payload())
+        .send()
+        .await
+        .assert_status_is_ok();
+}
+
+#[tokio::test]
+async fn portfolio_pdf_section_roundtrips_for_admin_and_stays_out_of_public_portfolio() {
+    let state = create_state().await;
+    let cli = TestClient::new(create_portfolio_app(state));
+    create_portfolio(&cli).await;
+
+    // 저장 전에는 404
+    cli.get("/portfolio/sections/portfolio_pdf")
+        .header("Authorization", admin_token())
+        .send()
+        .await
+        .assert_status(StatusCode::NOT_FOUND);
+
+    let doc = json!({
+        "theme": { "accent": "#1f4fd8", "accent_dark": "#7da2ff" },
+        "pages": [
+            { "id": "p1", "template": "cover", "dark": true, "data": { "name": "유태양" } },
+            { "id": "p2", "template": "closing", "data": { "title": "감사합니다." } }
+        ]
+    });
+    cli.put("/portfolio/sections/portfolio_pdf")
+        .header("Authorization", admin_token())
+        .body_json(&json!({ "content": doc }))
+        .send()
+        .await
+        .assert_status_is_ok();
+
+    let fetched = cli
+        .get("/portfolio/sections/portfolio_pdf")
+        .header("Authorization", admin_token())
+        .send()
+        .await;
+    fetched.assert_status_is_ok();
+    let body = fetched.json().await;
+    let pages = body
+        .value()
+        .object()
+        .get("data")
+        .object()
+        .get("content")
+        .object()
+        .get("pages");
+    pages.array().assert_len(2);
+    pages
+        .array()
+        .get(0)
+        .object()
+        .get("data")
+        .object()
+        .get("name")
+        .assert_string("유태양");
+
+    // 공개 GET /portfolio에는 portfolio_pdf이 노출되지 않는다.
+    let public = cli.get("/portfolio").send().await;
+    public.assert_status_is_ok();
+    let public_json = public.json().await;
+    let content = public_json.value().object().get("data").object().get("content");
+    assert!(content.object().get_opt("portfolio_pdf").is_none());
+}
+
+#[tokio::test]
+async fn portfolio_pdf_section_requires_admin() {
+    let state = create_state().await;
+    let cli = TestClient::new(create_portfolio_app(state));
+    create_portfolio(&cli).await;
+
+    cli.get("/portfolio/sections/portfolio_pdf")
+        .send()
+        .await
+        .assert_status(StatusCode::UNAUTHORIZED);
+    cli.get("/portfolio/sections/portfolio_pdf")
+        .header("Authorization", user_token())
+        .send()
+        .await
+        .assert_status(StatusCode::FORBIDDEN);
+    cli.put("/portfolio/sections/portfolio_pdf")
+        .header("Authorization", user_token())
+        .body_json(&json!({ "content": { "pages": [] } }))
+        .send()
+        .await
+        .assert_status(StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn portfolio_pdf_section_rejects_duplicate_ids_and_too_many_pages() {
+    let state = create_state().await;
+    let cli = TestClient::new(create_portfolio_app(state));
+    create_portfolio(&cli).await;
+
+    let dup = json!({ "content": { "pages": [
+        { "id": "a", "template": "cover" },
+        { "id": "a", "template": "closing" }
+    ]}});
+    cli.put("/portfolio/sections/portfolio_pdf")
+        .header("Authorization", admin_token())
+        .body_json(&dup)
+        .send()
+        .await
+        .assert_status(StatusCode::BAD_REQUEST);
+
+    let many: Vec<_> = (0..41)
+        .map(|i| json!({ "id": format!("p{i}"), "template": "cover" }))
+        .collect();
+    cli.put("/portfolio/sections/portfolio_pdf")
+        .header("Authorization", admin_token())
+        .body_json(&json!({ "content": { "pages": many } }))
+        .send()
+        .await
+        .assert_status(StatusCode::BAD_REQUEST);
+}

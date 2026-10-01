@@ -60,6 +60,12 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
 
 ## 현재 상태
 - 운영 중
+- `portfolio_pdf` 포트폴리오 섹션 추가 (2026-10) — tyange-cms `/portfolio-pdf`(PDF 포트폴리오 편집기)가 쓰는 문서.
+  `PUT /portfolio/sections/portfolio_pdf`로 저장하고, 새로 만든 **`GET /portfolio/sections/:section_key`**(관리자
+  전용, `AuthGuard` + `ensure_admin`)로 읽는다. 공개 `GET /portfolio` 조립부는 알 수 없는 섹션을 무시해서
+  `portfolio_pdf`은 공개 응답에 섞이지 않는다(테스트로 고정). 검증은 `{ theme, pages: [{ id, template, dark, data }] }`
+  모양과 페이지 40장·직렬화 256KB 상한·id 비어 있음/중복만 본다 — `data`는 템플릿마다 달라 구조를 안
+  본다(렌더링은 프론트엔드 담당). 테스트 3개(`portfolio_routes_test.rs`) 추가로 48개.
 - `/admin/posts` 목록에만 `excerpt`(본문 앞 300자, 마크다운 원문) 추가 (2026-09). tyange-cms 목록에서
   제목 없는 짧은 글을 구분하려고 쓴다. `PostItem.excerpt`는 `Option`이고 비어 있으면 JSON에서 빠지므로
   `/posts`·`/posts/search-with-tags` 응답 모양은 그대로다.

@@ -745,6 +745,13 @@ struct UpdateSectionRequest {
 }
 
 #[derive(Debug, serde::Serialize, poem_openapi::Object)]
+struct SectionContentResponse {
+    section_key: String,
+    content: poem_openapi::types::Any<serde_json::Value>,
+    updated_at: String,
+}
+
+#[derive(Debug, serde::Serialize, poem_openapi::Object)]
 struct UpdateSectionResponse {
     section_key: String,
     updated_at: String,
@@ -787,6 +794,28 @@ fn validate_portfolio_section(
             let parsed: PortfolioIntroSection = serde_json::from_value(value.clone())
                 .map_err(|e| format!("intro 검증 실패: {}", e))?;
             serde_json::to_string(&parsed).map_err(|e| e.to_string())
+        }
+        "portfolio_pdf" => {
+            use crate::models::{PORTFOLIO_PDF_MAX_BYTES, PORTFOLIO_PDF_MAX_PAGES};
+            let parsed: crate::models::PortfolioPdfSection = serde_json::from_value(value.clone())
+                .map_err(|e| format!("portfolio_pdf 검증 실패: {}", e))?;
+            if parsed.pages.len() > PORTFOLIO_PDF_MAX_PAGES {
+                return Err(format!("portfolio_pdf 페이지는 최대 {}장입니다.", PORTFOLIO_PDF_MAX_PAGES));
+            }
+            let mut seen = std::collections::HashSet::new();
+            for page in &parsed.pages {
+                if page.id.trim().is_empty() || page.template.trim().is_empty() {
+                    return Err("portfolio_pdf 페이지의 id와 template은 비어 있을 수 없습니다.".to_string());
+                }
+                if !seen.insert(page.id.as_str()) {
+                    return Err(format!("portfolio_pdf 페이지 id가 중복됩니다: {}", page.id));
+                }
+            }
+            let serialized = serde_json::to_string(&parsed).map_err(|e| e.to_string())?;
+            if serialized.len() > PORTFOLIO_PDF_MAX_BYTES {
+                return Err(format!("portfolio_pdf 문서는 {}KB 이하여야 합니다.", PORTFOLIO_PDF_MAX_BYTES / 1024));
+            }
+            Ok(serialized)
         }
         _ => Err(format!("알 수 없는 섹션: {}", section_key)),
     }
@@ -1178,6 +1207,58 @@ impl PortfolioApi {
                 updated_at,
             }),
             message: Some(String::from("포트폴리오를 업데이트 했습니다.")),
+        }))
+    }
+
+    /// 섹션 하나의 저장된 JSON을 그대로 돌려준다(관리자 전용). 공개 `GET /portfolio`에
+    /// 섞지 않는 `portfolio_pdf`처럼 편집기만 읽는 섹션용이다.
+    #[oai(path = "/portfolio/sections/:section_key", method = "get")]
+    async fn get_portfolio_section(
+        &self,
+        guard: AuthGuard,
+        Path(section_key): Path<String>,
+    ) -> poem::Result<Json<ApiResponse<SectionContentResponse>>> {
+        ensure_admin(&guard.0)?;
+
+        let row: Option<(String, String)> = sqlx::query_as(
+            r#"
+            SELECT s.content, s.updated_at
+            FROM portfolio_section s
+            JOIN portfolio p ON p.portfolio_id = s.portfolio_id
+            WHERE p.slug = ? AND s.section_key = ?
+            "#,
+        )
+        .bind("dev")
+        .bind(&section_key)
+        .fetch_optional(&self.state.db)
+        .await
+        .map_err(|err| {
+            poem::Error::from_string(
+                format!("{} 섹션 조회 실패: {}", section_key, err),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?;
+        let (content, updated_at) = row.ok_or_else(|| {
+            poem::Error::from_string(
+                format!("{} 섹션이 아직 없습니다.", section_key),
+                StatusCode::NOT_FOUND,
+            )
+        })?;
+        let value: serde_json::Value = serde_json::from_str(&content).map_err(|err| {
+            poem::Error::from_string(
+                format!("{} 섹션 파싱 실패: {}", section_key, err),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?;
+
+        Ok(Json(ApiResponse {
+            status: true,
+            data: Some(SectionContentResponse {
+                section_key,
+                content: poem_openapi::types::Any(value),
+                updated_at,
+            }),
+            message: None,
         }))
     }
 

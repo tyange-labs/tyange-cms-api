@@ -249,6 +249,38 @@ pub struct PortfolioTechStackItem {
     pub icon_url: String,
 }
 
+/// PDF 포트폴리오(포트폴리오 슬라이드) 편집 문서. tyange-cms의 `/portfolio-pdf` 편집기가 쓴다.
+/// 공개 `GET /portfolio` 응답에는 섞이지 않고 `GET /portfolio/sections/portfolio_pdf`
+/// (관리자 전용)으로만 읽힌다. 페이지 `data`는 템플릿마다 모양이 달라 백엔드는 구조를
+/// 검증하지 않고, 크기·개수 상한만 확인한다(렌더링은 프론트엔드 담당).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PortfolioPdfSection {
+    #[serde(default)]
+    pub theme: PortfolioPdfTheme,
+    pub pages: Vec<PortfolioPdfPage>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct PortfolioPdfTheme {
+    #[serde(default)]
+    pub accent: String,
+    #[serde(default)]
+    pub accent_dark: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PortfolioPdfPage {
+    pub id: String,
+    pub template: String,
+    #[serde(default)]
+    pub dark: bool,
+    #[serde(default)]
+    pub data: serde_json::Value,
+}
+
+pub const PORTFOLIO_PDF_MAX_PAGES: usize = 40;
+pub const PORTFOLIO_PDF_MAX_BYTES: usize = 256 * 1024;
+
 #[derive(Debug, Serialize, Deserialize, Clone, Object)]
 pub struct PortfolioIntroSection {
     /// Markdown. 프론트엔드(tyange-dev)가 렌더링한다 — 백엔드는 파싱하지 않고
