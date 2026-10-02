@@ -167,3 +167,69 @@ async fn put_rejects_non_object_negative_version_and_oversized_documents() {
     let got = body(cli.get("/gotolib/sync").header("Authorization", &auth).send().await).await;
     assert_eq!(got["version"], 0);
 }
+
+#[tokio::test]
+async fn get_returns_etag_and_answers_304_when_unchanged() {
+    let cli = TestClient::new(app(test_state().await));
+    let auth = token("me@example.com");
+    cli.put("/gotolib/sync")
+        .header("Authorization", &auth)
+        .body_json(&json!({ "base_version": 0, "data": { "k": 1 } }))
+        .send()
+        .await
+        .assert_status_is_ok();
+
+    let first = cli.get("/gotolib/sync").header("Authorization", &auth).send().await;
+    first.assert_status_is_ok();
+    first.assert_header("ETag", "\"v1\"");
+    first.assert_header("Vary", "Authorization");
+
+    // 같은 version이면 본문 없이 304
+    let same = cli
+        .get("/gotolib/sync")
+        .header("Authorization", &auth)
+        .header("If-None-Match", "\"v1\"")
+        .send()
+        .await;
+    same.assert_status(poem::http::StatusCode::NOT_MODIFIED);
+    assert!(same.0.into_body().into_string().await.unwrap().is_empty());
+
+    // 갱신되면 오래된 ETag로는 새 문서를 받는다.
+    cli.put("/gotolib/sync")
+        .header("Authorization", &auth)
+        .body_json(&json!({ "base_version": 1, "data": { "k": 2 } }))
+        .send()
+        .await
+        .assert_status_is_ok();
+    let changed = cli
+        .get("/gotolib/sync")
+        .header("Authorization", &auth)
+        .header("If-None-Match", "\"v1\"")
+        .send()
+        .await;
+    changed.assert_status_is_ok();
+    assert_eq!(body(changed).await["version"], 2);
+}
+
+#[tokio::test]
+async fn documents_larger_than_512kb_are_rejected() {
+    assert_eq!(MAX_SYNC_BYTES, 512 * 1024);
+    let cli = TestClient::new(app(test_state().await));
+    let auth = token("me@example.com");
+
+    // 상한 바로 아래는 통과, 넘으면 413.
+    let fits = "x".repeat(MAX_SYNC_BYTES - 64);
+    cli.put("/gotolib/sync")
+        .header("Authorization", &auth)
+        .body_json(&json!({ "base_version": 0, "data": { "blob": fits } }))
+        .send()
+        .await
+        .assert_status_is_ok();
+    let over = "x".repeat(MAX_SYNC_BYTES + 1);
+    cli.put("/gotolib/sync")
+        .header("Authorization", &auth)
+        .body_json(&json!({ "base_version": 1, "data": { "blob": over } }))
+        .send()
+        .await
+        .assert_status(poem::http::StatusCode::PAYLOAD_TOO_LARGE);
+}

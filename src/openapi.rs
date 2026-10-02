@@ -16,7 +16,9 @@ use poem_openapi::{
     OpenApi,
 };
 use sqlx::{query, query_as, QueryBuilder, Row, Sqlite};
-use tyange_cms_api::auth::authorization::{ensure_admin, ensure_post_owner, AuthGuard};
+use tyange_cms_api::auth::authorization::{
+    ensure_admin, ensure_content_writer, ensure_post_owner, AuthGuard,
+};
 
 use crate::blog_redeploy::{is_blog_redeploy_target, BlogContentEvent, BlogVisibility};
 use crate::models::{
@@ -213,6 +215,7 @@ impl PostsApi {
         payload: Json<UploadPostRequest>,
     ) -> poem::Result<Json<ApiResponse<UploadPostResponse>>> {
         let user = &guard.0;
+        ensure_content_writer(user)?;
         let payload = payload.0;
         let post_id = uuid::Uuid::new_v4().to_string();
 
@@ -318,6 +321,7 @@ impl PostsApi {
         payload: Json<UpdatePostRequest>,
     ) -> poem::Result<Json<ApiResponse<Post>>> {
         let user = &guard.0;
+        ensure_content_writer(user)?;
         let payload = payload.0;
         ensure_post_owner(user, &post_id, &self.state.db).await?;
         let existing_post = fetch_existing_post(&self.state.db, &post_id).await?;
@@ -449,6 +453,7 @@ impl PostsApi {
         guard: AuthGuard,
         Path(post_id): Path<String>,
     ) -> poem::Result<Json<ApiResponse<DeletePostResponse>>> {
+        ensure_content_writer(&guard.0)?;
         ensure_post_owner(&guard.0, &post_id, &self.state.db).await?;
 
         let existing_post = query_as::<Sqlite, PostResponseDb>(
@@ -697,7 +702,7 @@ impl ImagesApi {
         Query(image_type): Query<Option<String>>,
         payload: UploadImagePayload,
     ) -> poem::Result<Json<ApiResponse<crate::models::UploadImageResponse>>> {
-        let _user = &guard.0;
+        ensure_content_writer(&guard.0)?;
 
         let upload_dir = std::path::PathBuf::from(
             std::env::var("UPLOAD_PATH").unwrap_or_else(|_| ".uploads/images".to_string()),

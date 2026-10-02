@@ -87,6 +87,20 @@ pub async fn ensure_post_owner(
     }
 }
 
+/// 글과 이미지를 쓸 수 있는 역할. gotolib 전용 계정(`gotolib`)은 패스키·동기화만 쓰는 계정이라
+/// CMS 콘텐츠를 만들 수 없다. 이 서버는 블로그·CMS와 계정 테이블을 공유하므로, 새 역할이 생길 때
+/// 기본값이 '쓸 수 있음'이 되지 않게 허용 목록(admin, user)으로 막는다.
+pub fn ensure_content_writer(user: &AuthenticatedUser) -> Result<(), Error> {
+    if matches!(user.role.as_str(), "admin" | "user") {
+        Ok(())
+    } else {
+        Err(Error::from_string(
+            "이 계정으로는 콘텐츠를 작성할 수 없습니다.",
+            StatusCode::FORBIDDEN,
+        ))
+    }
+}
+
 pub fn ensure_admin(user: &AuthenticatedUser) -> Result<(), Error> {
     if user.role == "admin" {
         Ok(())

@@ -249,3 +249,43 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
 
     Ok(())
 }
+
+/// 오래 쓰지 않은 gotolib 전용 계정을 지운다(계정·패스키·동기화 문서). 가입에 이메일이 없어서
+/// 연락할 방법이 없고 복구도 불가능하므로, 쓰지 않는 계정이 저장소를 계속 차지하지 않게 한다.
+/// '마지막 활동' = 패스키 등록·사용, 동기화 문서 갱신 중 가장 최근. 지운 계정 수를 돌려준다.
+pub async fn purge_inactive_gotolib_accounts(
+    pool: &sqlx::SqlitePool,
+    inactive_days: u32,
+) -> Result<u64> {
+    let cutoff = format!("-{inactive_days} days");
+    let inactive = r#"
+        SELECT u.user_id FROM users u
+        WHERE u.user_role = 'gotolib'
+          AND COALESCE((
+                SELECT MAX(ts) FROM (
+                    SELECT created_at AS ts FROM passkeys WHERE user_id = u.user_id
+                    UNION ALL
+                    SELECT last_used_at FROM passkeys WHERE user_id = u.user_id
+                    UNION ALL
+                    SELECT updated_at FROM gotolib_sync WHERE user_id = u.user_id
+                )
+              ), '1970-01-01') < datetime('now', ?1)
+    "#;
+
+    let mut tx = pool.begin().await.map_err(InternalServerError)?;
+    for table in ["gotolib_sync", "passkeys"] {
+        query(&format!("DELETE FROM {table} WHERE user_id IN ({inactive})"))
+            .bind(&cutoff)
+            .execute(&mut *tx)
+            .await
+            .map_err(InternalServerError)?;
+    }
+    let removed = query(&format!("DELETE FROM users WHERE user_id IN ({inactive})"))
+        .bind(&cutoff)
+        .execute(&mut *tx)
+        .await
+        .map_err(InternalServerError)?
+        .rows_affected();
+    tx.commit().await.map_err(InternalServerError)?;
+    Ok(removed)
+}

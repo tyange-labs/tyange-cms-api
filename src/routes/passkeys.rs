@@ -30,6 +30,9 @@ use crate::{
 
 const MAX_LABEL_CHARS: usize = 40;
 const DEFAULT_LABEL: &str = "패스키";
+/// gotolib 전용 계정의 역할. 패스키·동기화만 쓸 수 있고 CMS 콘텐츠는 쓸 수 없다
+/// (`ensure_content_writer`).
+pub const GOTOLIB_ROLE: &str = "gotolib";
 
 #[derive(Serialize)]
 pub struct ChallengeResponse<T: Serialize> {
@@ -39,6 +42,13 @@ pub struct ChallengeResponse<T: Serialize> {
 
 #[derive(Deserialize)]
 pub struct RegisterFinishRequest {
+    challenge_id: String,
+    label: Option<String>,
+    credential: RegisterPublicKeyCredential,
+}
+
+#[derive(Deserialize)]
+pub struct SignupFinishRequest {
     challenge_id: String,
     label: Option<String>,
     credential: RegisterPublicKeyCredential,
@@ -106,6 +116,42 @@ async fn user_handle_for(state: &AppState, user_id: &str) -> Result<Uuid, Error>
         .unwrap_or_else(Uuid::new_v4))
 }
 
+/// 사용자명 없는 로그인을 하려면 디스커버러블이어야 한다. 동기화 패스키(iCloud·Google 등)는
+/// 알아서 그렇게 만들어지지만, 보안 키는 요청해야 만든다 — 가능하면 만들도록 요청한다.
+fn prefer_discoverable(options: &mut CreationChallengeResponse) {
+    if let Some(selection) = options.public_key.authenticator_selection.as_mut() {
+        selection.resident_key = Some(ResidentKeyRequirement::Preferred);
+    }
+}
+
+fn clean_label(label: Option<&str>) -> String {
+    label
+        .map(str::trim)
+        .filter(|label| !label.is_empty())
+        .unwrap_or(DEFAULT_LABEL)
+        .chars()
+        .take(MAX_LABEL_CHARS)
+        .collect()
+}
+
+async fn gotolib_account_count<'e, E>(executor: E) -> Result<i64, Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE user_role = ?")
+        .bind(GOTOLIB_ROLE)
+        .fetch_one(executor)
+        .await
+        .map_err(db_error)
+}
+
+fn accounts_full() -> Error {
+    Error::from_string(
+        "지금은 새 계정을 받지 않습니다.",
+        StatusCode::SERVICE_UNAVAILABLE,
+    )
+}
+
 #[handler]
 pub async fn register_start(
     req: &Request,
@@ -145,11 +191,7 @@ pub async fn register_start(
         .start_passkey_registration(user_handle, &user.user_id, &display_name, Some(exclude))
         .map_err(bad_request("패스키 등록을 시작하지 못했습니다."))?;
 
-    // 사용자명 없는 로그인을 하려면 디스커버러블이어야 한다. 동기화 패스키(iCloud·Google 등)는
-    // 알아서 그렇게 만들어지지만, 보안 키는 요청해야 만든다 — 가능하면 만들도록 요청한다.
-    if let Some(selection) = options.public_key.authenticator_selection.as_mut() {
-        selection.resident_key = Some(ResidentKeyRequirement::Preferred);
-    }
+    prefer_discoverable(&mut options);
 
     let challenge_id = data
         .passkeys
@@ -197,15 +239,7 @@ pub async fn register_finish(
         .finish_passkey_registration(&payload.credential, &state)
         .map_err(bad_request("패스키 등록을 확인하지 못했습니다."))?;
 
-    let label = payload
-        .label
-        .as_deref()
-        .map(str::trim)
-        .filter(|label| !label.is_empty())
-        .unwrap_or(DEFAULT_LABEL)
-        .chars()
-        .take(MAX_LABEL_CHARS)
-        .collect::<String>();
+    let label = clean_label(payload.label.as_deref());
     let id = credential_id_string(passkey.cred_id());
     let passkey_json = serde_json::to_string(&passkey).map_err(|e| {
         Error::from_string(
@@ -240,6 +274,108 @@ pub async fn register_finish(
         created_at: None,
         last_used_at: None,
     }))
+}
+
+/// 가입 시작: 이메일·비밀번호 없이 패스키 하나로 계정을 만든다. 계정 id는 서버가 정한다.
+#[handler]
+pub async fn signup_start(
+    data: Data<&Arc<AppState>>,
+) -> poem::Result<Json<ChallengeResponse<CreationChallengeResponse>>> {
+    let webauthn = webauthn(&data)?;
+    if gotolib_account_count(&data.db).await? >= data.passkeys.max_accounts() {
+        return Err(accounts_full());
+    }
+
+    let user_handle = Uuid::new_v4();
+    let user_id = format!("gl-{}", user_handle.simple());
+    let (mut options, state) = webauthn
+        .start_passkey_registration(user_handle, &user_id, "gotolib", None)
+        .map_err(bad_request("가입을 시작하지 못했습니다."))?;
+    prefer_discoverable(&mut options);
+
+    let challenge_id = data
+        .passkeys
+        .store(Pending::Signup {
+            user_id,
+            user_handle,
+            state,
+        })
+        .ok_or_else(too_many_pending)?;
+    Ok(Json(ChallengeResponse {
+        challenge_id,
+        options,
+    }))
+}
+
+/// 가입 완료: 패스키를 검증한 뒤에야 계정과 패스키를 한 트랜잭션으로 만들고 JWT를 돌려준다.
+#[handler]
+pub async fn signup_finish(
+    Json(payload): Json<SignupFinishRequest>,
+    data: Data<&Arc<AppState>>,
+) -> poem::Result<Json<LoginResponse>> {
+    let webauthn = webauthn(&data)?;
+
+    let Some(Pending::Signup {
+        user_id,
+        user_handle,
+        state,
+    }) = data.passkeys.take(&payload.challenge_id)
+    else {
+        return Err(Error::from_string(
+            "만료되었거나 알 수 없는 요청입니다.",
+            StatusCode::BAD_REQUEST,
+        ));
+    };
+
+    let passkey = webauthn
+        .finish_passkey_registration(&payload.credential, &state)
+        .map_err(bad_request("가입을 확인하지 못했습니다."))?;
+    let passkey_json = serde_json::to_string(&passkey).map_err(|e| {
+        Error::from_string(
+            format!("serialize passkey: {e}"),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )
+    })?;
+
+    let mut tx = data.db.begin().await.map_err(db_error)?;
+    // 상한 확인과 INSERT를 같은 트랜잭션에서 한다(동시에 여러 가입이 몰려도 상한을 크게 넘지 않게).
+    if gotolib_account_count(&mut *tx).await? >= data.passkeys.max_accounts() {
+        return Err(accounts_full());
+    }
+    query(
+        r#"
+        INSERT INTO users (user_id, password, user_role, auth_provider)
+        VALUES (?, NULL, ?, 'passkey')
+        "#,
+    )
+    .bind(&user_id)
+    .bind(GOTOLIB_ROLE)
+    .execute(&mut *tx)
+    .await
+    .map_err(db_error)?;
+    query(
+        r#"
+        INSERT INTO passkeys (credential_id, user_id, user_handle, label, passkey)
+        VALUES (?, ?, ?, ?, ?)
+        "#,
+    )
+    .bind(credential_id_string(passkey.cred_id()))
+    .bind(&user_id)
+    .bind(user_handle.to_string())
+    .bind(clean_label(payload.label.as_deref()))
+    .bind(&passkey_json)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| match e {
+        sqlx::Error::Database(db) if db.is_unique_violation() => {
+            Error::from_string("이미 등록된 패스키입니다.", StatusCode::CONFLICT)
+        }
+        other => db_error(other),
+    })?;
+    tx.commit().await.map_err(db_error)?;
+
+    println!("gotolib 계정 생성: {}", user_id);
+    Ok(Json(issue_login_response(&user_id, GOTOLIB_ROLE)?))
 }
 
 #[handler]

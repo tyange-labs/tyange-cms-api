@@ -20,7 +20,7 @@ use crate::{
         add_user::create_user,
         passkeys::{
             delete_passkey, list_passkeys, login_finish, login_start, register_finish,
-            register_start,
+            register_start, signup_finish, signup_start,
         },
     },
 };
@@ -51,6 +51,8 @@ async fn enabled_state() -> Arc<AppState> {
 
 fn app(state: Arc<AppState>) -> impl Endpoint {
     Route::new()
+        .at("/passkeys/signup/start", post(signup_start))
+        .at("/passkeys/signup/finish", post(signup_finish))
         .at("/passkeys/login/start", post(login_start))
         .at("/passkeys/login/finish", post(login_finish))
         .at("/passkeys/register/start", post(register_start).with(Auth))
@@ -450,4 +452,191 @@ fn browser_tojson_shapes_deserialize_into_server_types() {
         .expect("assertion JSON from a browser");
         assert_eq!(assertion.id, "AAAA");
     }
+}
+
+// ── 가입 (이메일·비밀번호 없이 패스키로 계정 생성) ─────────────────────────────
+
+/// 가입 전체 절차. (응답 JSON, 인증기)를 돌려준다.
+async fn sign_up<E: Endpoint>(
+    cli: &TestClient<E>,
+    authenticator: &mut WebauthnAuthenticator<SoftPasskey>,
+) -> TestResponse {
+    let start = cli.post("/passkeys/signup/start").send().await;
+    start.assert_status_is_ok();
+    let start = json_of(start).await;
+    let options: CreationChallengeResponse =
+        serde_json::from_value(start["options"].clone()).expect("creation options");
+    let credential = authenticator
+        .do_registration(Url::parse(ORIGIN).unwrap(), options)
+        .expect("soft registration");
+    cli.post("/passkeys/signup/finish")
+        .body_json(&json!({
+            "challenge_id": start["challenge_id"],
+            "label": "내 폰",
+            "credential": credential,
+        }))
+        .send()
+        .await
+}
+
+async fn count_gotolib_accounts(state: &AppState) -> i64 {
+    sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE user_role = 'gotolib'")
+        .fetch_one(&state.db)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn signup_creates_a_gotolib_account_and_returns_a_jwt() {
+    let state = enabled_state().await;
+    let cli = TestClient::new(app(state.clone()));
+    let mut authenticator = WebauthnAuthenticator::new(SoftPasskey::new(true));
+
+    let response = sign_up(&cli, &mut authenticator).await;
+    response.assert_status_is_ok();
+    let body = json_of(response).await;
+    assert_eq!(body["user_role"], "gotolib");
+
+    let claims = Claims::from_token(body["access_token"].as_str().unwrap(), b"test-access-secret")
+        .expect("valid jwt");
+    assert!(claims.claims.sub.starts_with("gl-"));
+    assert_eq!(claims.claims.role, "gotolib");
+
+    // 계정은 비밀번호가 없다(비밀번호 로그인 경로로 들어올 수 없다).
+    let password: Option<String> =
+        sqlx::query_scalar("SELECT password FROM users WHERE user_id = ?")
+            .bind(&claims.claims.sub)
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+    assert!(password.is_none());
+
+    // 만든 패스키로 사용자명 없이 다시 로그인하면 같은 계정이다.
+    let credential_id: String =
+        sqlx::query_scalar("SELECT credential_id FROM passkeys WHERE user_id = ?")
+            .bind(&claims.claims.sub)
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+    let handle = user_handle_of(&state, &claims.claims.sub).await;
+    let start = json_of(cli.post("/passkeys/login/start").send().await).await;
+    let credential = authenticate(&mut authenticator, &start, &credential_id, &handle);
+    let login = cli
+        .post("/passkeys/login/finish")
+        .body_json(&json!({ "challenge_id": start["challenge_id"], "credential": credential }))
+        .send()
+        .await;
+    login.assert_status_is_ok();
+    let login = json_of(login).await;
+    assert_eq!(login["user_role"], "gotolib");
+    let again = Claims::from_token(login["access_token"].as_str().unwrap(), b"test-access-secret")
+        .unwrap();
+    assert_eq!(again.claims.sub, claims.claims.sub);
+}
+
+#[tokio::test]
+async fn signup_start_alone_creates_no_account() {
+    let state = enabled_state().await;
+    let cli = TestClient::new(app(state.clone()));
+    let before = count_gotolib_accounts(&state).await;
+
+    for _ in 0..3 {
+        cli.post("/passkeys/signup/start")
+            .send()
+            .await
+            .assert_status_is_ok();
+    }
+    assert_eq!(count_gotolib_accounts(&state).await, before);
+}
+
+#[tokio::test]
+async fn signup_is_unavailable_when_passkeys_are_not_configured() {
+    let state = state_with(PasskeyService::disabled()).await;
+    let cli = TestClient::new(app(state));
+    cli.post("/passkeys/signup/start")
+        .send()
+        .await
+        .assert_status(poem::http::StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn signup_stops_at_the_account_cap_even_if_challenges_were_started_earlier() {
+    let service = PasskeyService::build("example.com", ORIGIN, "test")
+        .expect("build service")
+        .with_max_accounts(1);
+    let state = state_with(service).await;
+    let cli = TestClient::new(app(state.clone()));
+
+    // 상한 1: 두 가입이 동시에 시작돼도 한 명만 만들어진다.
+    let mut first = WebauthnAuthenticator::new(SoftPasskey::new(true));
+    let mut second = WebauthnAuthenticator::new(SoftPasskey::new(true));
+    let start_a = json_of(cli.post("/passkeys/signup/start").send().await).await;
+    let start_b = json_of(cli.post("/passkeys/signup/start").send().await).await;
+    let register = |auth: &mut WebauthnAuthenticator<SoftPasskey>, start: &Value| {
+        let options: CreationChallengeResponse =
+            serde_json::from_value(start["options"].clone()).unwrap();
+        auth.do_registration(Url::parse(ORIGIN).unwrap(), options).unwrap()
+    };
+    let cred_a = register(&mut first, &start_a);
+    let cred_b = register(&mut second, &start_b);
+
+    cli.post("/passkeys/signup/finish")
+        .body_json(&json!({ "challenge_id": start_a["challenge_id"], "credential": cred_a }))
+        .send()
+        .await
+        .assert_status_is_ok();
+    cli.post("/passkeys/signup/finish")
+        .body_json(&json!({ "challenge_id": start_b["challenge_id"], "credential": cred_b }))
+        .send()
+        .await
+        .assert_status(poem::http::StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(count_gotolib_accounts(&state).await, 1);
+
+    // 상한에 닿은 뒤의 새 시작도 거절한다.
+    cli.post("/passkeys/signup/start")
+        .send()
+        .await
+        .assert_status(poem::http::StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn signup_challenges_and_register_challenges_cannot_be_swapped() {
+    let state = enabled_state().await;
+    let cli = TestClient::new(app(state.clone()));
+    let mut authenticator = WebauthnAuthenticator::new(SoftPasskey::new(true));
+
+    // 가입 챌린지로 로그인한 사용자의 '패스키 추가'를 완료할 수 없다.
+    let start = json_of(cli.post("/passkeys/signup/start").send().await).await;
+    let options: CreationChallengeResponse =
+        serde_json::from_value(start["options"].clone()).unwrap();
+    let credential = authenticator
+        .do_registration(Url::parse(ORIGIN).unwrap(), options)
+        .unwrap();
+    cli.post("/passkeys/register/finish")
+        .header("Authorization", token("me@example.com"))
+        .body_json(&json!({ "challenge_id": start["challenge_id"], "credential": credential }))
+        .send()
+        .await
+        .assert_status(poem::http::StatusCode::BAD_REQUEST);
+
+    // 반대로 '패스키 추가' 챌린지로 가입을 완료해 새 계정을 만들 수도 없다.
+    let reg = cli
+        .post("/passkeys/register/start")
+        .header("Authorization", token("me@example.com"))
+        .send()
+        .await;
+    let reg = json_of(reg).await;
+    let options: CreationChallengeResponse =
+        serde_json::from_value(reg["options"].clone()).unwrap();
+    let mut other = WebauthnAuthenticator::new(SoftPasskey::new(true));
+    let credential = other
+        .do_registration(Url::parse(ORIGIN).unwrap(), options)
+        .unwrap();
+    let before = count_gotolib_accounts(&state).await;
+    cli.post("/passkeys/signup/finish")
+        .body_json(&json!({ "challenge_id": reg["challenge_id"], "credential": credential }))
+        .send()
+        .await
+        .assert_status(poem::http::StatusCode::BAD_REQUEST);
+    assert_eq!(count_gotolib_accounts(&state).await, before);
 }

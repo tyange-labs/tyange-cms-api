@@ -6,7 +6,7 @@ use poem::{
     web::{Data, Json, Multipart, Query},
     Error, Request,
 };
-use tyange_cms_api::auth::authorization::current_user;
+use tyange_cms_api::auth::authorization::{current_user, ensure_content_writer};
 
 use crate::models::{AppState, CustomResponse, UploadImageQueryParmas, UploadImageResponse};
 use crate::services::image_storage::{
@@ -30,7 +30,7 @@ pub async fn upload_image(
     Query(params): Query<UploadImageQueryParmas>,
     data: Data<&Arc<AppState>>,
 ) -> Result<Json<CustomResponse<UploadImageResponse>>, Error> {
-    let _user = current_user(req)?;
+    ensure_content_writer(current_user(req)?)?;
 
     while let Some(field) = multipart.next_field().await? {
         if field.file_name().is_none() {

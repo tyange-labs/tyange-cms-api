@@ -74,6 +74,17 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
     인증기는 레지던트 키가 없고 응답에 user handle을 안 채워서, 테스트가 allowCredentials와 user handle을
     직접 채운다(`passkeys_test.rs` 주석). origin 불일치 거부는 변이 검사로 확인했다.
   - `PASSKEY_RP_ID` 미설정이면 전부 503(기능 꺼짐). 운영 환경변수는 README "패스키 환경변수".
+- **gotolib 전용 계정(가입)** (2026-10-02): `POST /passkeys/signup/{start,finish}`로 이메일·비밀번호 없이
+  패스키만으로 계정을 만든다(`users.user_role = 'gotolib'`, `password NULL`, `user_id = gl-<uuid>`).
+  - **블로그·CMS와 `users` 테이블을 공유**하므로, 글·이미지를 쓰는 엔드포인트(`/post/upload`·`update`·
+    `delete`, `/upload-image`, `/images/upload`)에 `ensure_content_writer`(admin·user 허용 목록)를 걸었다.
+    새 역할이 생겨도 기본값이 '쓸 수 있음'이 되지 않게 **허용 목록**으로 막는다. 이전에는 로그인만 되면
+    누구나 글을 올릴 수 있었고, 공개 `/signup`이 열려 있던 동안 그 구멍이 실제로 열려 있었다.
+    새 라우트에 `AuthGuard`만 걸고 역할 확인을 빼먹지 않도록 주의.
+  - 상한: 계정 총량(`GOTOLIB_MAX_ACCOUNTS`), 가입 IP 속도 제한, 동기화 문서 512KB, 365일 비활성 계정 정리
+    (`db::purge_inactive_gotolib_accounts`, 시작 시 + 24시간마다). 서버가 저장하는 건 사용자당 JSON 하나.
+  - 가입 챌린지(`Pending::Signup`)와 기존 '패스키 추가'(`Pending::Register`)는 서로 바꿔 쓸 수 없다(테스트로 고정).
+  - `GET /gotolib/sync`는 `ETag`/304를 지원한다(클라이언트의 전송량을 줄이려고).
 - 공개 `POST /signup` 제거 (2026-10). 동기화 저장소가 생기므로 아무나 계정을 만들 수 없게 닫았다.
 - `portfolio_pdf` 포트폴리오 섹션 추가 (2026-10) — tyange-cms `/portfolio-pdf`(PDF 포트폴리오 편집기)가 쓰는 문서.
   `PUT /portfolio/sections/portfolio_pdf`로 저장하고, 새로 만든 **`GET /portfolio/sections/:section_key`**(관리자

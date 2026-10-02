@@ -18,8 +18,9 @@ use tyange_cms_api::auth::authorization::current_user;
 
 use crate::models::AppState;
 
-/// 동기화 문서 크기 상한(직렬화한 JSON). 책 수백~수천 권도 수백 KB를 넘지 않는다.
-pub const MAX_SYNC_BYTES: usize = 1024 * 1024;
+/// 동기화 문서 크기 상한(직렬화한 JSON). 클라이언트가 책을 1,000권까지만 올리므로(권당 약
+/// 200~300바이트) 정상 문서는 이보다 훨씬 작다 — 이 상한은 이중 방어다.
+pub const MAX_SYNC_BYTES: usize = 512 * 1024;
 
 #[derive(Serialize)]
 pub struct SyncDocument {
@@ -69,13 +70,39 @@ async fn load(state: &AppState, user_id: &str) -> Result<SyncDocument, Error> {
     })
 }
 
+/// 문서가 바뀌지 않았으면 본문 없이 304로 답하게 하는 ETag. version이 곧 문서의 정체성이다.
+fn etag(version: i64) -> String {
+    format!("\"v{version}\"")
+}
+
 #[handler]
-pub async fn get_sync(
-    req: &Request,
-    data: Data<&Arc<AppState>>,
-) -> poem::Result<Json<SyncDocument>> {
+pub async fn get_sync(req: &Request, data: Data<&Arc<AppState>>) -> poem::Result<Response> {
     let user = current_user(req)?;
-    Ok(Json(load(&data, &user.user_id).await?))
+    let document = load(&data, &user.user_id).await?;
+    let tag = etag(document.version);
+
+    // 토큰마다 다른 응답이라 캐시 키에 Authorization을 넣고, 매번 재검증(no-cache)하게 한다.
+    let builder = Response::builder()
+        .header("ETag", &tag)
+        .header("Cache-Control", "private, no-cache")
+        .header("Vary", "Authorization");
+
+    let not_modified = req
+        .headers()
+        .get("If-None-Match")
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.split(',').any(|candidate| candidate.trim() == tag));
+    if not_modified {
+        return Ok(builder.status(StatusCode::NOT_MODIFIED).finish());
+    }
+
+    let body = serde_json::to_string(&document).map_err(|_| {
+        Error::from_string("직렬화에 실패했습니다.", StatusCode::INTERNAL_SERVER_ERROR)
+    })?;
+    Ok(builder
+        .status(StatusCode::OK)
+        .content_type("application/json")
+        .body(Body::from_string(body)))
 }
 
 #[handler]

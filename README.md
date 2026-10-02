@@ -57,6 +57,7 @@ UPLOAD_MAX_BYTES=20971520
 ### 패스키 환경변수 (선택)
 
 `PASSKEY_RP_ID`가 비어 있으면 패스키 기능 전체가 꺼진다(시작 로그에 이유를 남김).
+`GOTOLIB_MAX_ACCOUNTS`(기본 1000)는 gotolib 전용 계정의 총량 상한이다.
 
 ```env
 # RP ID는 등록 가능한 도메인. tyange.com이면 그 아래 서브도메인 어디서든 같은 패스키를 쓴다.
@@ -128,6 +129,12 @@ CORS preflight(OPTIONS)는 `Cors` 미들웨어가 전담한다. 별도의 캐치
 비밀번호 로그인과 같은 JWT를 발급하는 패스키 로그인. 사용자명 없이(discoverable) 로그인한다.
 `PASSKEY_RP_ID`가 없으면 아래 엔드포인트는 전부 503이다(환경변수는 위 "패스키 환경변수" 참고).
 
+- `POST /passkeys/signup/start` → `{ challenge_id, options }`, `POST /passkeys/signup/finish`
+  `{ challenge_id, label?, credential }` → `{ access_token, user_role: "gotolib" }` — **가입**.
+  이메일·비밀번호 없이 패스키 하나로 gotolib 전용 계정(`user_id = gl-<uuid>`, 역할 `gotolib`)을
+  만든다. 계정은 finish에서 검증이 끝난 뒤에야 DB에 생긴다. 누구나 부를 수 있어서 IP당 시간당
+  start 10회·finish 5회로 제한하고, 계정 총량 상한(`GOTOLIB_MAX_ACCOUNTS`, 기본 1000)에 닿으면 503.
+  365일 동안 활동(패스키 사용·동기화)이 없는 gotolib 계정은 하루 한 번 정리한다.
 - `POST /passkeys/register/start` (JWT) → `{ challenge_id, options }` — 이 기기에 패스키 등록 시작.
   `options`는 `navigator.credentials.create({ publicKey })`에 넘기는 값(`options.publicKey`).
 - `POST /passkeys/register/finish` (JWT) `{ challenge_id, label?, credential }` → `{ id, label }`
@@ -140,8 +147,9 @@ CORS preflight(OPTIONS)는 `Cors` 미들웨어가 전담한다. 별도의 캐치
 
 ### gotolib 동기화
 
-- `GET /gotolib/sync` (JWT) → `{ version, data, updated_at }` (처음이면 `version: 0, data: null`)
-- `PUT /gotolib/sync` (JWT) `{ base_version, data }` — `data`는 JSON 객체(1MB 이하). `base_version`이
+- `GET /gotolib/sync` (JWT) → `{ version, data, updated_at }` (처음이면 `version: 0, data: null`).
+  `ETag: "v<version>"`을 붙이고 `If-None-Match`가 같으면 본문 없이 304.
+- `PUT /gotolib/sync` (JWT) `{ base_version, data }` — `data`는 JSON 객체(512KB 이하). `base_version`이
   서버의 현재 version과 같을 때만 저장하고 version을 1 올린다. 다르면 409와 함께 최신 문서를
   돌려주므로 클라이언트가 합쳐서 다시 올린다. 서버는 내용을 해석하지 않는다.
 

@@ -18,6 +18,8 @@ pub mod upload_image;
 pub mod upload_post;
 
 #[cfg(test)]
+mod gotolib_role_test;
+#[cfg(test)]
 mod gotolib_sync_test;
 #[cfg(test)]
 mod passkeys_test;

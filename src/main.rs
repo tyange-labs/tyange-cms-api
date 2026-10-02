@@ -21,6 +21,7 @@ use crate::routes::gotolib_sync::{get_sync, put_sync, MAX_SYNC_BYTES};
 use crate::routes::me::me;
 use crate::routes::passkeys::{
     delete_passkey, list_passkeys, login_finish, login_start, register_finish, register_start,
+    signup_finish, signup_start,
 };
 use crate::routes::update_my_profile::update_my_profile;
 use crate::routes::upload_image::upload_image;
@@ -51,6 +52,9 @@ async fn options_handler() -> Response {
 }
 
 const DEFAULT_UPLOAD_MAX_BYTES: usize = 20 * 1024 * 1024;
+
+/// 이 기간 동안 아무 활동이 없는 gotolib 전용 계정은 정리한다.
+const GOTOLIB_INACTIVE_DAYS: u32 = 365;
 
 /// 패스키 등록·로그인 본문은 WebAuthn 응답 하나(수 KB)라 넉넉히 잡아도 16KB면 충분하다.
 const PASSKEY_MAX_BYTES: usize = 16 * 1024;
@@ -89,6 +93,21 @@ async fn main() -> Result<(), std::io::Error> {
     init_db(&db)
         .await
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+    // 쓰지 않는 gotolib 전용 계정 정리: 시작할 때와 하루에 한 번.
+    {
+        let db = db.clone();
+        tokio::spawn(async move {
+            loop {
+                match db::purge_inactive_gotolib_accounts(&db, GOTOLIB_INACTIVE_DAYS).await {
+                    Ok(0) => {}
+                    Ok(removed) => println!("비활성 gotolib 계정 {removed}개 정리"),
+                    Err(_) => eprintln!("비활성 gotolib 계정 정리 실패"),
+                }
+                tokio::time::sleep(Duration::from_secs(24 * 60 * 60)).await;
+            }
+        });
+    }
 
     let state = Arc::new(AppState::new(db));
 
@@ -159,6 +178,17 @@ async fn main() -> Result<(), std::io::Error> {
                 post(login_finish)
                     .with(SizeLimit::new(PASSKEY_MAX_BYTES))
                     .with(RateLimit::new(20, Duration::from_secs(60))),
+            )
+            // 가입(계정 생성)은 누구나 부를 수 있어서 더 촘촘하게 제한한다. 계정 총량 상한은 별도.
+            .at(
+                "/passkeys/signup/start",
+                post(signup_start).with(RateLimit::new(10, Duration::from_secs(60 * 60))),
+            )
+            .at(
+                "/passkeys/signup/finish",
+                post(signup_finish)
+                    .with(SizeLimit::new(PASSKEY_MAX_BYTES))
+                    .with(RateLimit::new(5, Duration::from_secs(60 * 60))),
             )
             .at("/passkeys/register/start", post(register_start).with(Auth))
             .at(

@@ -22,6 +22,9 @@ const CHALLENGE_TTL: Duration = Duration::from_secs(5 * 60);
 /// 인증 없이 만들 수 있는 `login/start`가 메모리를 무한히 먹지 못하게 하는 상한.
 const MAX_PENDING: usize = 1000;
 const DEFAULT_RP_NAME: &str = "tyange";
+/// gotolib 전용 계정(`user_role = 'gotolib'`)을 받는 최대 개수. 가입에 이메일·비밀번호가 없고
+/// 누구나 만들 수 있어서 저장소가 끝없이 늘지 않게 하는 상한이다(GOTOLIB_MAX_ACCOUNTS로 조정).
+const DEFAULT_MAX_ACCOUNTS: i64 = 1000;
 
 pub enum Pending {
     Register {
@@ -30,11 +33,18 @@ pub enum Pending {
         state: PasskeyRegistration,
     },
     Login(DiscoverableAuthentication),
+    /// 가입: 계정은 finish에서 검증이 끝난 뒤에야 DB에 만든다(start만 부르고 떠난 요청이 남기는 건 메모리뿐).
+    Signup {
+        user_id: String,
+        user_handle: Uuid,
+        state: PasskeyRegistration,
+    },
 }
 
 #[derive(Clone)]
 pub struct PasskeyService {
     webauthn: Option<Arc<Webauthn>>,
+    max_accounts: i64,
     pending: Arc<Mutex<HashMap<String, (Instant, Pending)>>>,
 }
 
@@ -82,6 +92,11 @@ impl PasskeyService {
 
         Ok(Self {
             webauthn: Some(Arc::new(webauthn)),
+            max_accounts: env::var("GOTOLIB_MAX_ACCOUNTS")
+                .ok()
+                .and_then(|value| value.parse::<i64>().ok())
+                .filter(|value| *value >= 0)
+                .unwrap_or(DEFAULT_MAX_ACCOUNTS),
             pending: Arc::default(),
         })
     }
@@ -89,8 +104,19 @@ impl PasskeyService {
     pub fn disabled() -> Self {
         Self {
             webauthn: None,
+            max_accounts: DEFAULT_MAX_ACCOUNTS,
             pending: Arc::default(),
         }
+    }
+
+    pub fn max_accounts(&self) -> i64 {
+        self.max_accounts
+    }
+
+    #[cfg(test)]
+    pub fn with_max_accounts(mut self, max_accounts: i64) -> Self {
+        self.max_accounts = max_accounts;
+        self
     }
 
     pub fn webauthn(&self) -> Option<&Webauthn> {
