@@ -66,6 +66,10 @@ fn token(user_id: &str) -> String {
     Claims::create_access_token(user_id, "user", b"test-access-secret").expect("token")
 }
 
+fn token_with_role(user_id: &str, role: &str) -> String {
+    Claims::create_access_token(user_id, role, b"test-access-secret").expect("token")
+}
+
 async fn json_of(response: TestResponse) -> Value {
     serde_json::from_str(&response.0.into_body().into_string().await.expect("body"))
         .expect("json body")
@@ -639,4 +643,55 @@ async fn signup_challenges_and_register_challenges_cannot_be_swapped() {
         .await
         .assert_status(poem::http::StatusCode::BAD_REQUEST);
     assert_eq!(count_gotolib_accounts(&state).await, before);
+}
+
+// ── 패스키 표시 이름 ────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn signup_passkey_is_named_gotolib_not_the_account_id() {
+    let cli = TestClient::new(app(enabled_state().await));
+    let start = json_of(cli.post("/passkeys/signup/start").send().await).await;
+    let user = &start["options"]["publicKey"]["user"];
+
+    // 선택 창에 보이는 이름은 알아보기 쉬운 'gotolib'. 계정 id(gl-…)가 새어 나가지 않는다.
+    assert_eq!(user["name"], "gotolib");
+    assert_eq!(user["displayName"], "gotolib");
+    // 계정을 구분하는 건 이름이 아니라 user.id(사용자 핸들)다.
+    let id = user["id"].as_str().expect("user.id");
+    assert!(id.len() >= 16, "user.id가 비어 있거나 너무 짧다: {id}");
+    assert_ne!(id, "gotolib");
+}
+
+#[tokio::test]
+async fn adding_a_passkey_to_a_gotolib_account_also_uses_the_friendly_name() {
+    let state = enabled_state().await;
+    let cli = TestClient::new(app(state.clone()));
+    create_user(&state.db, "gl-abc123", "unused-password", "gotolib")
+        .await
+        .expect("create gotolib account");
+
+    let start = json_of(
+        cli.post("/passkeys/register/start")
+            .header("Authorization", token_with_role("gl-abc123", "gotolib"))
+            .send()
+            .await,
+    )
+    .await;
+    let user = &start["options"]["publicKey"]["user"];
+    assert_eq!(user["name"], "gotolib");
+    assert_eq!(user["displayName"], "gotolib");
+}
+
+#[tokio::test]
+async fn other_roles_keep_their_account_id_as_the_passkey_name() {
+    let cli = TestClient::new(app(enabled_state().await));
+    // 블로그·CMS 계정(user·admin)의 패스키 이름은 바꾸지 않는다(이메일/아이디 그대로).
+    let start = json_of(
+        cli.post("/passkeys/register/start")
+            .header("Authorization", token("me@example.com"))
+            .send()
+            .await,
+    )
+    .await;
+    assert_eq!(start["options"]["publicKey"]["user"]["name"], "me@example.com");
 }

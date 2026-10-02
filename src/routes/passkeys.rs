@@ -33,6 +33,10 @@ const DEFAULT_LABEL: &str = "패스키";
 /// gotolib 전용 계정의 역할. 패스키·동기화만 쓸 수 있고 CMS 콘텐츠는 쓸 수 없다
 /// (`ensure_content_writer`).
 pub const GOTOLIB_ROLE: &str = "gotolib";
+/// gotolib 계정의 패스키에 붙는 이름. iOS·macOS·Chrome의 패스키 선택 창은 WebAuthn user.name을 그대로
+/// 보여주는데, 예전에는 계정 id(gl-8d9fd7414a28…)가 나와서 알아볼 수 없었다. 계정은 user.id(사용자
+/// 핸들, UUID)로 구분하므로 이름은 표시용일 뿐이다 — 같은 이름이 여러 개여도 로그인에는 영향이 없다.
+pub const GOTOLIB_PASSKEY_NAME: &str = "gotolib";
 
 #[derive(Serialize)]
 pub struct ChallengeResponse<T: Serialize> {
@@ -175,20 +179,25 @@ pub async fn register_start(
         })
         .collect();
 
-    let display_name: Option<String> =
-        sqlx::query_scalar("SELECT display_name FROM users WHERE user_id = ?")
-            .bind(&user.user_id)
-            .fetch_optional(&data.db)
-            .await
-            .map_err(db_error)?
-            .flatten();
-    let display_name = display_name
-        .filter(|name| !name.trim().is_empty())
-        .unwrap_or_else(|| user.user_id.clone());
+    let (user_name, display_name) = if user.role == GOTOLIB_ROLE {
+        (GOTOLIB_PASSKEY_NAME.to_string(), GOTOLIB_PASSKEY_NAME.to_string())
+    } else {
+        let display_name: Option<String> =
+            sqlx::query_scalar("SELECT display_name FROM users WHERE user_id = ?")
+                .bind(&user.user_id)
+                .fetch_optional(&data.db)
+                .await
+                .map_err(db_error)?
+                .flatten();
+        let display_name = display_name
+            .filter(|name| !name.trim().is_empty())
+            .unwrap_or_else(|| user.user_id.clone());
+        (user.user_id.clone(), display_name)
+    };
 
     let user_handle = user_handle_for(&data, &user.user_id).await?;
     let (mut options, state) = webauthn
-        .start_passkey_registration(user_handle, &user.user_id, &display_name, Some(exclude))
+        .start_passkey_registration(user_handle, &user_name, &display_name, Some(exclude))
         .map_err(bad_request("패스키 등록을 시작하지 못했습니다."))?;
 
     prefer_discoverable(&mut options);
@@ -289,7 +298,7 @@ pub async fn signup_start(
     let user_handle = Uuid::new_v4();
     let user_id = format!("gl-{}", user_handle.simple());
     let (mut options, state) = webauthn
-        .start_passkey_registration(user_handle, &user_id, "gotolib", None)
+        .start_passkey_registration(user_handle, GOTOLIB_PASSKEY_NAME, GOTOLIB_PASSKEY_NAME, None)
         .map_err(bad_request("가입을 시작하지 못했습니다."))?;
     prefer_discoverable(&mut options);
 

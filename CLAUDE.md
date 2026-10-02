@@ -85,6 +85,12 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
     (`db::purge_inactive_gotolib_accounts`, 시작 시 + 24시간마다). 서버가 저장하는 건 사용자당 JSON 하나.
   - 가입 챌린지(`Pending::Signup`)와 기존 '패스키 추가'(`Pending::Register`)는 서로 바꿔 쓸 수 없다(테스트로 고정).
   - `GET /gotolib/sync`는 `ETag`/304를 지원한다(클라이언트의 전송량을 줄이려고).
+  - **패스키 표시 이름**: gotolib 계정의 패스키는 WebAuthn `user.name`/`displayName`을 `gotolib`으로 보낸다
+    (`GOTOLIB_PASSKEY_NAME`). 패스키 선택 창(iOS·macOS·Chrome)이 이 값을 그대로 보여주는데, 예전엔 계정 id
+    `gl-8d9fd7414a28…`가 나와서 알아볼 수 없었다. 계정은 `user.id`(사용자 핸들)로 구분하므로 이름이 같아도
+    로그인에는 영향이 없다. **이미 만든 패스키의 이름은 바뀌지 않는다**(기기에 저장된 값) — 같은 계정에 새 패스키를
+    만들면(같은 RP·사용자 핸들) iCloud 키체인은 이전 것을 덮어쓰고 이름도 새 값이 된다. 블로그·CMS 계정(user·admin)은
+    예전처럼 아이디를 이름으로 쓴다.
 - 공개 `POST /signup` 제거 (2026-10). 동기화 저장소가 생기므로 아무나 계정을 만들 수 없게 닫았다.
 - `portfolio_pdf` 포트폴리오 섹션 추가 (2026-10) — tyange-cms `/portfolio-pdf`(PDF 포트폴리오 편집기)가 쓰는 문서.
   `PUT /portfolio/sections/portfolio_pdf`로 저장하고, 새로 만든 **`GET /portfolio/sections/:section_key`**(관리자
