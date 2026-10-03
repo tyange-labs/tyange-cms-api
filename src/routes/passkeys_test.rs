@@ -522,6 +522,15 @@ async fn signup_creates_a_gotolib_account_and_returns_a_jwt() {
             .fetch_one(&state.db)
             .await
             .unwrap();
+    // 가입 자체가 이 패스키를 쓴 것이라, 로그인 전에도 '아직 사용 안 함'이 아니다.
+    let last_used: Option<String> =
+        sqlx::query_scalar("SELECT last_used_at FROM passkeys WHERE credential_id = ?")
+            .bind(&credential_id)
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+    assert!(last_used.is_some());
+
     let handle = user_handle_of(&state, &claims.claims.sub).await;
     let start = json_of(cli.post("/passkeys/login/start").send().await).await;
     let credential = authenticate(&mut authenticator, &start, &credential_id, &handle);

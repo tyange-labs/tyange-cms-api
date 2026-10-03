@@ -364,8 +364,8 @@ pub async fn signup_finish(
     .map_err(db_error)?;
     query(
         r#"
-        INSERT INTO passkeys (credential_id, user_id, user_handle, label, passkey)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO passkeys (credential_id, user_id, user_handle, label, passkey, last_used_at)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         "#,
     )
     .bind(credential_id_string(passkey.cred_id()))
@@ -383,6 +383,7 @@ pub async fn signup_finish(
     })?;
     tx.commit().await.map_err(db_error)?;
 
+    // 가입은 이 패스키로 막 인증한 것이라 '사용한' 것으로 센다(안 그러면 방금 쓴 패스키가 '아직 사용 안 함'으로 보인다).
     println!("gotolib 계정 생성: {}", user_id);
     Ok(Json(issue_login_response(&user_id, GOTOLIB_ROLE)?))
 }
