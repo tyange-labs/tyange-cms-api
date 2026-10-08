@@ -68,12 +68,12 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
     잘못된 ISBN이 하나라도 있으면 400. **알라딘 호출은 하지 않는다.** 이미지는 `/gotolib/cover-images/<isbn>.jpg`
     (정적 제공, 30일 캐시, 폴더 목록 없음).
   - **알라딘 호출은 수집 작업 한 개(`covers::run_worker`)만 한다.** 3초 이상 간격(환경 변수로 늘릴 수만 있음), 동시 1건,
-    `User-Agent`는 `gotolib-covers/0.1 (+COVER_CONTACT)`. **403/429면 작업 전체가 6시간 쉰다**(행 하나의 실패가 아니라
+    `User-Agent`는 `gotolib-covers/0.1 (+연락처)`(연락처는 `COVER_CONTACT`, 없으면 https://gotolib.tyange.com). **403/429면 작업 전체가 6시간 쉰다**(행 하나의 실패가 아니라
     막힘으로 본다). 표지 없음은 30일 뒤 재확인, 일시 오류는 10분부터 두 배씩(최대 12시간) 5번 뒤 `missing`.
     og:image는 `https://image.aladin.co.kr/product/…`만 믿는다(다른 호스트는 받지 않는다). `/search/`·`/ttb/`·
     `/account/` 등 알라딘 robots.txt가 막는 경로는 부르지 않는다. 약관에 자동 수집 금지 조항이 없음을 사용자가 확인함.
-  - **기본은 꺼짐**: `COVER_FETCH_ENABLED=true`와 `COVER_CONTACT`가 있어야 돈다. 배포는 `.forgejo/workflows/deploy.yml`이
-    Forgejo vars(`COVER_FETCH_ENABLED`, `COVER_CONTACT`, `COVERS_DIR`)로 `.env`에 넣는다 — vars를 비우고 다시 배포하면 멈춘다.
+  - **기본은 꺼짐**: `COVER_FETCH_ENABLED=true`일 때만 돈다(`COVER_CONTACT`는 선택). 배포는 `.forgejo/workflows/deploy.yml`이
+    Forgejo vars(`COVER_FETCH_ENABLED`, 선택으로 `COVER_CONTACT`·`COVERS_DIR`)로 `.env`에 넣는다 — vars를 비우고 다시 배포하면 멈춘다.
     이미 저장된 썸네일은 계속 제공된다. 서버가 1.9GB라 작업은 동시 1건, 이미지 변환은 `spawn_blocking`.
   - 테스트: 가짜 알라딘(로컬 poem 서버, `SourceConfig.allow_http`)으로 정상/표지 없음/403/500/이미지 아님/외부 호스트를
     검증한다. **실제 알라딘을 부르는 테스트는 만들지 않는다.** 변이 검사(검사 숫자·호스트 검증·막힘 처리·큐 상한·확대 방지)로 확인함.

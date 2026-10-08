@@ -69,8 +69,8 @@ jobs:
           echo UPLOAD_PATH=${{ vars.UPLOAD_PATH }} >> .env
           echo DATABASE_PATH=${{ vars.DATABASE_PATH }} >> .env
           # gotolib 책 표지 수집. Forgejo vars에 값을 넣기 전에는 모두 빈 값이라 수집 작업이 꺼진 채로 배포된다
-          # (COVER_FETCH_ENABLED가 정확히 true일 때만 돈다). 켜려면 vars에 COVER_FETCH_ENABLED=true와
-          # COVER_CONTACT(알라딘이 연락할 수 있는 URL/이메일, 공백 없이)를 넣고, 끄려면 값을 지우고 다시 배포한다.
+          # (COVER_FETCH_ENABLED가 정확히 true일 때만 돈다). 켜려면 vars에 COVER_FETCH_ENABLED=true를 넣고,
+          # 끄려면 값을 지우고 다시 배포한다. COVER_CONTACT는 선택(비우면 https://gotolib.tyange.com을 User-Agent에 쓴다).
           # COVERS_DIR은 비워 두면 ./data/covers(DB와 같은 영속 위치; 배포는 바이너리와 .env만 덮어쓴다).
           echo COVERS_DIR=${{ vars.COVERS_DIR }} >> .env
           echo COVER_FETCH_ENABLED=${{ vars.COVER_FETCH_ENABLED }} >> .env

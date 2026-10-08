@@ -549,6 +549,15 @@ impl WorkerConfig {
     }
 }
 
+/// 연락처 환경 변수 값에서 실제로 쓸 연락처를 고른다: 비었거나 공백뿐이면 기본값.
+pub fn contact_from(value: Option<&str>) -> String {
+    value
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .unwrap_or(DEFAULT_CONTACT)
+        .to_string()
+}
+
 /// 알라딘에 보내는 `User-Agent`: 서비스 이름과 연락처로 식별 가능하게 한다.
 pub fn user_agent(contact: &str) -> String {
     format!("gotolib-covers/0.1 (+{contact})")
@@ -573,9 +582,12 @@ pub async fn run_worker(pool: SqlitePool, source: CoverSource, config: WorkerCon
     }
 }
 
+/// 연락처를 따로 주지 않았을 때 `User-Agent`에 넣는 주소(공개된 서비스 주소).
+pub const DEFAULT_CONTACT: &str = "https://gotolib.tyange.com";
+
 /// 환경 변수로 수집 작업을 켠다. 기본은 꺼짐.
 /// - `COVER_FETCH_ENABLED=true` 일 때만 시작한다
-/// - `COVER_CONTACT`(알라딘이 연락할 수 있는 주소: 사이트 URL이나 이메일. 공백 없이)가 없으면 시작하지 않는다.
+/// - `COVER_CONTACT`(선택): 알라딘이 연락할 수 있는 주소. 없으면 `DEFAULT_CONTACT`를 쓴다.
 ///   `User-Agent`는 `gotolib-covers/0.1 (+연락처)`로 코드가 조립한다(.env에 공백·괄호를 넣지 않으려고).
 /// - `COVER_FETCH_INTERVAL_SECS`(기본 3, 3 미만은 3으로)
 pub fn spawn_worker_from_env(pool: SqlitePool) {
@@ -583,11 +595,8 @@ pub fn spawn_worker_from_env(pool: SqlitePool) {
         println!("[covers] 수집 작업이 꺼져 있습니다(COVER_FETCH_ENABLED).");
         return;
     }
-    let Some(contact) = env::var("COVER_CONTACT").ok().filter(|v| !v.trim().is_empty()) else {
-        eprintln!("[covers] COVER_CONTACT(연락처)가 없어 수집 작업을 시작하지 않습니다.");
-        return;
-    };
-    let user_agent = user_agent(contact.trim());
+    let contact = contact_from(env::var("COVER_CONTACT").ok().as_deref());
+    let user_agent = user_agent(&contact);
     let interval = env::var("COVER_FETCH_INTERVAL_SECS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())

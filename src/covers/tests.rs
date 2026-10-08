@@ -119,6 +119,14 @@ fn user_agent_names_the_service_and_the_contact() {
 }
 
 #[test]
+fn contact_falls_back_to_the_public_site_when_unset_or_blank() {
+    assert_eq!(contact_from(None), DEFAULT_CONTACT);
+    assert_eq!(contact_from(Some("")), DEFAULT_CONTACT);
+    assert_eq!(contact_from(Some("   ")), DEFAULT_CONTACT);
+    assert_eq!(contact_from(Some(" me@example.com ")), "me@example.com");
+}
+
+#[test]
 fn thumbnail_rejects_garbage_without_panicking() {
     assert!(make_thumbnail(b"this is not an image").is_err());
     assert!(make_thumbnail(b"").is_err());
