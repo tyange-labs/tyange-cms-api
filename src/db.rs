@@ -247,6 +247,31 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
     .await
     .map_err(InternalServerError)?;
 
+    // book_covers — gotolib 책 표지 썸네일의 수집 상태. 키는 ISBN-13.
+    // status: pending(수집 대기) / ok(저장됨) / missing(알라딘에 표지 없음) / error(일시 실패).
+    // 시각은 유닉스 초. next_try_at은 error·missing을 다시 시도해도 되는 시각이다.
+    query(
+        r#"
+        CREATE TABLE IF NOT EXISTS book_covers (
+            isbn13 TEXT PRIMARY KEY,
+            status TEXT NOT NULL,
+            source_url TEXT,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            next_try_at INTEGER NOT NULL DEFAULT 0,
+            fetched_at INTEGER,
+            created_at INTEGER NOT NULL
+        )
+        "#,
+    )
+    .execute(pool)
+    .await
+    .map_err(InternalServerError)?;
+    // 수집 작업이 '지금 해도 되는 다음 건'을 고르는 질의(status + next_try_at)를 받친다.
+    query("CREATE INDEX IF NOT EXISTS idx_book_covers_queue ON book_covers(status, next_try_at)")
+        .execute(pool)
+        .await
+        .map_err(InternalServerError)?;
+
     Ok(())
 }
 
