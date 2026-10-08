@@ -1,4 +1,5 @@
 mod blog_redeploy;
+mod covers;
 mod db;
 mod middlewares;
 mod models;
@@ -17,6 +18,7 @@ use std::{env, fs, sync::Arc, time::Duration};
 use crate::routes::create_wedding_guest::create_wedding_guest;
 use crate::routes::get_count_with_tags::get_count_with_tags;
 use crate::routes::get_posts_with_tags::get_posts_with_tags;
+use crate::routes::gotolib_covers::{get_covers, IMAGE_PATH_PREFIX};
 use crate::routes::gotolib_sync::{get_sync, put_sync, MAX_SYNC_BYTES};
 use crate::routes::me::me;
 use crate::routes::passkeys::{
@@ -34,7 +36,7 @@ use poem::{
     get, handler,
     http::StatusCode,
     listener::TcpListener,
-    middleware::{Cors, SizeLimit},
+    middleware::{Cors, SetHeader, SizeLimit},
     post, put, EndpointExt, Response, Route, Server,
 };
 use poem_openapi::OpenApiService;
@@ -108,6 +110,13 @@ async fn main() -> Result<(), std::io::Error> {
             }
         });
     }
+
+    // gotolib 책 표지 수집(알라딘 상품 페이지 → 썸네일). COVER_FETCH_ENABLED=true일 때만 돈다.
+    let covers_dir = covers::covers_dir();
+    if let Err(e) = fs::create_dir_all(&covers_dir) {
+        eprintln!("[covers] 썸네일 폴더를 만들지 못했습니다: {e}");
+    }
+    covers::spawn_worker_from_env(db.clone());
 
     let state = Arc::new(AppState::new(db));
 
@@ -207,6 +216,19 @@ async fn main() -> Result<(), std::io::Error> {
                         .with(SizeLimit::new(MAX_SYNC_BYTES + SYNC_ENVELOPE_BYTES))
                         .with(Auth),
                 ),
+            )
+            // 표지 조회는 로그인 없이 쓴다(표지는 계정과 무관한 기능). 대신 IP별로 제한한다.
+            // 이 핸들러는 DB만 보고, 알라딘 호출은 수집 작업 한 곳에서만 일어난다.
+            .at(
+                "/gotolib/covers",
+                get(get_covers)
+                    .with(RateLimit::new(60, Duration::from_secs(60)))
+                    .with(RateLimit::new(600, Duration::from_secs(60 * 60))),
+            )
+            .nest(
+                IMAGE_PATH_PREFIX,
+                StaticFilesEndpoint::new(covers::covers_dir())
+                    .with(SetHeader::new().overriding("Cache-Control", "public, max-age=2592000")),
             )
             .at("/me", get(me).with(Auth))
             .at("/me/profile", put(update_my_profile).with(Auth))
