@@ -68,12 +68,13 @@ jobs:
           echo PASSKEY_RP_ORIGIN=https://gotolib.tyange.com >> .env
           echo UPLOAD_PATH=${{ vars.UPLOAD_PATH }} >> .env
           echo DATABASE_PATH=${{ vars.DATABASE_PATH }} >> .env
-          # gotolib 책 표지 수집. Forgejo vars에 값을 넣기 전에는 모두 빈 값이라 수집 작업이 꺼진 채로 배포된다
-          # (COVER_FETCH_ENABLED가 정확히 true일 때만 돈다). 켜려면 vars에 COVER_FETCH_ENABLED=true를 넣고,
-          # 끄려면 값을 지우고 다시 배포한다. COVER_CONTACT는 선택(비우면 https://gotolib.tyange.com을 User-Agent에 쓴다).
+          # gotolib 책 표지 수집. **기본은 켜짐**이다(이 줄이 배포마다 .env를 새로 만들기 때문에, 켜 두는 값이
+          # push 배포에도 항상 들어가야 한다. 수동 실행의 입력값은 push 배포에는 없어서 스위치로 쓰지 않는다).
+          # 끄려면 Forgejo vars에 COVER_FETCH_ENABLED=false를 만들고 다시 배포한다(코드는 정확히 "true"일 때만 돈다).
+          # COVER_CONTACT는 선택(비우면 https://gotolib.tyange.com을 User-Agent에 쓴다).
           # COVERS_DIR은 비워 두면 ./data/covers(DB와 같은 영속 위치; 배포는 바이너리와 .env만 덮어쓴다).
           echo COVERS_DIR=${{ vars.COVERS_DIR }} >> .env
-          echo COVER_FETCH_ENABLED=${{ vars.COVER_FETCH_ENABLED }} >> .env
+          echo COVER_FETCH_ENABLED=${{ vars.COVER_FETCH_ENABLED || 'true' }} >> .env
           echo COVER_CONTACT=${{ vars.COVER_CONTACT }} >> .env
 
       - name: Build
