@@ -82,7 +82,11 @@ jobs:
         run: cargo build --release --verbose
 
       - name: Run tests
-        if: ${{ !inputs.skip_tests && !inputs.deploy_only }}
+        # push·PR 배포에서는 테스트를 돌리지 않는다(2026-10). 이 단계가 20분 안팎으로 가장 오래 걸렸다 —
+        # 같은 크레이트를 테스트 프로필로 한 번 더 컴파일하는데, 운영 서버와 같은 작은 박스(메모리 1.9GB)라
+        # 스왑까지 타서 느렸다. 테스트는 push 전에 로컬에서 `cargo test`로 돌린다.
+        # 수동 실행(workflow_dispatch)에서만 돌리며, skip_tests를 켜면 그때도 건너뛴다.
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.skip_tests && !inputs.deploy_only }}
         # --release: 바로 위 Build가 만든 target/release deps를 재사용한다. 없으면
         # 디버그 프로파일로 전체 트리를 처음부터 또 컴파일함(이 박스에서 30~40분).
         run: cargo test --release --verbose

@@ -164,6 +164,9 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
   사용자가 등록함(tyange-cms의 `DEPLOY_PATH` 등 vars 일부는 처음에 빠뜨려서 배포가
   SCP 단계에서 실패했었고, 그 뒤 채워 넣어 해결). Settings → Units → Overview의
   Actions 체크박스도 켜야 함.
+- **CI에서 테스트 단계 제거 (2026-10)** — push·PR 배포는 `cargo build --release`만 하고 `cargo test`는 돌리지 않는다.
+  테스트 컴파일이 20분 안팎(전체 배포 35~50분 중 가장 큼)이라서다. **푸시 전에 로컬에서 `cargo test`를 돌릴 것** — CI가
+  더 이상 안전망이 아니다. 수동 실행(`workflow_dispatch`)에서 `skip_tests`를 끄면 테스트를 돈다.
 - CI 빌드 캐시를 러너 볼륨 마운트로 (2026-09) — `actions/cache`는 이 Forgejo 러너
   (forgejo-runner v13.1.0, config 없이 기본값)에서 컨테이너에 `ACTIONS_CACHE_URL`이
   안 주입돼 **한 번도 저장된 적이 없었다**(멀티홈 박스라 cache-host 자동탐지 실패로 추정).
