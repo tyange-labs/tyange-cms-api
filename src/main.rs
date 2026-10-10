@@ -1,6 +1,7 @@
 mod blog_redeploy;
 mod covers;
 mod db;
+mod gotolib_push;
 mod middlewares;
 mod models;
 mod openapi;
@@ -19,6 +20,9 @@ use crate::routes::create_wedding_guest::create_wedding_guest;
 use crate::routes::get_count_with_tags::get_count_with_tags;
 use crate::routes::get_posts_with_tags::get_posts_with_tags;
 use crate::routes::gotolib_covers::{get_covers, IMAGE_PATH_PREFIX};
+use crate::routes::gotolib_push::{
+    push_key, push_subscribe, push_test, push_unsubscribe, PUSH_BODY_MAX_BYTES,
+};
 use crate::routes::gotolib_sync::{get_sync, put_sync, MAX_SYNC_BYTES};
 use crate::routes::me::me;
 use crate::routes::passkeys::{
@@ -117,6 +121,12 @@ async fn main() -> Result<(), std::io::Error> {
         eprintln!("[covers] 썸네일 폴더를 만들지 못했습니다: {e}");
     }
     covers::spawn_worker_from_env(db.clone());
+
+    // gotolib 찜한 책 소장 알림(Web Push). GOTOLIB_PUSH_ENABLED=true일 때만 켜진다.
+    let push = gotolib_push::handle_from_env();
+    if let Some(service) = &push.0 {
+        gotolib_push::spawn_worker(db.clone(), service.clone());
+    }
 
     let state = Arc::new(AppState::new(db));
 
@@ -230,6 +240,30 @@ async fn main() -> Result<(), std::io::Error> {
                 StaticFilesEndpoint::new(covers::covers_dir())
                     .with(SetHeader::new().overriding("Cache-Control", "public, max-age=2592000")),
             )
+            // 찜 소장 알림: 구독 관리. 키 조회만 로그인 없이, 나머지는 로그인한 계정만.
+            .at("/gotolib/push/key", get(push_key).with(RateLimit::new(60, Duration::from_secs(60))))
+            .at(
+                "/gotolib/push/subscribe",
+                post(
+                    push_subscribe
+                        .with(SizeLimit::new(PUSH_BODY_MAX_BYTES))
+                        .with(Auth),
+                )
+                .with(RateLimit::new(30, Duration::from_secs(60 * 60))),
+            )
+            .at(
+                "/gotolib/push/unsubscribe",
+                post(
+                    push_unsubscribe
+                        .with(SizeLimit::new(PUSH_BODY_MAX_BYTES))
+                        .with(Auth),
+                )
+                .with(RateLimit::new(30, Duration::from_secs(60 * 60))),
+            )
+            .at(
+                "/gotolib/push/test",
+                post(push_test.with(Auth)).with(RateLimit::new(5, Duration::from_secs(60 * 60))),
+            )
             .at("/me", get(me).with(Auth))
             .at("/me/profile", put(update_my_profile).with(Auth))
             .at(
@@ -243,7 +277,7 @@ async fn main() -> Result<(), std::io::Error> {
             .nest("/images", StaticFilesEndpoint::new(upload_base_path))
     }
 
-    let app = configure_routes(&state).data(state).with(
+    let app = configure_routes(&state).data(push).data(state).with(
         Cors::new()
             .allow_origin("http://localhost:3001")
             .allow_origin("http://localhost:3000")

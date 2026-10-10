@@ -60,6 +60,26 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
 
 ## 현재 상태
 - 운영 중
+- **gotolib 찜 소장 알림 (Web Push)** (2026-10, `feat/gotolib-push`): 찜 목록의 책이 '자주 가는 도서관'에 **미소장 → 소장**으로
+  바뀌면 알린다. 모듈 `src/gotolib_push.rs`(+`gotolib_push/tests.rs`), 라우트 `routes/gotolib_push.rs`. 크레이트는
+  `web-push-native`(요청만 만들고 전송은 reqwest; OpenSSL 불필요 — 옛 `web-push`+isahc는 쓰지 않는다).
+  - **대상은 패스키(동기화) 계정만**: 서버는 동기화 문서(`gotolib_sync.data`)의 `watchlist`(isbn13·title)와 `favLibraries`(libCode·libName)를
+    읽는다. 앱의 문서 모양이 바뀌면 `parse_targets`를 같이 고칠 것.
+  - API: `GET /gotolib/push/key`(공개, VAPID 공개 키), `POST /gotolib/push/subscribe`·`unsubscribe`·`test`(로그인). 꺼져 있으면 503.
+    **구독 endpoint는 알려진 푸시 서비스 호스트(fcm.googleapis.com, push.apple.com, push.services.mozilla.com, notify.windows.com)만 받는다** —
+    서버가 그 주소로 POST를 보내므로 SSRF 방지다. 계정당 구독 5개(넘으면 오래된 것부터 삭제), 410/404나 5번 연속 실패한 구독은 삭제.
+  - 수집 작업 한 개가 12시간마다(`GOTOLIB_PUSH_INTERVAL_HOURS`; 마지막 실행 시각은 DB `gotolib_push_runs`에 있어 재시작해도 주기를 지킨다)
+    (책, 도서관)마다 `bookExist`를 **우리 nginx 프록시(`GOTOLIB_LIBRARY_BASE`, 기본 https://gotolib.tyange.com/api/library/)로** 부른다 — 키가
+    nginx에만 있어서다. 라운드당 상한 300회(`GOTOLIB_PUSH_MAX_CHECKS`), 같은 쌍은 계정이 달라도 한 번. **도서관 정보나루의 일일 호출 한도는
+    확인하지 못했다**(앱의 직접 조회와 같은 키를 쓴다) — 한도 오류가 보이면 주기를 늘릴 것.
+  - 알림 조건: 지난번 상태가 **미소장**이었던 쌍이 소장이 됐을 때만. 처음 보는 쌍은 상태만 기록(이미 소장인 책을 쏟아내지 않는다). 모든 기기에
+    전달이 실패하면 상태를 바꾸지 않아 다음 라운드에 다시 시도. 4권 이상이 한꺼번에 소장되면 한 통으로 합친다.
+  - VAPID 키는 서버가 처음 켜질 때 만들어 `VAPID_KEY_PATH`(기본 `./data/vapid_private.key`, 권한 600)에 보관한다 — 비밀값을 Forgejo에 두지 않으려고.
+    **이 파일을 잃으면 기존 구독이 못 쓰게 되어 앱이 다시 구독해야 한다**(백업 대상). 표: `gotolib_push_subscriptions`·`gotolib_watch_state`·`gotolib_push_runs`
+    (이 DB를 쓰는 다른 앱의 `web_push_*`와 겹치지 않게 gotolib_ 접두). 비활성 계정 정리에 두 표도 포함.
+  - **기본 켜짐**: 배포 워크플로가 `GOTOLIB_PUSH_ENABLED`에 vars가 없으면 `true`를 넣는다. 끄려면 vars `GOTOLIB_PUSH_ENABLED=false` + 재배포.
+  - 테스트: 가짜 푸시 서비스·가짜 도서관 API(로컬 poem 서버)로 암호화·VAPID 서명·복호화(`web_push_native::decrypt`)까지 검증한다. 변이 검사 8종
+    (처음 보는 쌍 알림, 호스트 허용 목록, 전달 실패 시 상태 갱신, 호출 상한, 중복 제거, 410 삭제, 상태 정리, 남의 구독 삭제)로 확인함.
 - **gotolib 책 표지** (2026-10, `feat/gotolib-covers`): ISBN으로 알라딘 상품 페이지(`/shop/wproduct.aspx`)의
   `og:image`를 찾아 **200px 안팎의 JPEG 썸네일로 줄여 `COVERS_DIR`(기본 `./data/covers`)에 저장**한다. 모듈
   `src/covers.rs`(+`covers/tests.rs`), 라우트 `routes/gotolib_covers.rs`. 원본은 저장하지 않는다.

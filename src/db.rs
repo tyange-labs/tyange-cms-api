@@ -272,6 +272,61 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
         .await
         .map_err(InternalServerError)?;
 
+    // gotolib 찜한 책 소장 알림(Web Push). 구독은 기기(endpoint)마다 한 행이고, 상태는 (계정, 책, 도서관)마다
+    // '지난번 확인에서 소장이었나'를 기억해 '미소장 → 소장'으로 바뀔 때만 알리게 한다.
+    // 이름에 gotolib_를 붙인 건 이 DB를 쓰는 다른 앱의 web_push_* 표와 겹치지 않게 하려는 것이다
+    // (옛 web_push_subscriptions는 위에서 지운다).
+    query(
+        r#"
+        CREATE TABLE IF NOT EXISTS gotolib_push_subscriptions (
+            sub_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            endpoint TEXT NOT NULL UNIQUE,
+            p256dh TEXT NOT NULL,
+            auth TEXT NOT NULL,
+            user_agent TEXT,
+            created_at INTEGER NOT NULL,
+            last_success_at INTEGER,
+            failure_count INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
+        )
+        "#,
+    )
+    .execute(pool)
+    .await
+    .map_err(InternalServerError)?;
+    query("CREATE INDEX IF NOT EXISTS idx_gotolib_push_subs_user ON gotolib_push_subscriptions(user_id)")
+        .execute(pool)
+        .await
+        .map_err(InternalServerError)?;
+    query(
+        r#"
+        CREATE TABLE IF NOT EXISTS gotolib_watch_state (
+            user_id TEXT NOT NULL,
+            isbn13 TEXT NOT NULL,
+            lib_code TEXT NOT NULL,
+            has_book INTEGER NOT NULL,
+            checked_at INTEGER NOT NULL,
+            PRIMARY KEY (user_id, isbn13, lib_code)
+        )
+        "#,
+    )
+    .execute(pool)
+    .await
+    .map_err(InternalServerError)?;
+    // 확인 라운드를 마지막으로 돈 시각(한 행). 서버가 자주 재시작돼도 주기를 지키려고 DB에 둔다.
+    query(
+        r#"
+        CREATE TABLE IF NOT EXISTS gotolib_push_runs (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            last_run_at INTEGER NOT NULL
+        )
+        "#,
+    )
+    .execute(pool)
+    .await
+    .map_err(InternalServerError)?;
+
     Ok(())
 }
 
@@ -298,7 +353,12 @@ pub async fn purge_inactive_gotolib_accounts(
     "#;
 
     let mut tx = pool.begin().await.map_err(InternalServerError)?;
-    for table in ["gotolib_sync", "passkeys"] {
+    for table in [
+        "gotolib_sync",
+        "passkeys",
+        "gotolib_push_subscriptions",
+        "gotolib_watch_state",
+    ] {
         query(&format!("DELETE FROM {table} WHERE user_id IN ({inactive})"))
             .bind(&cutoff)
             .execute(&mut *tx)

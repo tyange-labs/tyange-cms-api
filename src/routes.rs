@@ -9,6 +9,7 @@ pub mod get_posts_with_tags;
 pub mod get_tags_with_category;
 pub mod get_wedding_guests;
 pub mod gotolib_covers;
+pub mod gotolib_push;
 pub mod gotolib_sync;
 pub mod login;
 pub mod me;
@@ -20,6 +21,8 @@ pub mod upload_post;
 
 #[cfg(test)]
 mod gotolib_covers_test;
+#[cfg(test)]
+mod gotolib_push_test;
 #[cfg(test)]
 mod gotolib_role_test;
 #[cfg(test)]
