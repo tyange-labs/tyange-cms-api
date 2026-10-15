@@ -1450,3 +1450,62 @@ impl WeddingApi {
         }))
     }
 }
+
+#[derive(Debug, serde::Serialize, poem_openapi::Object)]
+pub struct CraftSyncStatus {
+    pub enabled: bool,
+    pub last_report: Option<crate::craft_sync::SyncReport>,
+}
+
+pub struct CraftApi {
+    pub state: Arc<AppState>,
+    pub craft_sync: Arc<crate::craft_sync::CraftSyncService>,
+}
+
+#[OpenApi]
+impl CraftApi {
+    /// Craft 폴더를 지금 바로 한 번 동기화한다. 관리자 전용. 이미 돌고 있으면 끝나길 기다렸다가 돈다.
+    #[oai(path = "/admin/craft/sync", method = "post")]
+    async fn run_craft_sync(
+        &self,
+        guard: AuthGuard,
+    ) -> poem::Result<Json<ApiResponse<crate::craft_sync::SyncReport>>> {
+        ensure_admin(&guard.0)?;
+        if !self.craft_sync.is_enabled() {
+            return Err(poem::Error::from_string(
+                "Craft 동기화가 꺼져 있습니다.",
+                StatusCode::SERVICE_UNAVAILABLE,
+            ));
+        }
+
+        let report = self
+            .craft_sync
+            .sync_once(&self.state.db)
+            .await
+            .map_err(|e| poem::Error::from_string(e, StatusCode::BAD_GATEWAY))?;
+
+        Ok(Json(ApiResponse {
+            status: true,
+            data: Some(report),
+            message: None,
+        }))
+    }
+
+    /// 켜져 있는지와 마지막 동기화 결과.
+    #[oai(path = "/admin/craft/status", method = "get")]
+    async fn get_craft_sync_status(
+        &self,
+        guard: AuthGuard,
+    ) -> poem::Result<Json<ApiResponse<CraftSyncStatus>>> {
+        ensure_admin(&guard.0)?;
+
+        Ok(Json(ApiResponse {
+            status: true,
+            data: Some(CraftSyncStatus {
+                enabled: self.craft_sync.is_enabled(),
+                last_report: self.craft_sync.last_report(),
+            }),
+            message: None,
+        }))
+    }
+}

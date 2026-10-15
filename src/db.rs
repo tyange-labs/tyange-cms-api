@@ -327,6 +327,34 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
     .await
     .map_err(InternalServerError)?;
 
+    // Craft 폴더 동기화(src/craft_sync.rs): Craft 문서 ↔ 포스트 연결. removed=1이면 Craft에서 사라져 draft로 돌린 글.
+    query(
+        r#"
+        CREATE TABLE IF NOT EXISTS craft_sync_posts (
+            craft_doc_id TEXT PRIMARY KEY,
+            post_id TEXT NOT NULL,
+            last_modified_at TEXT NOT NULL,
+            removed INTEGER NOT NULL DEFAULT 0
+        )
+        "#,
+    )
+    .execute(pool)
+    .await
+    .map_err(InternalServerError)?;
+
+    // 같은 Craft 이미지 블록을 다시 내려받지 않으려고 저장 경로를 기억한다.
+    query(
+        r#"
+        CREATE TABLE IF NOT EXISTS craft_sync_images (
+            craft_block_id TEXT PRIMARY KEY,
+            image_path TEXT NOT NULL
+        )
+        "#,
+    )
+    .execute(pool)
+    .await
+    .map_err(InternalServerError)?;
+
     Ok(())
 }
 

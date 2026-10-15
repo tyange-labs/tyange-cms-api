@@ -81,6 +81,17 @@ jobs:
           # 끄려면 Forgejo vars에 GOTOLIB_PUSH_ENABLED=false를 만들고 다시 배포한다. 선택: VAPID_SUBJECT(mailto:/https:),
           # GOTOLIB_PUSH_INTERVAL_HOURS(기본 12), GOTOLIB_PUSH_MAX_CHECKS(라운드당 도서관 API 호출 상한, 기본 300).
           echo GOTOLIB_PUSH_ENABLED=${{ vars.GOTOLIB_PUSH_ENABLED || 'true' }} >> .env
+          # Craft 폴더 → 포스트 동기화(src/craft_sync.rs). CRAFT_API_URL(Craft Connect API 링크, 그 자체가 접근 권한이라
+          # **secret**으로만 둔다)이 없으면 코드가 알아서 꺼진다. 기본 켜짐: 끄려면 Forgejo vars에 CRAFT_SYNC_ENABLED=false.
+          # 선택 vars: CRAFT_SYNC_INTERVAL_SECS(기본 300, 최소 60), CRAFT_SYNC_STATUS(기본 published),
+          # CRAFT_SYNC_IMAGE_BASE_URL(기본 https://tyange.com/api/cms), CRAFT_SYNC_WRITER_ID(기본 첫 admin 계정).
+          echo CRAFT_API_URL=${{ secrets.CRAFT_API_URL }} >> .env
+          echo CRAFT_SYNC_ENABLED=${{ vars.CRAFT_SYNC_ENABLED || 'true' }} >> .env
+          echo CRAFT_SYNC_FOLDER_ID=${{ vars.CRAFT_SYNC_FOLDER_ID || 'C67928AC-9BC9-4343-A7A3-22115AA0DB74' }} >> .env
+          echo CRAFT_SYNC_INTERVAL_SECS=${{ vars.CRAFT_SYNC_INTERVAL_SECS }} >> .env
+          echo CRAFT_SYNC_STATUS=${{ vars.CRAFT_SYNC_STATUS }} >> .env
+          echo CRAFT_SYNC_IMAGE_BASE_URL=${{ vars.CRAFT_SYNC_IMAGE_BASE_URL }} >> .env
+          echo CRAFT_SYNC_WRITER_ID=${{ vars.CRAFT_SYNC_WRITER_ID }} >> .env
 
       - name: Build
         if: ${{ !inputs.deploy_only }}

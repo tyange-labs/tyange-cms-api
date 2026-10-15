@@ -179,7 +179,7 @@ pub async fn store_image_field(
     .await
 }
 
-async fn store_image_from_reader(
+pub async fn store_image_from_reader(
     origin_filename: Option<String>,
     mut reader: impl tokio::io::AsyncRead + Unpin,
     policy: &ImageUploadPolicy,
