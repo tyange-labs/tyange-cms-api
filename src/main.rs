@@ -34,7 +34,7 @@ use crate::routes::update_my_profile::update_my_profile;
 use crate::routes::upload_image::upload_image;
 use crate::{models::AppState, routes::add_user::add_user};
 use db::init_db;
-use openapi::{CraftApi, ImagesApi, PortfolioApi, PostsApi, TagsApi, WeddingApi};
+use openapi::{ApiKeysApi, CraftApi, ImagesApi, PortfolioApi, PostsApi, TagsApi, WeddingApi};
 use poem::{
     delete,
     endpoint::StaticFilesEndpoint,
@@ -133,6 +133,9 @@ async fn main() -> Result<(), std::io::Error> {
     let craft_sync = craft_sync::CraftSyncService::from_env();
     craft_sync::spawn_worker(db.clone(), craft_sync.clone());
 
+    // API 키 확인용. AuthGuard가 요청 데이터에서 꺼내 쓴다(lib 크레이트의 타입이라 AppState와 따로 싣는다).
+    let api_keys = tyange_cms_api::auth::api_key::ApiKeyVerifier::new(db.clone());
+
     let state = Arc::new(AppState::new(db));
 
     fn configure_routes(
@@ -175,6 +178,9 @@ async fn main() -> Result<(), std::io::Error> {
                 CraftApi {
                     state: state.clone(),
                     craft_sync: craft_sync.clone(),
+                },
+                ApiKeysApi {
+                    state: state.clone(),
                 },
             ),
             "tyange-cms-api",
@@ -289,7 +295,7 @@ async fn main() -> Result<(), std::io::Error> {
             .nest("/images", StaticFilesEndpoint::new(upload_base_path))
     }
 
-    let app = configure_routes(&state, &craft_sync).data(push).data(state).with(
+    let app = configure_routes(&state, &craft_sync).data(push).data(api_keys).data(state).with(
         Cors::new()
             .allow_origin("http://localhost:3001")
             .allow_origin("http://localhost:3000")
@@ -307,7 +313,7 @@ async fn main() -> Result<(), std::io::Error> {
             .allow_headers(vec!["authorization", "content-type", "accept"]),
     );
 
-    Server::new(TcpListener::bind("0.0.0.0:8080"))
-        .run(app)
-        .await
+    // 기본 포트는 8080이다. 이미 쓰고 있는 포트와 겹치는 로컬 개발에서만 LISTEN_ADDR로 바꾼다.
+    let listen_addr = env::var("LISTEN_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
+    Server::new(TcpListener::bind(listen_addr)).run(app).await
 }

@@ -17,7 +17,7 @@ use poem_openapi::{
 };
 use sqlx::{query, query_as, QueryBuilder, Row, Sqlite};
 use tyange_cms_api::auth::authorization::{
-    ensure_admin, ensure_content_writer, ensure_post_owner, AuthGuard,
+    ensure_admin, ensure_content_writer, ensure_post_owner, AuthGuard, SessionGuard,
 };
 
 use crate::blog_redeploy::{is_blog_redeploy_target, BlogContentEvent, BlogVisibility};
@@ -1508,4 +1508,201 @@ impl CraftApi {
             message: None,
         }))
     }
+}
+
+#[derive(Debug, serde::Deserialize, poem_openapi::Object)]
+pub struct CreateApiKeyRequest {
+    pub name: String,
+    /// `admin`(관리 API까지) 또는 `user`(글·이미지 쓰기만).
+    pub role: String,
+}
+
+#[derive(Debug, serde::Serialize, poem_openapi::Object)]
+pub struct CreatedApiKey {
+    pub api_key_id: i64,
+    pub name: String,
+    pub role: String,
+    /// 키 원문. **이 응답에서만** 볼 수 있다(서버는 해시만 가진다).
+    pub key: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, serde::Serialize, poem_openapi::Object)]
+pub struct ApiKeyItem {
+    pub api_key_id: i64,
+    pub name: String,
+    pub role: String,
+    /// 키 앞부분(`tyk_` + 12자). 어떤 키인지 알아보는 용도이고 이것만으론 인증되지 않는다.
+    pub key_prefix: String,
+    pub created_at: String,
+    pub last_used_at: Option<String>,
+    pub revoked_at: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize, poem_openapi::Object)]
+pub struct ApiKeyListResponse {
+    pub keys: Vec<ApiKeyItem>,
+}
+
+/// 사용자당 살아 있는(폐기하지 않은) 키 상한.
+const MAX_ACTIVE_API_KEYS: i64 = 20;
+const MAX_API_KEY_NAME_CHARS: usize = 50;
+
+pub struct ApiKeysApi {
+    pub state: Arc<AppState>,
+}
+
+/// 키 발급·조회·폐기는 **로그인 JWT로만** 된다(`SessionGuard`) — API 키로는 키를 관리할 수 없다.
+#[OpenApi]
+impl ApiKeysApi {
+    /// API 키를 만든다. 원문은 이 응답에서 한 번만 보여 준다. 관리자 전용.
+    #[oai(path = "/admin/api-keys", method = "post")]
+    async fn create_api_key(
+        &self,
+        guard: SessionGuard,
+        payload: Json<CreateApiKeyRequest>,
+    ) -> poem::Result<Json<ApiResponse<CreatedApiKey>>> {
+        ensure_admin(&guard.0)?;
+        let payload = payload.0;
+
+        let name = payload.name.trim().to_string();
+        if name.is_empty() || name.chars().count() > MAX_API_KEY_NAME_CHARS {
+            return Err(poem::Error::from_string(
+                format!("이름은 1~{MAX_API_KEY_NAME_CHARS}자여야 합니다."),
+                StatusCode::BAD_REQUEST,
+            ));
+        }
+        if !matches!(payload.role.as_str(), "admin" | "user") {
+            return Err(poem::Error::from_string(
+                "role은 admin 또는 user여야 합니다.",
+                StatusCode::BAD_REQUEST,
+            ));
+        }
+
+        let active: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM api_keys WHERE user_id = ? AND revoked_at IS NULL",
+        )
+        .bind(&guard.0.user_id)
+        .fetch_one(&self.state.db)
+        .await
+        .map_err(|e| {
+            poem::Error::from_string(format!("키 조회 실패: {e}"), StatusCode::INTERNAL_SERVER_ERROR)
+        })?;
+        if active >= MAX_ACTIVE_API_KEYS {
+            return Err(poem::Error::from_string(
+                format!("키는 최대 {MAX_ACTIVE_API_KEYS}개까지 만들 수 있습니다. 안 쓰는 키를 폐기하세요."),
+                StatusCode::CONFLICT,
+            ));
+        }
+
+        let key = tyange_cms_api::auth::api_key::generate();
+        let row: (i64, String) = sqlx::query_as(
+            "INSERT INTO api_keys (user_id, name, key_lookup, key_hash, user_role)
+             VALUES (?, ?, ?, ?, ?)
+             RETURNING api_key_id, COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', created_at), '')",
+        )
+        .bind(&guard.0.user_id)
+        .bind(&name)
+        .bind(&key.lookup)
+        .bind(&key.hash)
+        .bind(&payload.role)
+        .fetch_one(&self.state.db)
+        .await
+        .map_err(|e| {
+            poem::Error::from_string(format!("키 저장 실패: {e}"), StatusCode::INTERNAL_SERVER_ERROR)
+        })?;
+
+        Ok(Json(ApiResponse {
+            status: true,
+            data: Some(CreatedApiKey {
+                api_key_id: row.0,
+                name,
+                role: payload.role,
+                key: key.plaintext,
+                created_at: row.1,
+            }),
+            message: Some(String::from("키 원문은 지금만 볼 수 있습니다. 안전한 곳에 저장하세요.")),
+        }))
+    }
+
+    /// 내 API 키 목록(폐기한 것 포함, 최신순). 키 원문은 나오지 않는다. 관리자 전용.
+    #[oai(path = "/admin/api-keys", method = "get")]
+    async fn list_api_keys(
+        &self,
+        guard: SessionGuard,
+    ) -> poem::Result<Json<ApiResponse<ApiKeyListResponse>>> {
+        ensure_admin(&guard.0)?;
+
+        let rows = query(
+            "SELECT api_key_id, name, user_role, key_lookup,
+                    COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', created_at), '') AS created_at,
+                    strftime('%Y-%m-%dT%H:%M:%SZ', last_used_at) AS last_used_at,
+                    strftime('%Y-%m-%dT%H:%M:%SZ', revoked_at) AS revoked_at
+             FROM api_keys WHERE user_id = ? ORDER BY api_key_id DESC",
+        )
+        .bind(&guard.0.user_id)
+        .fetch_all(&self.state.db)
+        .await
+        .map_err(|e| {
+            poem::Error::from_string(format!("키 조회 실패: {e}"), StatusCode::INTERNAL_SERVER_ERROR)
+        })?;
+
+        let keys = rows
+            .iter()
+            .map(|row| ApiKeyItem {
+                api_key_id: row.get("api_key_id"),
+                name: row.get("name"),
+                role: row.get("user_role"),
+                key_prefix: format!("{}{}", tyange_cms_api::auth::api_key::KEY_PREFIX, row.get::<String, _>("key_lookup")),
+                created_at: row.get("created_at"),
+                last_used_at: row.get("last_used_at"),
+                revoked_at: row.get("revoked_at"),
+            })
+            .collect();
+
+        Ok(Json(ApiResponse {
+            status: true,
+            data: Some(ApiKeyListResponse { keys }),
+            message: None,
+        }))
+    }
+
+    /// 키를 폐기한다(행은 남기고 `revoked_at`만 채운다). 이미 폐기했으면 404. 관리자 전용.
+    #[oai(path = "/admin/api-keys/:api_key_id", method = "delete")]
+    async fn revoke_api_key(
+        &self,
+        guard: SessionGuard,
+        Path(api_key_id): Path<i64>,
+    ) -> poem::Result<Json<ApiResponse<ApiKeyRevoked>>> {
+        ensure_admin(&guard.0)?;
+
+        let updated = query(
+            "UPDATE api_keys SET revoked_at = CURRENT_TIMESTAMP
+             WHERE api_key_id = ? AND user_id = ? AND revoked_at IS NULL",
+        )
+        .bind(api_key_id)
+        .bind(&guard.0.user_id)
+        .execute(&self.state.db)
+        .await
+        .map_err(|e| {
+            poem::Error::from_string(format!("키 폐기 실패: {e}"), StatusCode::INTERNAL_SERVER_ERROR)
+        })?;
+        if updated.rows_affected() == 0 {
+            return Err(poem::Error::from_string(
+                "폐기할 키를 찾을 수 없습니다.",
+                StatusCode::NOT_FOUND,
+            ));
+        }
+
+        Ok(Json(ApiResponse {
+            status: true,
+            data: Some(ApiKeyRevoked { api_key_id }),
+            message: None,
+        }))
+    }
+}
+
+#[derive(Debug, serde::Serialize, poem_openapi::Object)]
+pub struct ApiKeyRevoked {
+    pub api_key_id: i64,
 }

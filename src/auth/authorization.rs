@@ -6,6 +6,7 @@ use poem_openapi::auth::ApiKey;
 use poem_openapi::SecurityScheme;
 use sqlx::{query_scalar, Error as SqlxError, Pool, Sqlite};
 
+use crate::auth::api_key::{self, ApiKeyVerifier};
 use crate::auth::jwt::Claims;
 
 #[derive(Clone, Debug)]
@@ -35,9 +36,18 @@ pub fn current_user(req: &Request) -> Result<&AuthenticatedUser, Error> {
 )]
 pub struct AuthGuard(pub AuthenticatedUser);
 
-async fn auth_guard_checker(_req: &Request, api_key: ApiKey) -> Option<AuthenticatedUser> {
+/// `Authorization` 헤더 값에서 토큰만 꺼낸다. 표준인 `Bearer <토큰>`과 예전 방식(토큰만)을 둘 다 받는다.
+fn bearer_or_raw(value: &str) -> &str {
+    let value = value.trim();
+    value
+        .strip_prefix("Bearer ")
+        .or_else(|| value.strip_prefix("bearer "))
+        .unwrap_or(value)
+        .trim()
+}
+
+fn jwt_user(token: &str) -> Option<AuthenticatedUser> {
     let secret = env::var("JWT_ACCESS_SECRET").ok()?;
-    let token = api_key.key.as_str();
     let token_data = Claims::from_token(token, secret.as_bytes()).ok()?;
     let is_valid = Claims::validate_token(token, secret.as_bytes()).ok()?;
 
@@ -49,6 +59,35 @@ async fn auth_guard_checker(_req: &Request, api_key: ApiKey) -> Option<Authentic
         user_id: token_data.claims.sub,
         role: token_data.claims.role,
     })
+}
+
+/// 로그인 JWT 또는 API 키(`tyk_…`, `auth::api_key`)로 인증한다. 키 확인에는 요청 데이터에 실린
+/// `ApiKeyVerifier`가 필요하다(main.rs가 `.data(...)`로 넣는다). 없으면 키는 인증되지 않는다.
+async fn auth_guard_checker(req: &Request, api_key: ApiKey) -> Option<AuthenticatedUser> {
+    let token = bearer_or_raw(api_key.key.as_str());
+    if api_key::is_api_key(token) {
+        return req.data::<ApiKeyVerifier>()?.verify(token).await;
+    }
+    jwt_user(token)
+}
+
+/// **로그인 JWT만** 받는 가드. API 키 발급·폐기처럼 "키로는 할 수 없어야 하는" 일에 쓴다 —
+/// 키가 새도 그 키로 새 키를 만들어 버티지 못하게 한다.
+#[derive(SecurityScheme)]
+#[oai(
+    ty = "api_key",
+    key_name = "Authorization",
+    key_in = "header",
+    checker = "session_guard_checker"
+)]
+pub struct SessionGuard(pub AuthenticatedUser);
+
+async fn session_guard_checker(_req: &Request, api_key: ApiKey) -> Option<AuthenticatedUser> {
+    let token = bearer_or_raw(api_key.key.as_str());
+    if api_key::is_api_key(token) {
+        return None;
+    }
+    jwt_user(token)
 }
 
 pub async fn ensure_post_owner(

@@ -327,6 +327,35 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
     .await
     .map_err(InternalServerError)?;
 
+    // API 키(개인 액세스 토큰, src/auth/api_key.rs). 운영 DB에는 예전에 만든 같은 모양의 표가 이미 있어
+    // IF NOT EXISTS라 건드리지 않는다. 키 원문이 아니라 해시(key_hash)만 저장한다.
+    query(
+        r#"
+        CREATE TABLE IF NOT EXISTS api_keys (
+            api_key_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            key_lookup TEXT NOT NULL,
+            key_hash TEXT NOT NULL,
+            user_role TEXT NOT NULL DEFAULT 'user',
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            last_used_at DATETIME,
+            revoked_at DATETIME
+        )
+        "#,
+    )
+    .execute(pool)
+    .await
+    .map_err(InternalServerError)?;
+    query("CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_lookup ON api_keys(key_lookup)")
+        .execute(pool)
+        .await
+        .map_err(InternalServerError)?;
+    query("CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id)")
+        .execute(pool)
+        .await
+        .map_err(InternalServerError)?;
+
     // Craft 폴더 동기화(src/craft_sync.rs): Craft 문서 ↔ 포스트 연결. removed=1이면 Craft에서 사라져 draft로 돌린 글.
     query(
         r#"

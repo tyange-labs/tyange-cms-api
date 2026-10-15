@@ -20,6 +20,8 @@ pub mod upload_image;
 pub mod upload_post;
 
 #[cfg(test)]
+mod api_keys_test;
+#[cfg(test)]
 mod gotolib_covers_test;
 #[cfg(test)]
 mod gotolib_push_test;

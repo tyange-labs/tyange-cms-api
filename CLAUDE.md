@@ -10,6 +10,7 @@ Rust + Poem 프레임워크. cargo 사용.
 ## 연결 프로젝트
 - 프론트엔드: `tyange-cms` (Nuxt 4 + Vue)
 - API 변경 시 반드시 tyange-cms와 동기화 필요
+- **글 작업·동기화·배포 확인은 CLI `tyange`(`tyange-cli`)로 한다** — 직접 HTTP 요청이나 브라우저 조작 대신. `tyange cms posts|get|new|update|publish|draft|delete|sync`, `tyange ci --watch`. 쓰는 법과 설정은 `tyange-cli/CLAUDE.md`. API 응답·인증 방식을 바꾸면 그 CLI(`src/cms.rs`)도 같이 고친다.
 
 ## OpenAPI 스펙 (2026-09)
 
@@ -60,6 +61,22 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
 
 ## 현재 상태
 - 운영 중
+- **API 키(개인 액세스 토큰)** (2026-10, `feat/api-keys`): `tyange` CLI 같은 클라이언트가 **비밀번호를 들고 있지 않고** CMS를 쓰게 하려고 다시 도입했다.
+  (예전에 한 번 만들었다가 "CMS는 포스트·포트폴리오 운영에 집중"하며 걷어낸 기능이다 — 운영 DB의 `api_keys` 표가 그 흔적이고, 같은 모양으로 `init_db`가 만든다.)
+  모듈 `src/auth/api_key.rs`, 엔드포인트 `openapi.rs::ApiKeysApi`, 테스트 `routes/api_keys_test.rs`(통합 9 + 단위 5).
+  - 키는 `tyk_<조회용 12자>_<비밀 52자>`(무작위 208비트). **서버는 SHA-256 해시만 저장**하고 원문은 만들 때 한 번만 응답한다. 조회용 12자로 행을 찾고 해시를
+    상수 시간으로 비교한다(키가 무작위라 bcrypt 같은 느린 해시는 필요 없다). 폐기는 행을 지우지 않고 `revoked_at`을 채운다. 마지막 사용 시각은 1분에 한 번만 갱신.
+  - API: `POST /admin/api-keys`(`{name 1~50자, role admin|user}` → 원문 포함 응답), `GET /admin/api-keys`(내 키 목록, 원문 없음), `DELETE /admin/api-keys/:id`(폐기).
+    **전부 로그인 JWT로만 된다(`SessionGuard`)** — 키로는 키를 만들거나 폐기할 수 없다. 그래야 키가 새도 새 키를 불려 버티지 못한다(`a_key_cannot_manage_keys`가 고정, 변이 검사로 확인).
+    사용자당 살아 있는 키는 20개까지. 남의 키는 목록·폐기 모두 안 보인다.
+  - **`AuthGuard`(`#[OpenApi]` 라우트 전체)는 JWT와 키를 둘 다 받는다.** `Authorization: Bearer <토큰>`과 예전 방식(토큰만)을 모두 읽는다. 키 확인에는 요청 데이터에 실린
+    `ApiKeyVerifier`가 필요하다 — lib 크레이트의 타입이라 `AppState`와 따로 `main.rs`에서 `.data(api_keys)`로 싣는다(없으면 키는 인증되지 않는다).
+    **plain poem으로 남은 라우트(`/me`, `/admin/add-user` 등)의 `Auth` 미들웨어는 JWT만 받는다.** 키가 필요한 새 라우트는 `#[OpenApi]`로 만들 것.
+  - `role`: `admin` 키는 관리 API까지, `user` 키는 글·이미지 쓰기만(`ensure_admin`이 403). CLI에는 admin이 필요하다.
+  - tyange-cms의 `/api-keys` 화면에서 만들고 폐기한다. CLI는 `tyange auth login`으로 저장한다(`tyange-cli/CLAUDE.md`).
+  - `LISTEN_ADDR`(기본 `0.0.0.0:8080`)로 포트를 바꿀 수 있다 — 로컬에서 8080이 다른 프로그램과 겹칠 때만.
+  - **알려진 기존 문제(이번 작업과 무관)**: `delete_post`는 `DELETE FROM posts`만 실행해서, **새로 만든 DB에서는 태그가 달린 글이 외래키(`post_tags`) 때문에 500으로 안 지워진다.**
+    운영 DB는 옛 스키마라 제약이 없어 지워진다. 새 DB로 옮기거나 스키마를 정리할 때 `post_tags`를 먼저 지우도록 고칠 것.
 - **Craft 폴더 → 포스트 동기화** (2026-10, `feat/craft-sync`): Craft의 `CMS` 폴더에 문서를 쓰면 lovelog 짧은 글(태그 `lovelog`, 카테고리
   `general`, 제목 없음)로 올린다. 모듈 `src/craft_sync.rs`(+`craft_sync/tests.rs`), 표 `craft_sync_posts`(문서↔글)·`craft_sync_images`(이미지 블록↔저장 경로).
   - **폴링이다.** Craft Connect API에는 웹훅이 없다. `CRAFT_SYNC_INTERVAL_SECS`(기본 300, 최소 60)마다 문서 목록(`/documents?folderId=…&fetchMetadata=true`)의
