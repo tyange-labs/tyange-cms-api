@@ -80,8 +80,8 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
             post_id TEXT NOT NULL,
             tag_id INTEGER NOT NULL,
             PRIMARY KEY (post_id, tag_id),
-            FOREIGN KEY (post_id) REFERENCES posts(post_id),
-            FOREIGN KEY (tag_id) REFERENCES tags(tag_id)
+            FOREIGN KEY (post_id) REFERENCES posts(post_id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_id) REFERENCES tags(tag_id) ON DELETE CASCADE
         )
         "#,
     )

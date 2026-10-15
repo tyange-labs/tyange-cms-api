@@ -479,13 +479,36 @@ impl PostsApi {
             )
         })?;
 
+        // posts를 참조하는 행을 먼저 정리한다. post_tags는 지우고, images는 파일과 행을 남긴 채 글과의
+        // 연결만 끊는다(외래키(images.post_id)가 cascade가 아니라서 그냥 지우면 500이 난다).
+        // 한 트랜잭션이라 글이 없어서 404가 나면 아무것도 바뀌지 않는다.
+        let internal = |what: &str, err: sqlx::Error| {
+            poem::Error::from_string(
+                format!("{what}: {err}"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        };
+        let mut tx = self
+            .state
+            .db
+            .begin()
+            .await
+            .map_err(|err| internal("트랜잭션 시작 실패", err))?;
+        query("DELETE FROM post_tags WHERE post_id = ?")
+            .bind(&post_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|err| internal("태그 연결 삭제 실패", err))?;
+        query("UPDATE images SET post_id = NULL WHERE post_id = ?")
+            .bind(&post_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|err| internal("이미지 연결 해제 실패", err))?;
         let result = query("DELETE FROM posts WHERE post_id = ?")
             .bind(&post_id)
-            .execute(&self.state.db)
+            .execute(&mut *tx)
             .await
-            .map_err(|err| {
-                poem::Error::from_string(err.to_string(), StatusCode::INTERNAL_SERVER_ERROR)
-            })?;
+            .map_err(|err| internal("게시글 삭제 실패", err))?;
 
         if result.rows_affected() == 0 {
             return Err(poem::Error::from_string(
@@ -493,6 +516,9 @@ impl PostsApi {
                 StatusCode::NOT_FOUND,
             ));
         }
+        tx.commit()
+            .await
+            .map_err(|err| internal("트랜잭션 커밋 실패", err))?;
 
         if is_blog_redeploy_target(
             &existing_post.status,

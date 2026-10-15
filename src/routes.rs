@@ -34,6 +34,8 @@ mod passkeys_test;
 #[cfg(test)]
 mod portfolio_routes_test;
 #[cfg(test)]
+mod post_delete_test;
+#[cfg(test)]
 mod post_authorization_test;
 #[cfg(test)]
 mod account_test;

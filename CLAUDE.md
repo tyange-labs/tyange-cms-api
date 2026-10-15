@@ -75,8 +75,11 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
   - `role`: `admin` 키는 관리 API까지, `user` 키는 글·이미지 쓰기만(`ensure_admin`이 403). CLI에는 admin이 필요하다.
   - tyange-cms의 `/api-keys` 화면에서 만들고 폐기한다. CLI는 `tyange auth login`으로 저장한다(`tyange-cli/CLAUDE.md`).
   - `LISTEN_ADDR`(기본 `0.0.0.0:8080`)로 포트를 바꿀 수 있다 — 로컬에서 8080이 다른 프로그램과 겹칠 때만.
-  - **알려진 기존 문제(이번 작업과 무관)**: `delete_post`는 `DELETE FROM posts`만 실행해서, **새로 만든 DB에서는 태그가 달린 글이 외래키(`post_tags`) 때문에 500으로 안 지워진다.**
-    운영 DB는 옛 스키마라 제약이 없어 지워진다. 새 DB로 옮기거나 스키마를 정리할 때 `post_tags`를 먼저 지우도록 고칠 것.
+  - **글 삭제 버그 수정 (2026-10, `fix/delete-post-foreign-keys`)**: `DELETE /post/delete/:id`가 `DELETE FROM posts`만 실행해서 글을 참조하는 행 때문에 외래키 오류(500)로 실패했다.
+    ① 새 DB의 `post_tags`에는 `ON DELETE CASCADE`가 없었다(운영 DB에는 있어 스키마가 어긋나 있었다) → `init_db`를 운영과 같게 맞췄다.
+    ② **`images.post_id` 외래키는 운영에도 cascade가 없어서, 이미지가 연결된 글은 운영에서도 못 지웠다** → 핸들러가 한 트랜잭션으로 `post_tags` 삭제 + `images.post_id = NULL`(파일과 행은 남기고
+    연결만 끊음) + `posts` 삭제를 한다. 글이 없으면 404이고 아무것도 안 바뀐다. 테스트 `routes/post_delete_test.rs`(6개)가 변이 검사 3종(핸들러만/스키마만/둘 다 되돌림)으로 확인됐다.
+    옛 `routes/delete_post.rs`(등록 안 된 죽은 코드, 테스트만 참조)는 그대로 둔다 — 같은 결함이 있지만 서빙되지 않는다.
 - **Craft 폴더 → 포스트 동기화** (2026-10, `feat/craft-sync`): Craft의 `CMS` 폴더에 문서를 쓰면 lovelog 짧은 글(태그 `lovelog`, 카테고리
   `general`, 제목 없음)로 올린다. 모듈 `src/craft_sync.rs`(+`craft_sync/tests.rs`), 표 `craft_sync_posts`(문서↔글)·`craft_sync_images`(이미지 블록↔저장 경로).
   - **폴링이다.** Craft Connect API에는 웹훅이 없다. `CRAFT_SYNC_INTERVAL_SECS`(기본 300, 최소 60)마다 문서 목록(`/documents?folderId=…&fetchMetadata=true`)의
