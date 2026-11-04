@@ -141,6 +141,18 @@ fn category_path_is_none_when_the_list_is_absent() {
 }
 
 #[test]
+fn category_path_stops_at_the_fold_toggle_even_when_it_has_an_href() {
+    // 운영에서 실제로 겪은 버그: 테스트 조각을 뜰 때는 "접기" 토글에 href가 없었는데, 다른 책 페이지에서는
+    // href가 붙어 나와서 href 유무로만 거르면 "...한국소설 > 접기"처럼 분류 경로 끝에 섞여 들어갔다.
+    let html = r#"<ul id="ulCategory">
+        <li><a href="/a">국내도서</a>&gt;<a href="/b">한국소설</a>
+            <a href="javascript:void(0)" class="Ere_sub_gray8 Ere_fs13 foreignCategoryFold">접기<img src="x.png"></a>
+        </li>
+    </ul>"#;
+    assert_eq!(extract_category_path(html).as_deref(), Some("국내도서 > 한국소설"));
+}
+
+#[test]
 fn extracts_page_count_from_basic_info_box() {
     assert_eq!(extract_pages(JAEI_BASIC_INFO), Some(232));
 }

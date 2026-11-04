@@ -138,7 +138,9 @@ fn strip_tags(s: &str) -> String {
 
 /// 알라딘 상품 페이지의 주제 분류(`<ul id="ulCategory">`) 경로.
 /// "국내도서 > 소설/시/희곡 > 한국소설 > 2000년대 이후 한국소설"처럼 " > "로 이어 붙인다.
-/// `href`가 있는 링크만 센다 — 같은 `<li>` 안의 "접기" 토글(`href` 없음)을 섞지 않기 위함.
+/// 같은 `<li>` 끝에 "접기"(`class="...Fold..."`) 토글 링크가 있는데, 이건 운영에서 실제로 `href`를
+/// 가진 채 나오는 경우가 있어서(테스트 조각을 뜰 당시의 페이지와 다름) `href` 유무가 아니라
+/// 이 토글의 class 이름으로 걸러낸다 — 그 뒤로는 분류 경로가 아니므로 만나는 순간 멈춘다.
 pub fn extract_category_path(html: &str) -> Option<String> {
     let block_start = html.find("id=\"ulCategory\"")?;
     let li_start = html[block_start..].find("<li")? + block_start;
@@ -153,12 +155,13 @@ pub fn extract_category_path(html: &str) -> Option<String> {
         let open_tag = &after_a[..tag_end];
         let text_start = tag_end + 1;
         let Some(close_rel) = after_a[text_start..].find("</a>") else { break };
+        if open_tag.contains("Fold") {
+            break;
+        }
         let inner = &after_a[text_start..text_start + close_rel];
-        if open_tag.contains("href") {
-            let text = strip_tags(inner).trim().to_string();
-            if !text.is_empty() {
-                parts.push(text);
-            }
+        let text = strip_tags(inner).trim().to_string();
+        if !text.is_empty() {
+            parts.push(text);
         }
         rest = &after_a[text_start + close_rel + 4..];
     }
