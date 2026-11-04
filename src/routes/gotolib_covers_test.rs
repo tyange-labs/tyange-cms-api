@@ -8,7 +8,7 @@ use serde_json::Value;
 use sqlx::{query, SqlitePool};
 
 use crate::{
-    covers::{self, tests::isbn},
+    book_info::{self, tests::isbn},
     db::init_db,
     models::AppState,
     routes::gotolib_covers::{get_covers, IMAGE_PATH_PREFIX, MAX_ISBNS_PER_REQUEST},
@@ -105,15 +105,15 @@ async fn unknown_isbn_is_pending_and_registered_once_even_when_repeated() {
 async fn reports_ok_with_a_path_and_hides_internal_states() {
     let state = test_state().await;
     let (done, none, failing, waiting) = (isbn(3), isbn(4), isbn(5), isbn(6));
-    set_row(&state, &done, covers::STATUS_OK).await;
-    set_row(&state, &none, covers::STATUS_MISSING).await;
+    set_row(&state, &done, book_info::STATUS_OK).await;
+    set_row(&state, &none, book_info::STATUS_MISSING).await;
     query("UPDATE book_covers SET next_try_at = 9999999999 WHERE isbn13 = ?")
         .bind(&none)
         .execute(&state.db)
         .await
         .unwrap();
-    set_row(&state, &failing, covers::STATUS_ERROR).await;
-    set_row(&state, &waiting, covers::STATUS_PENDING).await;
+    set_row(&state, &failing, book_info::STATUS_ERROR).await;
+    set_row(&state, &waiting, book_info::STATUS_PENDING).await;
 
     let cli = TestClient::new(app(state));
     let res = cli
@@ -135,24 +135,24 @@ async fn reports_ok_with_a_path_and_hides_internal_states() {
 async fn old_missing_rows_are_queued_again() {
     let state = test_state().await;
     let id = isbn(7);
-    set_row(&state, &id, covers::STATUS_MISSING).await; // next_try_at = 0 → 이미 오래됨
+    set_row(&state, &id, book_info::STATUS_MISSING).await; // next_try_at = 0 → 이미 오래됨
     let cli = TestClient::new(app(state.clone()));
     let body = json(cli.get(format!("/gotolib/covers?isbn={id}")).send().await).await;
     assert_eq!(body["covers"][&id]["status"], "pending");
-    assert_eq!(covers::statuses(&state.db, std::slice::from_ref(&id)).await.unwrap()[&id], covers::STATUS_PENDING);
+    assert_eq!(book_info::statuses(&state.db, std::slice::from_ref(&id)).await.unwrap()[&id], book_info::STATUS_PENDING);
 }
 
 #[tokio::test]
 async fn full_queue_stops_accepting_new_isbns_but_still_answers() {
     let state = test_state().await;
-    for n in 0..covers::DEFAULT_QUEUE_MAX as u32 {
-        set_row(&state, &isbn(100 + n), covers::STATUS_PENDING).await;
+    for n in 0..book_info::DEFAULT_QUEUE_MAX as u32 {
+        set_row(&state, &isbn(100 + n), book_info::STATUS_PENDING).await;
     }
     let cli = TestClient::new(app(state.clone()));
     let fresh = isbn(9);
     let body = json(cli.get(format!("/gotolib/covers?isbn={fresh}")).send().await).await;
     assert_eq!(body["covers"][&fresh]["status"], "pending");
-    assert_eq!(row_count(&state).await, covers::DEFAULT_QUEUE_MAX); // 등록되지 않았다
+    assert_eq!(row_count(&state).await, book_info::DEFAULT_QUEUE_MAX); // 등록되지 않았다
     // 이미 아는 ISBN은 큐가 가득 차도 답한다
     let known = isbn(100);
     let body = json(cli.get(format!("/gotolib/covers?isbn={known}")).send().await).await;

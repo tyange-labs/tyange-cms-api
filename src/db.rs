@@ -247,9 +247,11 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
     .await
     .map_err(InternalServerError)?;
 
-    // book_covers — gotolib 책 표지 썸네일의 수집 상태. 키는 ISBN-13.
+    // book_covers — gotolib 책 표지 썸네일 + 책 정보의 수집 상태. 키는 ISBN-13.
     // status: pending(수집 대기) / ok(저장됨) / missing(알라딘에 표지 없음) / error(일시 실패).
     // 시각은 유닉스 초. next_try_at은 error·missing을 다시 시도해도 되는 시각이다.
+    // category_path·form_hint·pages는 표지와 같은 페이지 한 번에서 함께 뽑는 "한국문학" 탭용 정보라
+    // status가 ok/missing이어도 못 뽑았으면 NULL일 수 있다(covers.rs 참고).
     query(
         r#"
         CREATE TABLE IF NOT EXISTS book_covers (
@@ -266,6 +268,14 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
     .execute(pool)
     .await
     .map_err(InternalServerError)?;
+    // 기존 DB 마이그레이션(컬럼이 이미 있으면 duplicate column 에러가 나므로 무시) — "한국문학" 탭(2026-11).
+    for stmt in [
+        "ALTER TABLE book_covers ADD COLUMN category_path TEXT",
+        "ALTER TABLE book_covers ADD COLUMN form_hint TEXT",
+        "ALTER TABLE book_covers ADD COLUMN pages INTEGER",
+    ] {
+        let _ = query(stmt).execute(pool).await;
+    }
     // 수집 작업이 '지금 해도 되는 다음 건'을 고르는 질의(status + next_try_at)를 받친다.
     query("CREATE INDEX IF NOT EXISTS idx_book_covers_queue ON book_covers(status, next_try_at)")
         .execute(pool)

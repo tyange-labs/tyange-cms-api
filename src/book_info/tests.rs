@@ -1,11 +1,9 @@
 use std::{
     collections::HashMap,
-    io::Cursor,
     path::PathBuf,
     sync::{Arc, Mutex},
 };
 
-use image::{DynamicImage, ImageFormat, RgbImage};
 use poem::{
     get, handler,
     http::StatusCode,
@@ -18,7 +16,7 @@ use sqlx::{query, query_scalar, SqlitePool};
 use super::*;
 use crate::db::init_db;
 
-/// 9자리 번호로 검사 숫자까지 맞는 ISBN-13을 만든다.
+/// 9자리 번호로 검사 숫자까지 맞는 ISBN-13을 만든다. `cover/tests.rs`도 이걸 쓴다.
 pub(crate) fn isbn(n: u32) -> String {
     let body = format!("978{n:09}");
     let sum: u32 = body
@@ -30,13 +28,18 @@ pub(crate) fn isbn(n: u32) -> String {
 }
 
 fn jpeg(width: u32, height: u32) -> Vec<u8> {
+    use image::{DynamicImage, ImageFormat, RgbImage};
     let img = RgbImage::from_fn(width, height, |x, y| image::Rgb([(x % 255) as u8, (y % 255) as u8, 90]));
-    let mut out = Cursor::new(Vec::new());
+    let mut out = std::io::Cursor::new(Vec::new());
     DynamicImage::ImageRgb8(img).write_to(&mut out, ImageFormat::Jpeg).unwrap();
     out.into_inner()
 }
 
-// ── 순수 함수 ────────────────────────────────────────────────────────────────
+fn temp_dir() -> PathBuf {
+    std::env::temp_dir().join(format!("covers-test-{}", uuid::Uuid::new_v4()))
+}
+
+// ── 순수 함수: ISBN ────────────────────────────────────────────────────────────
 
 #[test]
 fn accepts_real_isbn13s() {
@@ -72,6 +75,8 @@ fn generated_isbns_pass_the_validator() {
     }
 }
 
+// ── 순수 함수: 상품 페이지 파싱 ─────────────────────────────────────────────────
+
 #[test]
 fn extracts_og_image_regardless_of_attribute_order_and_quotes() {
     let a = r#"<html><head><meta charset="utf-8"><meta property="og:image" content="https://image.aladin.co.kr/product/1/2/cover500/x.jpg" /></head>"#;
@@ -90,6 +95,88 @@ fn og_image_is_none_when_absent_or_empty() {
     assert_eq!(extract_og_image(r#"<meta property="og:image""#), None); // 닫히지 않은 태그
 }
 
+// ── 실제 알라딘 페이지에서 받은 조각으로 검증 ────────────────────────────────────
+// 2026-11-04에 두 상품 페이지에서 그대로 떠온 조각이다:
+//   - 재이(조남주, 장편소설, 종이책, ItemId=401662202)
+//   - [전자책] 태풍의 이름을 잊은 것처럼(정세랑, 소설집, ItemId=406072524)
+// 실제 마크업을 그대로 테스트에 박아 두면 알라딘이 마크업을 바꿨을 때 이 테스트가 먼저 깨진다.
+
+pub(crate) const JAEI_CATEGORY: &str = r#"<div class="conts_info_list2">
+    <ul id="ulCategory">
+        <li><a href="https://www.aladin.co.kr/home/wbookmain.aspx">국내도서</a>&nbsp;&gt;&nbsp;<a href="https://www.aladin.co.kr/shop/wbrowse.aspx?CID=1">소설/시/희곡</a>&nbsp;&gt;&nbsp;<a href="https://www.aladin.co.kr/shop/wbrowse.aspx?CID=50917">한국소설</a>&nbsp;&gt;&nbsp;<a href="https://www.aladin.co.kr/shop/wbrowse.aspx?CID=50993&amp;BrowseTarget=List"><b>2000년대 이후 한국소설</b></a> <a class="Ere_sub_gray8 Ere_fs13 foreignCategoryFold" style="display:none;">접기<img src="https://image.aladin.co.kr/img/shop/2018/icon_arrow_fold.png" style="margin-bottom:-1px;"></a></li>
+    </ul>
+</div>"#;
+
+pub(crate) const JAEI_BASIC_INFO: &str = r#"<div class="conts_info_list1"><ul><li>양장본</li><li>232쪽</li><li>128*188mm (B6)</li><li>325g</li><li>ISBN : 9791141603649</li></ul></div>"#;
+
+pub(crate) const JAEI_DESCRIPTION_META: &str = r#"<meta name="description" content="소설가 조남주의 신작 장편소설 『재이』를 문학동네에서 펴낸다. 한국 문학과 사회의 바로미터라 불러도 좋을 법한 감각으로 시대의 기분을 정확하게 포착하고, 또 그것을 소설로 지어 독자에게 건네는 그의 네번째...">"#;
+
+// 소설집 쪽은 "장편소설"이라는 낱말이 (다른 맥락으로) 같이 들어 있다는 게 핵심 함정이다:
+// "그의 출간작 절반 이상이 장편소설이기에" — 이 책 얘기가 아니라 작가의 이력 얘기다.
+const TAEPUNG_DESCRIPTION_META: &str = r#"<meta name="description" content="동시대 한국문학을 대표하는 정세랑 작가의 6년 만의 소설집 『태풍의 이름을 잊은 것처럼』을 문학동네에서 펴낸다. 그의 출간작 절반 이상이 장편소설이기에 또다른 매력이 만개하는 소설집은 귀한 동시에 반갑기 ...">"#;
+
+const TAEPUNG_CATEGORY: &str = r#"<ul id="ulCategory">
+                    <li><a href="https://www.aladin.co.kr/home/webookmain.aspx">전자책</a>&nbsp;&gt;&nbsp;<a href="https://www.aladin.co.kr/shop/wbrowse.aspx?CID=38396">소설/시/희곡</a>&nbsp;&gt;&nbsp;<a href="https://www.aladin.co.kr/shop/wbrowse.aspx?CID=56538">한국소설</a>&nbsp;&gt;&nbsp;<a href="https://www.aladin.co.kr/shop/wbrowse.aspx?CID=57637&amp;BrowseTarget=List"><b>2000년대 이후</b></a> <a class="Ere_sub_gray8 Ere_fs13 foreignCategoryFold" style="display:none;">접기<img src="https://image.aladin.co.kr/img/shop/2018/icon_arrow_fold.png" style="margin-bottom:-1px;"></a></li>
+
+
+
+
+                </ul>"#;
+
+#[test]
+fn category_path_joins_hrefed_links_and_skips_the_fold_toggle() {
+    assert_eq!(
+        extract_category_path(JAEI_CATEGORY).as_deref(),
+        Some("국내도서 > 소설/시/희곡 > 한국소설 > 2000년대 이후 한국소설"),
+    );
+    assert_eq!(
+        extract_category_path(TAEPUNG_CATEGORY).as_deref(),
+        Some("전자책 > 소설/시/희곡 > 한국소설 > 2000년대 이후"),
+    );
+}
+
+#[test]
+fn category_path_is_none_when_the_list_is_absent() {
+    assert_eq!(extract_category_path("<html></html>"), None);
+}
+
+#[test]
+fn extracts_page_count_from_basic_info_box() {
+    assert_eq!(extract_pages(JAEI_BASIC_INFO), Some(232));
+}
+
+#[test]
+fn page_count_is_none_without_a_pages_item() {
+    // 전자책은 이 상자 자체가(쪽수를 안 보여줘서) 없는 경우가 흔하다.
+    assert_eq!(extract_pages("<html></html>"), None);
+    assert_eq!(extract_pages(r#"<div class="conts_info_list1"><ul><li>EPUB</li></ul></div>"#), None);
+}
+
+#[test]
+fn form_hint_reads_the_word_directly_before_the_titles_quote() {
+    assert_eq!(extract_form_hint(JAEI_DESCRIPTION_META), Some("장편소설"));
+    // 함정: 이 설명문에 "장편소설"도 나오지만(작가의 과거작 얘기) 제목 바로 앞은 "소설집"이다.
+    assert_eq!(extract_form_hint(TAEPUNG_DESCRIPTION_META), Some("소설집"));
+}
+
+#[test]
+fn form_hint_is_none_without_a_recognized_word_right_before_the_title() {
+    assert_eq!(
+        extract_form_hint(r#"<meta name="description" content="어느 작가의 신작 『제목』을 펴낸다.">"#),
+        None,
+    );
+    assert_eq!(extract_form_hint("<html></html>"), None);
+}
+
+#[test]
+fn book_page_info_from_html_combines_all_three_fields() {
+    let html = format!("{JAEI_DESCRIPTION_META}{JAEI_CATEGORY}{JAEI_BASIC_INFO}");
+    let info = BookPageInfo::from_html(&html);
+    assert_eq!(info.form_hint.as_deref(), Some("장편소설"));
+    assert_eq!(info.category_path.as_deref(), Some("국내도서 > 소설/시/희곡 > 한국소설 > 2000년대 이후 한국소설"));
+    assert_eq!(info.pages, Some(232));
+}
+
 #[test]
 fn config_only_allows_https_aladin_cover_paths() {
     let config = SourceConfig::aladin();
@@ -99,18 +186,6 @@ fn config_only_allows_https_aladin_cover_paths() {
     assert!(!config.allows("https://image.aladin.co.kr.evil.example/product/1/a.jpg")); // 호스트 위장
     assert!(!config.allows("https://image.aladin.co.kr/img/common/logo.png")); // 표지 경로 아님
     assert!(!config.allows("not a url"));
-}
-
-#[test]
-fn thumbnail_shrinks_large_images_and_never_enlarges_small_ones() {
-    let big = make_thumbnail(&jpeg(800, 1200)).unwrap();
-    let decoded = image::load_from_memory(&big).unwrap();
-    assert!(decoded.width() <= THUMB_WIDTH && decoded.height() <= THUMB_MAX_HEIGHT);
-    assert!(decoded.width() == THUMB_WIDTH || decoded.height() == THUMB_MAX_HEIGHT);
-
-    let small = make_thumbnail(&jpeg(60, 90)).unwrap();
-    let decoded = image::load_from_memory(&small).unwrap();
-    assert_eq!((decoded.width(), decoded.height()), (60, 90));
 }
 
 #[test]
@@ -126,50 +201,15 @@ fn contact_falls_back_to_the_public_site_when_unset_or_blank() {
     assert_eq!(contact_from(Some(" me@example.com ")), "me@example.com");
 }
 
-#[test]
-fn thumbnail_rejects_garbage_without_panicking() {
-    assert!(make_thumbnail(b"this is not an image").is_err());
-    assert!(make_thumbnail(b"").is_err());
-    assert!(make_thumbnail(&jpeg(40, 40)[..50]).is_err()); // 잘린 파일
-}
-
-// ── 파일 저장 ────────────────────────────────────────────────────────────────
-
-fn temp_dir() -> PathBuf {
-    std::env::temp_dir().join(format!("covers-test-{}", uuid::Uuid::new_v4()))
-}
-
-#[test]
-fn store_writes_final_file_and_leaves_no_temp_file() {
-    let dir = temp_dir();
-    let id = isbn(7);
-    store_thumbnail(&dir, &id, &jpeg(500, 700)).unwrap();
-    let path = cover_path(&dir, &id).unwrap();
-    assert!(path.exists());
-    assert!(!path.with_extension("jpg.tmp").exists());
-    let written = fs::read(&path).unwrap();
-    assert_eq!(&written[..2], &[0xFF, 0xD8]); // JPEG 시작 표지
-    assert!(written.len() < 40 * 1024, "썸네일이 너무 크다: {}", written.len());
-    // 같은 ISBN을 다시 저장해도 덮어쓴다
-    store_thumbnail(&dir, &id, &jpeg(300, 400)).unwrap();
-    let _ = fs::remove_dir_all(dir);
-}
-
-#[test]
-fn store_refuses_bad_isbn_and_bad_image() {
-    let dir = temp_dir();
-    assert!(store_thumbnail(&dir, "../evil", &jpeg(50, 50)).is_err());
-    assert!(store_thumbnail(&dir, &isbn(8), b"nope").is_err());
-    assert!(cover_path(&dir, "../evil").is_none());
-    assert!(!dir.join("../evil.jpg").exists());
-    let _ = fs::remove_dir_all(dir);
-}
-
 // ── 수집 작업 (가짜 알라딘 서버) ───────────────────────────────────────────────
+// 썸네일 변환·저장 자체의 단위 테스트는 `cover/tests.rs`에 있다. 여기서는 큐 → 페치 → 파싱 → 저장이
+// 끝까지 맞물리는지를 가짜 알라딘 서버로 본다.
 
 #[derive(Clone, Copy)]
 enum Scenario {
     Ok,
+    /// 표지 + 분류·형식어·쪽수(실제 알라딘 조각)까지 있는 페이지.
+    OkWithGenre,
     NoCover,
     Forbidden,
     ServerError,
@@ -201,6 +241,12 @@ fn fake_page(req: &Request, scenarios: Data<&Scenarios>) -> Response {
         Scenario::Ok | Scenario::NotAnImage => {
             Response::builder().body(og(format!("http://{host}/product/1/cover500/{isbn}.jpg")))
         }
+        Scenario::OkWithGenre => Response::builder().body(format!(
+            r#"<html><head>
+                <meta property="og:image" content="http://{host}/product/1/cover500/{isbn}.jpg">
+                {JAEI_DESCRIPTION_META}
+            </head><body>{JAEI_CATEGORY}{JAEI_BASIC_INFO}</body></html>"#
+        )),
     }
 }
 
@@ -270,11 +316,19 @@ impl Fixture {
             .await
             .unwrap()
     }
+
+    async fn text_field(&self, isbn: &str, column: &str) -> Option<String> {
+        query_scalar(&format!("SELECT {column} FROM book_covers WHERE isbn13 = ?"))
+            .bind(isbn)
+            .fetch_one(&self.pool)
+            .await
+            .unwrap()
+    }
 }
 
 impl Drop for Fixture {
     fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.dir);
+        let _ = std::fs::remove_dir_all(&self.dir);
     }
 }
 
@@ -292,12 +346,28 @@ async fn found_cover_is_downloaded_shrunk_and_recorded() {
 
     assert_eq!(f.step(2_000).await, Step::Processed);
     assert_eq!(f.status(&id).await, STATUS_OK);
-    let written = fs::read(cover_path(&f.dir, &id).unwrap()).unwrap();
+    let written = std::fs::read(cover_path(&f.dir, &id).unwrap()).unwrap();
     let decoded = image::load_from_memory(&written).unwrap();
     assert!(decoded.width() <= THUMB_WIDTH);
     assert_eq!(f.field(&id, "fetched_at").await, 2_000);
     // 처리한 건은 큐에서 빠진다
     assert_eq!(f.step(3_000).await, Step::Idle);
+}
+
+#[tokio::test]
+async fn found_cover_also_records_category_form_hint_and_pages() {
+    let f = fixture().await;
+    let id = isbn(20);
+    f.add(&id, Scenario::OkWithGenre).await;
+
+    assert_eq!(f.step(2_000).await, Step::Processed);
+    assert_eq!(f.status(&id).await, STATUS_OK);
+    assert_eq!(
+        f.text_field(&id, "category_path").await.as_deref(),
+        Some("국내도서 > 소설/시/희곡 > 한국소설 > 2000년대 이후 한국소설"),
+    );
+    assert_eq!(f.text_field(&id, "form_hint").await.as_deref(), Some("장편소설"));
+    assert_eq!(f.field(&id, "pages").await, 232);
 }
 
 #[tokio::test]

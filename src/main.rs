@@ -1,5 +1,5 @@
 mod blog_redeploy;
-mod covers;
+mod book_info;
 mod craft_sync;
 mod db;
 mod gotolib_push;
@@ -20,6 +20,7 @@ use std::{env, fs, sync::Arc, time::Duration};
 use crate::routes::create_wedding_guest::create_wedding_guest;
 use crate::routes::get_count_with_tags::get_count_with_tags;
 use crate::routes::get_posts_with_tags::get_posts_with_tags;
+use crate::routes::gotolib_book_info::get_book_info;
 use crate::routes::gotolib_covers::{get_covers, IMAGE_PATH_PREFIX};
 use crate::routes::gotolib_push::{
     push_key, push_subscribe, push_test, push_unsubscribe, PUSH_BODY_MAX_BYTES,
@@ -117,11 +118,11 @@ async fn main() -> Result<(), std::io::Error> {
     }
 
     // gotolib 책 표지 수집(알라딘 상품 페이지 → 썸네일). COVER_FETCH_ENABLED=true일 때만 돈다.
-    let covers_dir = covers::covers_dir();
+    let covers_dir = book_info::covers_dir();
     if let Err(e) = fs::create_dir_all(&covers_dir) {
         eprintln!("[covers] 썸네일 폴더를 만들지 못했습니다: {e}");
     }
-    covers::spawn_worker_from_env(db.clone());
+    book_info::spawn_worker_from_env(db.clone());
 
     // gotolib 찜한 책 소장 알림(Web Push). GOTOLIB_PUSH_ENABLED=true일 때만 켜진다.
     let push = gotolib_push::handle_from_env();
@@ -255,8 +256,15 @@ async fn main() -> Result<(), std::io::Error> {
             )
             .nest(
                 IMAGE_PATH_PREFIX,
-                StaticFilesEndpoint::new(covers::covers_dir())
+                StaticFilesEndpoint::new(book_info::covers_dir())
                     .with(SetHeader::new().overriding("Cache-Control", "public, max-age=2592000")),
+            )
+            // "한국문학" 탭의 장편/소설집 판정용 책 정보. 표지와 같은 큐·같은 수집 작업을 본다(알라딘 추가 호출 없음).
+            .at(
+                "/gotolib/book-info",
+                get(get_book_info)
+                    .with(RateLimit::new(60, Duration::from_secs(60)))
+                    .with(RateLimit::new(600, Duration::from_secs(60 * 60))),
             )
             // 찜 소장 알림: 구독 관리. 키 조회만 로그인 없이, 나머지는 로그인한 계정만.
             .at("/gotolib/push/key", get(push_key).with(RateLimit::new(60, Duration::from_secs(60))))

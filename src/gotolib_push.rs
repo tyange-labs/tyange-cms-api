@@ -34,7 +34,7 @@ use web_push_native::{
     Auth, WebPushBuilder,
 };
 
-use crate::covers::is_valid_isbn13;
+use crate::book_info::is_valid_isbn13;
 
 /// 연락처를 따로 주지 않았을 때 VAPID `sub`에 넣는 주소(공개된 서비스 주소). 애플은 mailto: 또는 https: 를 요구한다.
 pub const DEFAULT_CONTACT: &str = "https://gotolib.tyange.com";
@@ -744,7 +744,7 @@ pub fn spawn_worker(pool: SqlitePool, service: Arc<PushService>) {
 async fn worker_loop(pool: SqlitePool, service: Arc<PushService>, interval: Duration) {
     tokio::time::sleep(STARTUP_DELAY).await;
     loop {
-        if let Some(summary) = run_if_due(&pool, &service, crate::covers::now(), interval).await {
+        if let Some(summary) = run_if_due(&pool, &service, crate::book_info::now(), interval).await {
             println!(
                 "[push] 라운드 완료: 계정 {}, 조회 {}(실패 {}), 알림 {}, 정리된 구독 {}",
                 summary.users, summary.checked, summary.errors, summary.notified, summary.removed_subscriptions

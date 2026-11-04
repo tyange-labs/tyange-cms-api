@@ -16,7 +16,7 @@ use serde_json::{json, Value};
 use tyange_cms_api::auth::authorization::current_user;
 
 use crate::{
-    covers,
+    book_info,
     gotolib_push::{self, PushHandle, PushService, SubscriptionInput},
     models::AppState,
 };
@@ -59,7 +59,7 @@ pub async fn push_subscribe(
     gotolib_push::validate_subscription(&input, service.allow_loopback())
         .map_err(|message| Error::from_string(message, StatusCode::BAD_REQUEST))?;
     let agent = req.header("user-agent");
-    gotolib_push::upsert_subscription(&state.db, &user.user_id, &input, agent, covers::now())
+    gotolib_push::upsert_subscription(&state.db, &user.user_id, &input, agent, book_info::now())
         .await
         .map_err(db_error)?;
     Ok(Json(json!({ "ok": true })))
@@ -88,6 +88,6 @@ pub async fn push_test(
     let service = service_of(&handle)?;
     let user = current_user(req)?;
     let payload = gotolib_push::notification_payload("gotolib 알림 테스트", "알림이 잘 오고 있어요.", "/", "gotolib-test");
-    let (delivered, removed) = gotolib_push::send_to_user(&state.db, service, &user.user_id, &payload, covers::now()).await;
+    let (delivered, removed) = gotolib_push::send_to_user(&state.db, service, &user.user_id, &payload, book_info::now()).await;
     Ok(Json(json!({ "delivered": delivered, "removed": removed })))
 }

@@ -18,7 +18,7 @@ use sqlx::{query, query_scalar, SqlitePool};
 use web_push_native::{jwt_simple::algorithms::ES256KeyPair, p256::SecretKey, Auth};
 
 use super::*;
-use crate::{covers::tests::isbn, db::init_db};
+use crate::{book_info::tests::isbn, db::init_db};
 
 // ── 구독자(받는 쪽) 키 ────────────────────────────────────────────────────────
 
