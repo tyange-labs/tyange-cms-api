@@ -136,6 +136,26 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
   - 테스트: 가짜 알라딘(로컬 poem 서버, `SourceConfig.allow_http`)으로 정상/표지 없음/403/500/이미지 아님/외부 호스트를
     검증한다. **실제 알라딘을 부르는 테스트는 만들지 않는다.** 변이 검사(검사 숫자·호스트 검증·막힘 처리·큐 상한·확대 방지)로 확인함.
   - 주의: 이 워크플로는 `pull_request`에도 걸려 있어 PR을 열면 빌드 후 **배포 단계까지** 돈다(기존 동작). 이 브랜치로 PR을 열지 말 것.
+  - **책 상세 (2026-11)**: 모듈 이름이 `covers` → `book_info`로 바뀌었다(썸네일은 `book_info/cover.rs`, 상세 파싱은 `book_info/details.rs`).
+    같은 상품 페이지 한 번에서 제목·부제·사람(`[{name, role}]`, 역할은 페이지 표기 그대로)·출판사·출간일·원제·판본(전자책 탭 유무)·
+    쪽수·판형·무게·기타 항목(예: "양장본")·**분류 여러 줄**·형식어를 뽑아 표 `book_details`에 둔다(JSON 배열 열: people·extra_info·categories).
+    **전자책 상품 페이지는 상세를 쌓지 않는다**(사용자 결정) — 표지만 저장한다(서재의 전자책 표지용). 표지는 `CoverMainImage`를 먼저, 없으면 og:image.
+    `book_covers.category_path·form_hint·pages`는 상세 이전 값이라 더 쓰지 않고 `GET /gotolib/book-info`가 상세 없는 행의 대체값으로만 읽는다.
+    `book_covers.is_ebook`이 NULL인 옛 `ok` 행은 큐가 빌 때 한 건씩 다시 받아 상세를 채운다(표지·상태는 그대로, 일시 오류면 12시간 뒤 재시도).
+    응답은 camelCase(`categories`, `people`, `pubDate`, `originalTitle`, `hasEbook`, `extraInfo` …). `category`(첫 줄)는 배열을 읽기 전 앱 배포를 위한 값이라 나중에 지운다.
+    테스트 `book_info/details/tests.rs`는 2026-11-05에 뜬 실제 페이지 조각(번역서·분류 두 줄·양장본·전자책)으로 검증한다.
+  - **YES24 장편/단편 분류 (2026-11)**: `book_info/yes24.rs`(+`yes24/tests.rs`), 표 `yes24_books`(키: YES24 상품번호, ISBN은 상품 페이지에서)·`yes24_scan`(분류별 진행).
+    YES24 "한국 장편소설"(`001001046001002`)·"한국 단편소설"(`001001046001001`) 목록 조각 `/product/category/CategoryProductContents?…&order=RECENT`을
+    읽어 **17개 대상 출판사 책만** 저장하고(목록은 gotolib `novelClassify.ts`의 `TARGET_PUBLISHERS`와 같다 — 함께 고친다), 그 책들만 상품 페이지
+    `/product/goods/번호`의 `books:isbn` 메타로 ISBN을 채운다. `GET /gotolib/book-info`가 ISBN으로 찾아 `yes24Form`("장편"/"단편")을 준다(알라딘 행이 pending이어도).
+    - 처음엔 두 분류를 1쪽부터 끝(또는 2000-01 이전 책)까지 백필하고, 끝나면 6시간마다 앞쪽만 다시 본다(아는 책만 나오는 쪽 또는 10쪽에서 멈춤).
+      상품 페이지(ISBN)가 목록보다 먼저다. 진행은 `yes24_scan`에 있어 재시작해도 이어간다.
+    - 알라딘 수집과 별도 작업이다(호스트가 달라서). 동시 1건, 기본 5초 간격(`YES24_FETCH_INTERVAL_SECS`, 최소 3), 403/429면 6시간 쉼,
+      목록 일시 오류면 그 분류만 10분 쉼. `User-Agent`는 알라딘과 같은 `gotolib-covers/0.1 (+연락처)`.
+    - robots.txt가 막은 경로(검색, `JsonGoodsList`, `display/018` 등)는 부르지 않는다. 이용약관에 자동 수집 금지 조항은 없고 제18조가
+      지적재산권 침해·업무 방해를 금지해서, 사실 정보(제목·부제·저자 표기·출판사·출간 연월·ISBN·분류)만 저장한다(소개글·표지·리뷰·가격 X).
+    - **기본 켜짐**: 배포 워크플로가 vars가 없으면 `YES24_FETCH_ENABLED=true`를 넣는다. 끄려면 vars `YES24_FETCH_ENABLED=false` + 재배포.
+    - `db.rs`는 lib 크레이트에도 들어가서 `book_info`를 못 본다 — 그래서 `yes24_scan`의 초기 행(두 분류 번호)을 SQL에 직접 적어 뒀다.
 - **패스키(WebAuthn) 로그인 + gotolib 동기화 추가** (2026-10, `feat/passkeys`). `webauthn-rs`(0.5,
   `conditional-ui` feature = discoverable 로그인용). 로그인 검증이 끝나면 기존 `issue_login_response()`로
   같은 JWT를 발급하므로 `Auth`/`AuthGuard`는 바뀐 게 없다. 모듈: `src/passkey.rs`(설정·진행 중인 의식

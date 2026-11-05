@@ -1,9 +1,13 @@
-//! gotolib 책 정보: ISBN으로 알라딘 상품 페이지(`/shop/wproduct.aspx`)를 한 번 받아 표지·주제 분류
-//! 경로·형식어(장편소설/소설집 등)·쪽수를 함께 뽑아 `book_covers`에 저장한다. 표지는 이 수집이 내놓는
-//! 결과물 중 하나일 뿐이다(그래서 "cover"가 아니라 "book_info"가 이 모듈의 이름이고, 썸네일 생성·저장
-//! 같은 표지 전용 로직은 `cover` 하위 모듈로 들어가 있다) — "한국문학" 탭의 장편/소설집 판정이 쓰는
-//! 분류·형식어·쪽수도 같은 한 번의 요청에서 나온다. 표지와 책 정보를 따로 긁으면 같은 ISBN에 알라딘
-//! 요청을 두 번 보내게 되므로 반드시 한 번에 뽑는다.
+//! gotolib 책 정보: ISBN으로 알라딘 상품 페이지(`/shop/wproduct.aspx`)를 한 번 받아 표지와 책 상세
+//! (제목·부제·사람·출판사·출간일·원제·판본·기본정보·분류 여러 줄·형식어)를 함께 뽑는다. 표지는 이 수집이
+//! 내놓는 결과물 중 하나일 뿐이다(그래서 "cover"가 아니라 "book_info"가 이 모듈의 이름이고, 썸네일 생성·저장은
+//! `cover`, 상세 파싱은 `details` 하위 모듈에 있다). 표지와 상세를 따로 긁으면 같은 ISBN에 알라딘 요청을
+//! 두 번 보내게 되므로 반드시 한 번에 뽑는다.
+//!
+//! 저장: 큐·상태·표지는 `book_covers`, 상세는 `book_details`(종이책만). 전자책 상품 페이지는 표지만
+//! 저장하고(서재의 전자책 표지용) 상세는 쌓지 않는다. `book_covers`의 `category_path`·`form_hint`·`pages`는
+//! 상세 테이블을 만들기 전(2026-11 이전)에 모은 값이라 더 쓰지 않고, 상세가 없는 행의 대체값으로 읽기만 한다.
+//! 그 시절에 `ok`가 된 행(`is_ebook`이 비어 있다)은 큐가 비었을 때 한 건씩 다시 받아 상세를 채운다.
 //!
 //! 설계 약속(어기면 안 된다):
 //! - 앱의 조회 요청 경로에서는 알라딘에 가지 않는다. 요청은 DB만 보고, 알라딘 호출은 아래 수집 작업 한 개만 한다.
@@ -22,7 +26,11 @@ use reqwest::{redirect, StatusCode, Url};
 use sqlx::{query, query_scalar, Row, Sqlite, SqlitePool};
 
 mod cover;
+mod details;
+mod html;
+pub mod yes24;
 pub use cover::{cover_path, covers_dir, make_thumbnail, store_thumbnail, THUMB_MAX_HEIGHT, THUMB_QUALITY, THUMB_WIDTH};
+pub use details::{extract_cover_main_image, BookDetails, Person, ProductPage};
 
 // ── 상태 값(문자열은 한 곳에서만 쓴다) ─────────────────────────────────────────
 pub const STATUS_PENDING: &str = "pending";
@@ -41,6 +49,8 @@ const MAX_PAGE_BYTES: usize = 2 * 1024 * 1024;
 const MAX_IMAGE_BYTES: usize = 3 * 1024 * 1024;
 /// 표지가 없다고 나온 ISBN을 다시 확인하기까지의 시간.
 const MISSING_RETRY_SECS: i64 = 30 * 24 * 60 * 60;
+/// 상세를 다시 받으려다(옛 `ok` 행) 일시 오류가 나면 이만큼 뒤에 다시 시도한다(표지·상태는 그대로 둔다).
+const REFRESH_RETRY_SECS: i64 = 12 * 60 * 60;
 /// 일시 오류를 이만큼 겪으면 `missing`으로 보고 한참 뒤에 다시 본다.
 const MAX_ATTEMPTS: i64 = 5;
 const EXHAUSTED_RETRY_SECS: i64 = 7 * 24 * 60 * 60;
@@ -136,38 +146,6 @@ fn strip_tags(s: &str) -> String {
     out
 }
 
-/// 알라딘 상품 페이지의 주제 분류(`<ul id="ulCategory">`) 경로.
-/// "국내도서 > 소설/시/희곡 > 한국소설 > 2000년대 이후 한국소설"처럼 " > "로 이어 붙인다.
-/// 같은 `<li>` 끝에 "접기"(`class="...Fold..."`) 토글 링크가 있는데, 이건 운영에서 실제로 `href`를
-/// 가진 채 나오는 경우가 있어서(테스트 조각을 뜰 당시의 페이지와 다름) `href` 유무가 아니라
-/// 이 토글의 class 이름으로 걸러낸다 — 그 뒤로는 분류 경로가 아니므로 만나는 순간 멈춘다.
-pub fn extract_category_path(html: &str) -> Option<String> {
-    let block_start = html.find("id=\"ulCategory\"")?;
-    let li_start = html[block_start..].find("<li")? + block_start;
-    let li_end = html[li_start..].find("</li>")? + li_start;
-    let li = &html[li_start..li_end];
-
-    let mut parts = Vec::new();
-    let mut rest = li;
-    while let Some(a_start) = rest.find("<a") {
-        let after_a = &rest[a_start..];
-        let Some(tag_end) = after_a.find('>') else { break };
-        let open_tag = &after_a[..tag_end];
-        let text_start = tag_end + 1;
-        let Some(close_rel) = after_a[text_start..].find("</a>") else { break };
-        if open_tag.contains("Fold") {
-            break;
-        }
-        let inner = &after_a[text_start..text_start + close_rel];
-        let text = strip_tags(inner).trim().to_string();
-        if !text.is_empty() {
-            parts.push(text);
-        }
-        rest = &after_a[text_start + close_rel + 4..];
-    }
-    (!parts.is_empty()).then(|| parts.join(" > "))
-}
-
 /// 책 소개 문구(`<meta name="description">`)에서 이 책 자체의 형식어를 뽑는다. "장편소설"·"소설집" 같은
 /// 낱말은 작가의 다른 책 이력을 말할 때도 나오므로(예: "그의 출간작 절반 이상이 장편소설이기에"), 아무 데나
 /// 있는 낱말을 줍지 않고 **이 책 제목(『…』) 바로 앞에 붙은 것만** 믿는다
@@ -178,43 +156,6 @@ pub fn extract_form_hint(html: &str) -> Option<&'static str> {
     let title_at = description.find('『')?;
     let before = description[..title_at].trim_end();
     FORMS.into_iter().find(|form| before.ends_with(form))
-}
-
-/// 기본정보(`.conts_info_list1`)의 "232쪽" 같은 항목에서 쪽수를 뽑는다. 전자책처럼 이 목록 자체가
-/// 없거나 쪽수 항목이 없으면 `None`(전자책은 종이책과 달리 쪽수를 안 보여준다).
-pub fn extract_pages(html: &str) -> Option<i64> {
-    let start = html.find("conts_info_list1")?;
-    let ul_start = html[start..].find("<ul")? + start;
-    let ul_end = html[ul_start..].find("</ul>")? + ul_start;
-    let block = &html[ul_start..ul_end];
-    for part in block.split("<li>") {
-        let text = strip_tags(part);
-        let text = text.trim();
-        if let Some(digits) = text.strip_suffix('쪽') {
-            if let Ok(n) = digits.trim().parse::<i64>() {
-                return Some(n);
-            }
-        }
-    }
-    None
-}
-
-/// 상품 페이지 한 번에서 함께 뽑히는 책 정보(표지 주소 제외 — 표지는 `PageOutcome`에 따로 담는다).
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct BookPageInfo {
-    pub category_path: Option<String>,
-    pub form_hint: Option<String>,
-    pub pages: Option<i64>,
-}
-
-impl BookPageInfo {
-    pub fn from_html(html: &str) -> Self {
-        Self {
-            category_path: extract_category_path(html),
-            form_hint: extract_form_hint(html).map(str::to_string),
-            pages: extract_pages(html),
-        }
-    }
 }
 
 // ── 알라딘 ───────────────────────────────────────────────────────────────────
@@ -253,10 +194,10 @@ impl SourceConfig {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum PageOutcome {
-    /// 표지 주소를 찾았다 (+ 같은 페이지에서 함께 뽑은 책 정보)
-    Found(String, BookPageInfo),
-    /// 페이지는 정상인데 표지가 없다(또는 믿을 수 없는 주소다). 책 정보는 뽑았을 수 있다.
-    NoCover(BookPageInfo),
+    /// 표지 주소를 찾았다 (+ 같은 페이지에서 읽은 상세)
+    Found(String, ProductPage),
+    /// 표지가 없다(또는 믿을 수 없는 주소다). 페이지를 받았으면 그 페이지, 404처럼 페이지 자체가 없으면 `None`.
+    NoCover(Option<ProductPage>),
     /// 막혔다는 신호(403, 429): 작업 전체가 쉬어야 한다
     Blocked,
     /// 잠시 뒤 다시 하면 풀릴 수 있다(5xx, 타임아웃, 연결 실패)
@@ -306,12 +247,12 @@ impl CoverSource {
         Ok(Self { http, config })
     }
 
-    /// ISBN으로 상품 페이지를 가져와 표지 주소와 책 정보(분류·형식어·쪽수)를 찾는다.
-    /// `/shop/wproduct.aspx`만 부른다 — 이 한 번의 요청으로 표지 수집과 "한국문학" 탭의 장편/소설집
-    /// 판정에 필요한 정보를 모두 얻는다(알라딘에 추가 요청을 보내지 않는다).
+    /// ISBN으로 상품 페이지를 가져와 표지 주소와 상세를 찾는다.
+    /// `/shop/wproduct.aspx`만 부른다 — 이 한 번의 요청으로 표지와 상세를 모두 얻는다(알라딘에 추가 요청을
+    /// 보내지 않는다). 표지는 대표 이미지(`CoverMainImage`)를 먼저, 없으면 `og:image`를 본다.
     pub async fn find_cover_url(&self, isbn: &str) -> PageOutcome {
         if !is_valid_isbn13(isbn) {
-            return PageOutcome::NoCover(BookPageInfo::default());
+            return PageOutcome::NoCover(None);
         }
         let url = format!("{}/shop/wproduct.aspx?ISBN={isbn}", self.config.page_base);
         let response = match self.http.get(&url).send().await {
@@ -320,7 +261,7 @@ impl CoverSource {
         };
         match response.status() {
             StatusCode::FORBIDDEN | StatusCode::TOO_MANY_REQUESTS => return PageOutcome::Blocked,
-            StatusCode::NOT_FOUND | StatusCode::GONE => return PageOutcome::NoCover(BookPageInfo::default()),
+            StatusCode::NOT_FOUND | StatusCode::GONE => return PageOutcome::NoCover(None),
             status if !status.is_success() => return PageOutcome::Transient,
             _ => {}
         }
@@ -328,10 +269,14 @@ impl CoverSource {
             return PageOutcome::Transient;
         };
         let html = String::from_utf8_lossy(&body);
-        let info = BookPageInfo::from_html(&html);
-        match extract_og_image(&html) {
-            Some(found) if self.config.allows(&found) => PageOutcome::Found(found, info),
-            _ => PageOutcome::NoCover(info),
+        let page = ProductPage::from_html(&html);
+        let cover = [extract_cover_main_image(&html), extract_og_image(&html)]
+            .into_iter()
+            .flatten()
+            .find(|found| self.config.allows(found));
+        match cover {
+            Some(found) => PageOutcome::Found(found, page),
+            None => PageOutcome::NoCover(Some(page)),
         }
     }
 
@@ -435,13 +380,23 @@ pub async fn statuses(
     Ok(map)
 }
 
-/// `GET /gotolib/book-info`가 보는 한 책의 상태. `category_path`·`form_hint`·`pages`는 `status`가
-/// `ok`/`missing`이어도 페이지에서 못 뽑았으면 `None`일 수 있다(예: 전자책은 `pages`가 거의 항상 없다).
+/// `GET /gotolib/book-info`가 보는 한 책의 상태.
 pub struct BookInfoRow {
     pub status: String,
-    pub category_path: Option<String>,
-    pub form_hint: Option<String>,
-    pub pages: Option<i64>,
+    /// 종이책 상품 페이지에서 뽑은 상세. 전자책이거나 아직 못 받았으면 `None`.
+    pub details: Option<BookDetails>,
+    /// 상세 테이블을 만들기 전에 `book_covers`에 모아 둔 값 — 상세가 없을 때의 대체값으로만 쓴다.
+    pub legacy_category_path: Option<String>,
+    pub legacy_form_hint: Option<String>,
+    pub legacy_pages: Option<i64>,
+}
+
+fn json_list<T: serde::de::DeserializeOwned>(raw: Option<String>) -> Vec<T> {
+    raw.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+}
+
+fn to_json<T: serde::Serialize>(value: &[T]) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| "[]".to_string())
 }
 
 /// 주어진 ISBN들의 책 정보(DB에 없는 ISBN은 빠진다). 표지 수집과 같은 행·같은 큐를 본다.
@@ -450,7 +405,12 @@ pub async fn book_infos(pool: &SqlitePool, isbns: &[String]) -> Result<HashMap<S
         return Ok(HashMap::new());
     }
     let sql = format!(
-        "SELECT isbn13, status, category_path, form_hint, pages FROM book_covers WHERE isbn13 IN ({})",
+        "SELECT c.isbn13, c.status, c.category_path, c.form_hint, c.pages,
+                d.isbn13 AS d_isbn13, d.title, d.subtitle, d.people, d.publisher, d.pub_date, d.original_title,
+                d.has_ebook, d.pages AS d_pages, d.size, d.weight, d.extra_info, d.categories,
+                d.form_hint AS d_form_hint
+         FROM book_covers c LEFT JOIN book_details d ON d.isbn13 = c.isbn13
+         WHERE c.isbn13 IN ({})",
         placeholders(isbns.len())
     );
     let mut q = query(&sql);
@@ -460,17 +420,69 @@ pub async fn book_infos(pool: &SqlitePool, isbns: &[String]) -> Result<HashMap<S
     let rows = q.fetch_all(pool).await?;
     let mut map = HashMap::new();
     for row in rows {
+        let details = match row.try_get::<Option<String>, _>("d_isbn13")? {
+            None => None,
+            Some(_) => Some(BookDetails {
+                title: row.try_get("title")?,
+                subtitle: row.try_get("subtitle")?,
+                people: json_list(row.try_get("people")?),
+                publisher: row.try_get("publisher")?,
+                pub_date: row.try_get("pub_date")?,
+                original_title: row.try_get("original_title")?,
+                has_ebook: row.try_get::<Option<i64>, _>("has_ebook")?.unwrap_or(0) != 0,
+                pages: row.try_get("d_pages")?,
+                size: row.try_get("size")?,
+                weight: row.try_get("weight")?,
+                extra_info: json_list(row.try_get("extra_info")?),
+                categories: json_list(row.try_get("categories")?),
+                form_hint: row.try_get("d_form_hint")?,
+            }),
+        };
         map.insert(
             row.try_get("isbn13")?,
             BookInfoRow {
                 status: row.try_get("status")?,
-                category_path: row.try_get("category_path")?,
-                form_hint: row.try_get("form_hint")?,
-                pages: row.try_get("pages")?,
+                details,
+                legacy_category_path: row.try_get("category_path")?,
+                legacy_form_hint: row.try_get("form_hint")?,
+                legacy_pages: row.try_get("pages")?,
             },
         );
     }
     Ok(map)
+}
+
+/// 종이책 페이지의 상세를 저장한다(같은 ISBN이면 덮어쓴다). 전자책 페이지이거나 제목조차 없는 페이지
+/// (상품이 아닌 안내 페이지 등)는 저장하지 않는다.
+async fn save_details(pool: &SqlitePool, isbn: &str, page: &ProductPage, now: i64) -> Result<(), sqlx::Error> {
+    let d = &page.details;
+    if page.is_ebook || d.title.is_none() {
+        return Ok(());
+    }
+    query(
+        "INSERT OR REPLACE INTO book_details
+         (isbn13, title, subtitle, people, publisher, pub_date, original_title, has_ebook,
+          pages, size, weight, extra_info, categories, form_hint, fetched_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(isbn)
+    .bind(&d.title)
+    .bind(&d.subtitle)
+    .bind(to_json(&d.people))
+    .bind(&d.publisher)
+    .bind(&d.pub_date)
+    .bind(&d.original_title)
+    .bind(i64::from(d.has_ebook))
+    .bind(d.pages)
+    .bind(&d.size)
+    .bind(&d.weight)
+    .bind(to_json(&d.extra_info))
+    .bind(to_json(&d.categories))
+    .bind(&d.form_hint)
+    .bind(now)
+    .execute(pool)
+    .await?;
+    Ok(())
 }
 
 /// 수집을 기다리는 건수(대기 + 일시 오류). 큐 상한 검사에 쓴다.
@@ -504,54 +516,53 @@ async fn mark_ok(
     pool: &SqlitePool,
     isbn: &str,
     source_url: &str,
-    info: &BookPageInfo,
+    page: &ProductPage,
     now: i64,
 ) -> Result<(), sqlx::Error> {
     query(
-        "UPDATE book_covers SET status = ?, source_url = ?, category_path = ?, form_hint = ?, pages = ?,
-         fetched_at = ?, next_try_at = 0 WHERE isbn13 = ?",
+        "UPDATE book_covers SET status = ?, source_url = ?, is_ebook = ?, fetched_at = ?, next_try_at = 0
+         WHERE isbn13 = ?",
     )
     .bind(STATUS_OK)
     .bind(source_url)
-    .bind(&info.category_path)
-    .bind(&info.form_hint)
-    .bind(info.pages)
+    .bind(i64::from(page.is_ebook))
     .bind(now)
     .bind(isbn)
     .execute(pool)
     .await?;
-    Ok(())
+    save_details(pool, isbn, page, now).await
 }
 
+/// 표지 없음. 페이지를 받았다면(`Some`) 판본 구분과 상세도 같이 기록한다.
 async fn mark_missing(
     pool: &SqlitePool,
     isbn: &str,
-    info: &BookPageInfo,
+    page: Option<&ProductPage>,
     retry_after_secs: i64,
     now: i64,
 ) -> Result<(), sqlx::Error> {
     query(
-        "UPDATE book_covers SET status = ?, category_path = ?, form_hint = ?, pages = ?,
-         next_try_at = ?, fetched_at = ? WHERE isbn13 = ?",
+        "UPDATE book_covers SET status = ?, is_ebook = COALESCE(?, is_ebook), next_try_at = ?, fetched_at = ?
+         WHERE isbn13 = ?",
     )
     .bind(STATUS_MISSING)
-    .bind(&info.category_path)
-    .bind(&info.form_hint)
-    .bind(info.pages)
+    .bind(page.map(|p| i64::from(p.is_ebook)))
     .bind(now + retry_after_secs)
     .bind(now)
     .bind(isbn)
     .execute(pool)
     .await?;
-    Ok(())
+    match page {
+        Some(page) => save_details(pool, isbn, page, now).await,
+        None => Ok(()),
+    }
 }
 
 /// 일시 오류: 시도 횟수를 올리고 점점 늘어나는 간격 뒤로 미룬다. 여러 번 겹치면 `missing`으로 본다.
-/// 일시 오류는 페이지를 받지 못한 경우라 책 정보가 없다(`BookPageInfo::default()`).
 async fn mark_error(pool: &SqlitePool, isbn: &str, attempts: i64, now: i64) -> Result<(), sqlx::Error> {
     let attempts = attempts + 1;
     if attempts >= MAX_ATTEMPTS {
-        return mark_missing(pool, isbn, &BookPageInfo::default(), EXHAUSTED_RETRY_SECS, now).await;
+        return mark_missing(pool, isbn, None, EXHAUSTED_RETRY_SECS, now).await;
     }
     let delay = (RETRY_BASE_SECS << (attempts - 1)).min(RETRY_MAX_SECS);
     query("UPDATE book_covers SET status = ?, attempts = ?, next_try_at = ? WHERE isbn13 = ?")
@@ -575,9 +586,10 @@ pub enum Step {
     Blocked,
 }
 
-/// 큐에서 지금 해도 되는 한 건을 처리한다. 시간 대기는 하지 않는다(대기는 `run_worker`의 몫).
+/// 지금 해도 되는 한 건을 처리한다. 시간 대기는 하지 않는다(대기는 `run_worker`의 몫).
+/// 대기·일시 오류 큐가 먼저고, 그게 비어 있을 때만 옛 `ok` 행(상세 이전에 모은 것)의 상세를 하나 채운다.
 pub async fn process_next(pool: &SqlitePool, source: &CoverSource, dir: &Path, now: i64) -> Step {
-    let next = query(
+    let queued = query(
         "SELECT isbn13, attempts FROM book_covers
          WHERE status IN (?, ?) AND next_try_at <= ?
          ORDER BY created_at LIMIT 1",
@@ -587,33 +599,90 @@ pub async fn process_next(pool: &SqlitePool, source: &CoverSource, dir: &Path, n
     .bind(now)
     .fetch_optional(pool)
     .await;
-    let row = match next {
-        Ok(Some(row)) => row,
-        Ok(None) => return Step::Idle,
+    match queued {
+        Ok(Some(row)) => {
+            let (Ok(isbn), Ok(attempts)) = (row.try_get::<String, _>("isbn13"), row.try_get::<i64, _>("attempts"))
+            else {
+                return Step::Idle;
+            };
+            collect(pool, source, dir, &isbn, attempts, now).await
+        }
+        Ok(None) => {
+            let refresh = query_scalar::<Sqlite, String>(
+                "SELECT isbn13 FROM book_covers
+                 WHERE status = ? AND is_ebook IS NULL AND next_try_at <= ?
+                 ORDER BY created_at LIMIT 1",
+            )
+            .bind(STATUS_OK)
+            .bind(now)
+            .fetch_optional(pool)
+            .await;
+            match refresh {
+                Ok(Some(isbn)) => refresh_details(pool, source, &isbn, now).await,
+                Ok(None) => Step::Idle,
+                Err(e) => {
+                    eprintln!("[book_info] 상세 보충 대상을 읽지 못했습니다: {e}");
+                    Step::Idle
+                }
+            }
+        }
         Err(e) => {
             eprintln!("[book_info] 큐를 읽지 못했습니다: {e}");
-            return Step::Idle;
+            Step::Idle
         }
-    };
-    let (Ok(isbn), Ok(attempts)) = (row.try_get::<String, _>("isbn13"), row.try_get::<i64, _>("attempts"))
-    else {
-        return Step::Idle;
-    };
+    }
+}
 
+/// 옛 `ok` 행의 상세만 채운다. 표지·상태는 이미 있는 그대로 둔다(이미지를 다시 받지 않는다) —
+/// 그래서 일시 오류가 나도 상태를 `error`로 바꾸지 않고(서재 표지가 사라지지 않게) 다음 시도만 미룬다.
+async fn refresh_details(pool: &SqlitePool, source: &CoverSource, isbn: &str, now: i64) -> Step {
+    let postpone = |until: i64| async move {
+        query("UPDATE book_covers SET next_try_at = ? WHERE isbn13 = ?")
+            .bind(until)
+            .bind(isbn)
+            .execute(pool)
+            .await
+            .map(|_| ())
+    };
+    let recorded = match source.find_cover_url(isbn).await {
+        PageOutcome::Blocked => return Step::Blocked,
+        PageOutcome::Found(_, page) | PageOutcome::NoCover(Some(page)) => {
+            let updated = query("UPDATE book_covers SET is_ebook = ?, next_try_at = 0 WHERE isbn13 = ?")
+                .bind(i64::from(page.is_ebook))
+                .bind(isbn)
+                .execute(pool)
+                .await;
+            match updated {
+                Ok(_) => save_details(pool, isbn, &page, now).await,
+                Err(e) => Err(e),
+            }
+        }
+        PageOutcome::NoCover(None) => postpone(now + MISSING_RETRY_SECS).await,
+        PageOutcome::Transient => postpone(now + REFRESH_RETRY_SECS).await,
+    };
+    if let Err(e) = recorded {
+        eprintln!("[book_info] {isbn} 상세를 기록하지 못했습니다: {e}");
+    }
+    Step::Processed
+}
+
+/// 대기·일시 오류 행 한 건: 페이지를 받아 표지를 내려받고 결과와 상세를 기록한다.
+async fn collect(pool: &SqlitePool, source: &CoverSource, dir: &Path, isbn: &str, attempts: i64, now: i64) -> Step {
+    let isbn = isbn.to_string();
     let recorded = match source.find_cover_url(&isbn).await {
         PageOutcome::Blocked => return Step::Blocked,
-        PageOutcome::NoCover(info) => mark_missing(pool, &isbn, &info, MISSING_RETRY_SECS, now).await,
+        PageOutcome::NoCover(page) => mark_missing(pool, &isbn, page.as_ref(), MISSING_RETRY_SECS, now).await,
         PageOutcome::Transient => mark_error(pool, &isbn, attempts, now).await,
-        PageOutcome::Found(url, info) => match source.download(&url).await {
+        PageOutcome::Found(url, page) => match source.download(&url).await {
             Err(DownloadError::Blocked) => return Step::Blocked,
-            Err(DownloadError::Invalid) => mark_missing(pool, &isbn, &info, MISSING_RETRY_SECS, now).await,
+            Err(DownloadError::Invalid) => mark_missing(pool, &isbn, Some(&page), MISSING_RETRY_SECS, now).await,
             Err(DownloadError::Transient) => mark_error(pool, &isbn, attempts, now).await,
             Ok(bytes) => {
                 let dir = dir.to_path_buf();
                 let target = isbn.clone();
                 let stored = tokio::task::spawn_blocking(move || store_thumbnail(&dir, &target, &bytes)).await;
                 match stored {
-                    Ok(Ok(())) => mark_ok(pool, &isbn, &url, &info, now).await,
+                    Ok(Ok(())) => mark_ok(pool, &isbn, &url, &page, now).await,
                     // 받은 이미지를 줄이거나 쓰지 못함: 일시 오류와 같이 간격을 두고 다시 보고, 반복되면 missing이 된다.
                     Ok(Err(reason)) => {
                         eprintln!("[book_info] {isbn} 저장 실패: {reason}");

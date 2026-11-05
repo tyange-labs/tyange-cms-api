@@ -250,8 +250,8 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
     // book_covers — gotolib 책 표지 썸네일 + 책 정보의 수집 상태. 키는 ISBN-13.
     // status: pending(수집 대기) / ok(저장됨) / missing(알라딘에 표지 없음) / error(일시 실패).
     // 시각은 유닉스 초. next_try_at은 error·missing을 다시 시도해도 되는 시각이다.
-    // category_path·form_hint·pages는 표지와 같은 페이지 한 번에서 함께 뽑는 "한국문학" 탭용 정보라
-    // status가 ok/missing이어도 못 뽑았으면 NULL일 수 있다(covers.rs 참고).
+    // category_path·form_hint·pages는 book_details를 만들기 전에 모은 값이라 더 쓰지 않는다(읽기만 한다).
+    // is_ebook: 마지막으로 받은 페이지가 전자책 상품이었나(1/0). NULL이면 상세 이전에 모은 행이라 상세를 보충한다.
     query(
         r#"
         CREATE TABLE IF NOT EXISTS book_covers (
@@ -273,14 +273,79 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
         "ALTER TABLE book_covers ADD COLUMN category_path TEXT",
         "ALTER TABLE book_covers ADD COLUMN form_hint TEXT",
         "ALTER TABLE book_covers ADD COLUMN pages INTEGER",
+        "ALTER TABLE book_covers ADD COLUMN is_ebook INTEGER",
     ] {
         let _ = query(stmt).execute(pool).await;
     }
+    // book_details — 종이책 상품 페이지에서 뽑은 책 상세(book_info::details). 전자책 페이지는 쌓지 않는다.
+    // people·extra_info·categories는 JSON 배열 문자열(people: [{name, role}], 역할은 페이지 표기 그대로).
+    query(
+        r#"
+        CREATE TABLE IF NOT EXISTS book_details (
+            isbn13 TEXT PRIMARY KEY,
+            title TEXT,
+            subtitle TEXT,
+            people TEXT NOT NULL DEFAULT '[]',
+            publisher TEXT,
+            pub_date TEXT,
+            original_title TEXT,
+            has_ebook INTEGER NOT NULL DEFAULT 0,
+            pages INTEGER,
+            size TEXT,
+            weight TEXT,
+            extra_info TEXT NOT NULL DEFAULT '[]',
+            categories TEXT NOT NULL DEFAULT '[]',
+            form_hint TEXT,
+            fetched_at INTEGER NOT NULL
+        )
+        "#,
+    )
+    .execute(pool)
+    .await
+    .map_err(InternalServerError)?;
     // 수집 작업이 '지금 해도 되는 다음 건'을 고르는 질의(status + next_try_at)를 받친다.
     query("CREATE INDEX IF NOT EXISTS idx_book_covers_queue ON book_covers(status, next_try_at)")
         .execute(pool)
         .await
         .map_err(InternalServerError)?;
+
+    // YES24 "한국 장편소설"/"한국 단편소설" 분류에서 모은 17개 출판사 책(book_info::yes24). 키는 YES24 상품번호,
+    // ISBN은 상품 페이지에서 따로 받는다(받기 전엔 NULL). form: 장편/단편. 사실 정보만 둔다(소개글·표지·가격 없음).
+    for stmt in [
+        r#"
+        CREATE TABLE IF NOT EXISTS yes24_books (
+            goods_no INTEGER PRIMARY KEY,
+            form TEXT NOT NULL,
+            title TEXT NOT NULL,
+            subtitle TEXT,
+            author TEXT,
+            publisher TEXT,
+            pub_month TEXT,
+            isbn13 TEXT,
+            status TEXT NOT NULL,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            next_try_at INTEGER NOT NULL DEFAULT 0,
+            fetched_at INTEGER,
+            created_at INTEGER NOT NULL
+        )
+        "#,
+        "CREATE INDEX IF NOT EXISTS idx_yes24_books_isbn ON yes24_books(isbn13)",
+        // 분류별 진행 상태: 백필 쪽 번호·완료 여부, 진행 중인 재확인 쪽, 마지막 재확인 시각, 일시 오류 뒤 쉬는 시각.
+        r#"
+        CREATE TABLE IF NOT EXISTS yes24_scan (
+            category TEXT PRIMARY KEY,
+            backfill_page INTEGER NOT NULL DEFAULT 1,
+            backfill_done INTEGER NOT NULL DEFAULT 0,
+            scan_page INTEGER,
+            last_scan_at INTEGER NOT NULL DEFAULT 0,
+            retry_at INTEGER NOT NULL DEFAULT 0
+        )
+        "#,
+        // book_info::yes24::CATEGORY_NOVEL / CATEGORY_SHORT (db는 lib 크레이트에도 들어가서 그 상수를 못 본다)
+        "INSERT OR IGNORE INTO yes24_scan (category) VALUES ('001001046001002'), ('001001046001001')",
+    ] {
+        query(stmt).execute(pool).await.map_err(InternalServerError)?;
+    }
 
     // gotolib 찜한 책 소장 알림(Web Push). 구독은 기기(endpoint)마다 한 행이고, 상태는 (계정, 책, 도서관)마다
     // '지난번 확인에서 소장이었나'를 기억해 '미소장 → 소장'으로 바뀔 때만 알리게 한다.

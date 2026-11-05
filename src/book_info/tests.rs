@@ -107,6 +107,8 @@ pub(crate) const JAEI_CATEGORY: &str = r#"<div class="conts_info_list2">
     </ul>
 </div>"#;
 
+pub(crate) const JAEI_TITLE: &str = r#"<div><span class="Ere_bo_title">재이</span></div>"#;
+
 pub(crate) const JAEI_BASIC_INFO: &str = r#"<div class="conts_info_list1"><ul><li>양장본</li><li>232쪽</li><li>128*188mm (B6)</li><li>325g</li><li>ISBN : 9791141603649</li></ul></div>"#;
 
 pub(crate) const JAEI_DESCRIPTION_META: &str = r#"<meta name="description" content="소설가 조남주의 신작 장편소설 『재이』를 문학동네에서 펴낸다. 한국 문학과 사회의 바로미터라 불러도 좋을 법한 감각으로 시대의 기분을 정확하게 포착하고, 또 그것을 소설로 지어 독자에게 건네는 그의 네번째...">"#;
@@ -124,24 +126,18 @@ const TAEPUNG_CATEGORY: &str = r#"<ul id="ulCategory">
                 </ul>"#;
 
 #[test]
-fn category_path_joins_hrefed_links_and_skips_the_fold_toggle() {
-    assert_eq!(
-        extract_category_path(JAEI_CATEGORY).as_deref(),
-        Some("국내도서 > 소설/시/희곡 > 한국소설 > 2000년대 이후 한국소설"),
-    );
-    assert_eq!(
-        extract_category_path(TAEPUNG_CATEGORY).as_deref(),
-        Some("전자책 > 소설/시/희곡 > 한국소설 > 2000년대 이후"),
-    );
+fn categories_join_hrefed_links_and_skip_the_fold_toggle() {
+    assert_eq!(details::extract_categories(JAEI_CATEGORY), vec!["국내도서 > 소설/시/희곡 > 한국소설 > 2000년대 이후 한국소설"]);
+    assert_eq!(details::extract_categories(TAEPUNG_CATEGORY), vec!["전자책 > 소설/시/희곡 > 한국소설 > 2000년대 이후"]);
 }
 
 #[test]
-fn category_path_is_none_when_the_list_is_absent() {
-    assert_eq!(extract_category_path("<html></html>"), None);
+fn categories_are_empty_when_the_list_is_absent() {
+    assert!(details::extract_categories("<html></html>").is_empty());
 }
 
 #[test]
-fn category_path_stops_at_the_fold_toggle_even_when_it_has_an_href() {
+fn categories_stop_at_the_fold_toggle_even_when_it_has_an_href() {
     // 운영에서 실제로 겪은 버그: 테스트 조각을 뜰 때는 "접기" 토글에 href가 없었는데, 다른 책 페이지에서는
     // href가 붙어 나와서 href 유무로만 거르면 "...한국소설 > 접기"처럼 분류 경로 끝에 섞여 들어갔다.
     let html = r#"<ul id="ulCategory">
@@ -149,19 +145,7 @@ fn category_path_stops_at_the_fold_toggle_even_when_it_has_an_href() {
             <a href="javascript:void(0)" class="Ere_sub_gray8 Ere_fs13 foreignCategoryFold">접기<img src="x.png"></a>
         </li>
     </ul>"#;
-    assert_eq!(extract_category_path(html).as_deref(), Some("국내도서 > 한국소설"));
-}
-
-#[test]
-fn extracts_page_count_from_basic_info_box() {
-    assert_eq!(extract_pages(JAEI_BASIC_INFO), Some(232));
-}
-
-#[test]
-fn page_count_is_none_without_a_pages_item() {
-    // 전자책은 이 상자 자체가(쪽수를 안 보여줘서) 없는 경우가 흔하다.
-    assert_eq!(extract_pages("<html></html>"), None);
-    assert_eq!(extract_pages(r#"<div class="conts_info_list1"><ul><li>EPUB</li></ul></div>"#), None);
+    assert_eq!(details::extract_categories(html), vec!["국내도서 > 한국소설"]);
 }
 
 #[test]
@@ -181,12 +165,13 @@ fn form_hint_is_none_without_a_recognized_word_right_before_the_title() {
 }
 
 #[test]
-fn book_page_info_from_html_combines_all_three_fields() {
-    let html = format!("{JAEI_DESCRIPTION_META}{JAEI_CATEGORY}{JAEI_BASIC_INFO}");
-    let info = BookPageInfo::from_html(&html);
-    assert_eq!(info.form_hint.as_deref(), Some("장편소설"));
-    assert_eq!(info.category_path.as_deref(), Some("국내도서 > 소설/시/희곡 > 한국소설 > 2000년대 이후 한국소설"));
-    assert_eq!(info.pages, Some(232));
+fn product_page_combines_form_hint_categories_and_pages() {
+    let html = format!("{JAEI_TITLE}{JAEI_DESCRIPTION_META}{JAEI_CATEGORY}{JAEI_BASIC_INFO}");
+    let d = ProductPage::from_html(&html).details;
+    assert_eq!(d.title.as_deref(), Some("재이"));
+    assert_eq!(d.form_hint.as_deref(), Some("장편소설"));
+    assert_eq!(d.categories, vec!["국내도서 > 소설/시/희곡 > 한국소설 > 2000년대 이후 한국소설"]);
+    assert_eq!(d.pages, Some(232));
 }
 
 #[test]
@@ -220,8 +205,10 @@ fn contact_falls_back_to_the_public_site_when_unset_or_blank() {
 #[derive(Clone, Copy)]
 enum Scenario {
     Ok,
-    /// 표지 + 분류·형식어·쪽수(실제 알라딘 조각)까지 있는 페이지.
+    /// 표지 + 제목·분류·형식어·쪽수(실제 알라딘 조각)까지 있는 종이책 페이지.
     OkWithGenre,
+    /// 표지가 있는 전자책 상품 페이지(제목 "[eBook] …", 판본 탭이 전자책에 켜져 있다).
+    Ebook,
     NoCover,
     Forbidden,
     ServerError,
@@ -257,7 +244,13 @@ fn fake_page(req: &Request, scenarios: Data<&Scenarios>) -> Response {
             r#"<html><head>
                 <meta property="og:image" content="http://{host}/product/1/cover500/{isbn}.jpg">
                 {JAEI_DESCRIPTION_META}
-            </head><body>{JAEI_CATEGORY}{JAEI_BASIC_INFO}</body></html>"#
+            </head><body>{JAEI_TITLE}{JAEI_CATEGORY}{JAEI_BASIC_INFO}</body></html>"#
+        )),
+        Scenario::Ebook => Response::builder().body(format!(
+            r#"<html><head><meta property="og:image" content="http://{host}/product/1/cover500/{isbn}.jpg"></head>
+            <body><span class="Ere_bo_title">[eBook] 재이</span>
+            <div class="book_tab_box"><span class="tab_on">전자책</span><span class="tab_off"><a href="/x">종이책</a></span></div>
+            {TAEPUNG_CATEGORY}</body></html>"#
         )),
     }
 }
@@ -336,6 +329,10 @@ impl Fixture {
             .await
             .unwrap()
     }
+
+    async fn info(&self, isbn: &str) -> BookInfoRow {
+        book_infos(&self.pool, &[isbn.to_string()]).await.unwrap().remove(isbn).unwrap()
+    }
 }
 
 impl Drop for Fixture {
@@ -367,19 +364,108 @@ async fn found_cover_is_downloaded_shrunk_and_recorded() {
 }
 
 #[tokio::test]
-async fn found_cover_also_records_category_form_hint_and_pages() {
+async fn paper_book_page_records_its_details() {
     let f = fixture().await;
     let id = isbn(20);
     f.add(&id, Scenario::OkWithGenre).await;
 
     assert_eq!(f.step(2_000).await, Step::Processed);
     assert_eq!(f.status(&id).await, STATUS_OK);
+    assert_eq!(f.field(&id, "is_ebook").await, 0);
+    let row = f.info(&id).await;
+    let d = row.details.expect("종이책이면 상세가 쌓인다");
+    assert_eq!(d.title.as_deref(), Some("재이"));
+    assert_eq!(d.categories, vec!["국내도서 > 소설/시/희곡 > 한국소설 > 2000년대 이후 한국소설"]);
+    assert_eq!(d.form_hint.as_deref(), Some("장편소설"));
+    assert_eq!(d.pages, Some(232));
+    assert_eq!(d.extra_info, vec!["양장본"]);
+    // 예전 열에는 더 쓰지 않는다
+    assert_eq!(row.legacy_category_path, None);
+}
+
+#[tokio::test]
+async fn ebook_page_keeps_its_cover_but_not_its_details() {
+    let f = fixture().await;
+    let id = isbn(21);
+    f.add(&id, Scenario::Ebook).await;
+
+    assert_eq!(f.step(2_000).await, Step::Processed);
+    assert_eq!(f.status(&id).await, STATUS_OK, "서재의 전자책 표지는 계속 쓴다");
+    assert!(cover_path(&f.dir, &id).unwrap().exists());
+    assert_eq!(f.field(&id, "is_ebook").await, 1);
+    assert!(f.info(&id).await.details.is_none(), "전자책 상세는 쌓지 않는다");
+}
+
+/// 상세 테이블을 만들기 전에 `ok`가 된 행을 흉내 낸다(표지는 이미 있고, 예전 열에 분류가 있고, is_ebook은 비어 있다).
+async fn legacy_ok_row(f: &Fixture, id: &str, scenario: Scenario) {
+    f.scenarios.lock().unwrap().insert(id.to_string(), scenario);
+    query(
+        "INSERT INTO book_covers (isbn13, status, source_url, category_path, attempts, next_try_at, fetched_at, created_at)
+         VALUES (?, ?, 'https://image.aladin.co.kr/product/old.jpg', '옛 분류', 0, 0, 1, 1)",
+    )
+    .bind(id)
+    .bind(STATUS_OK)
+    .execute(&f.pool)
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn old_ok_rows_get_details_filled_without_touching_status_or_cover() {
+    let f = fixture().await;
+    let id = isbn(22);
+    legacy_ok_row(&f, &id, Scenario::OkWithGenre).await;
+
+    assert_eq!(f.step(2_000).await, Step::Processed);
+    assert_eq!(f.status(&id).await, STATUS_OK);
     assert_eq!(
-        f.text_field(&id, "category_path").await.as_deref(),
-        Some("국내도서 > 소설/시/희곡 > 한국소설 > 2000년대 이후 한국소설"),
+        f.text_field(&id, "source_url").await.as_deref(),
+        Some("https://image.aladin.co.kr/product/old.jpg"),
+        "표지를 다시 받지 않는다",
     );
-    assert_eq!(f.text_field(&id, "form_hint").await.as_deref(), Some("장편소설"));
-    assert_eq!(f.field(&id, "pages").await, 232);
+    assert!(!cover_path(&f.dir, &id).unwrap().exists(), "이미지를 내려받지 않았다");
+    assert_eq!(f.info(&id).await.details.unwrap().title.as_deref(), Some("재이"));
+    // 한 번 채우면 다시 보충 대상이 아니다
+    assert_eq!(f.step(3_000).await, Step::Idle);
+}
+
+#[tokio::test]
+async fn old_ebook_rows_are_marked_but_get_no_details() {
+    let f = fixture().await;
+    let id = isbn(23);
+    legacy_ok_row(&f, &id, Scenario::Ebook).await;
+
+    assert_eq!(f.step(2_000).await, Step::Processed);
+    assert_eq!(f.field(&id, "is_ebook").await, 1);
+    let row = f.info(&id).await;
+    assert!(row.details.is_none());
+    assert_eq!(row.legacy_category_path.as_deref(), Some("옛 분류"), "예전에 모은 값은 그대로 남는다");
+    assert_eq!(f.step(3_000).await, Step::Idle);
+}
+
+#[tokio::test]
+async fn filling_old_rows_waits_for_the_regular_queue() {
+    let f = fixture().await;
+    let old = isbn(24);
+    let new = isbn(25);
+    legacy_ok_row(&f, &old, Scenario::OkWithGenre).await;
+    f.add(&new, Scenario::Ok).await;
+
+    assert_eq!(f.step(2_000).await, Step::Processed);
+    assert_eq!(f.status(&new).await, STATUS_OK, "새 대기 행이 먼저다");
+    assert!(f.info(&old).await.details.is_none());
+}
+
+#[tokio::test]
+async fn failing_to_fill_an_old_row_postpones_it_but_keeps_it_ok() {
+    let f = fixture().await;
+    let id = isbn(26);
+    legacy_ok_row(&f, &id, Scenario::ServerError).await;
+
+    assert_eq!(f.step(2_000).await, Step::Processed);
+    assert_eq!(f.status(&id).await, STATUS_OK, "일시 오류로 서재 표지가 사라지면 안 된다");
+    assert_eq!(f.field(&id, "next_try_at").await, 2_000 + REFRESH_RETRY_SECS);
+    assert_eq!(f.step(2_001).await, Step::Idle);
 }
 
 #[tokio::test]

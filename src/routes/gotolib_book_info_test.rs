@@ -102,8 +102,62 @@ async fn reports_the_fields_collected_alongside_the_cover() {
     let body = json(res).await;
     assert_eq!(body["info"][&done]["status"], "ok");
     assert_eq!(body["info"][&done]["category"], "국내도서 > 소설/시/희곡 > 한국소설");
+    assert_eq!(body["info"][&done]["categories"], serde_json::json!(["국내도서 > 소설/시/희곡 > 한국소설"]));
     assert_eq!(body["info"][&done]["formHint"], "장편소설");
     assert_eq!(body["info"][&done]["pages"], 232);
+}
+
+#[tokio::test]
+async fn yes24_form_is_reported_even_while_the_aladin_row_is_pending() {
+    let state = test_state().await;
+    let id = isbn(9);
+    query("INSERT INTO yes24_books (goods_no, form, title, isbn13, status, created_at) VALUES (1, '장편', 't', ?, 'ok', 1)")
+        .bind(&id)
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+    let cli = TestClient::new(app(state));
+    let body = json(cli.get(format!("/gotolib/book-info?isbn={id},{}", isbn(10))).send().await).await;
+    assert_eq!(body["info"][&id]["status"], "pending");
+    assert_eq!(body["info"][&id]["yes24Form"], "장편");
+    assert!(body["info"][isbn(10)]["yes24Form"].is_null());
+}
+
+#[tokio::test]
+async fn details_win_over_the_old_columns_and_carry_every_field() {
+    let state = test_state().await;
+    let id = isbn(8);
+    set_row(&state, &id, book_info::STATUS_OK, Some("옛 분류"), None, Some(1)).await;
+    query(
+        r#"INSERT INTO book_details (isbn13, title, subtitle, people, publisher, pub_date, original_title, has_ebook,
+             pages, size, weight, extra_info, categories, form_hint, fetched_at)
+           VALUES (?, '데이터베이스 설계, 이렇게 하면 된다', '제2판', '[{"name":"미크","role":"지은이"},{"name":"윤인성","role":"옮긴이"}]',
+             '제이펍', '2025-10-30', '達人に學ぶDB設計徹底指南書', 1, 356, '170*225mm', '676g', '["양장본"]',
+             '["국내도서 > 컴퓨터/모바일 > 컴퓨터 공학 > 데이터베이스 개론","국내도서 > 추천도서"]', NULL, 1)"#,
+    )
+    .bind(&id)
+    .execute(&state.db)
+    .await
+    .unwrap();
+
+    let cli = TestClient::new(app(state));
+    let body = json(cli.get(format!("/gotolib/book-info?isbn={id}")).send().await).await;
+    let e = &body["info"][&id];
+    assert_eq!(e["title"], "데이터베이스 설계, 이렇게 하면 된다");
+    assert_eq!(e["subtitle"], "제2판");
+    assert_eq!(e["people"], serde_json::json!([{"name":"미크","role":"지은이"},{"name":"윤인성","role":"옮긴이"}]));
+    assert_eq!(e["publisher"], "제이펍");
+    assert_eq!(e["pubDate"], "2025-10-30");
+    assert_eq!(e["originalTitle"], "達人に學ぶDB設計徹底指南書");
+    assert_eq!(e["hasEbook"], true);
+    assert_eq!(e["pages"], 356);
+    assert_eq!(e["size"], "170*225mm");
+    assert_eq!(e["weight"], "676g");
+    assert_eq!(e["extraInfo"], serde_json::json!(["양장본"]));
+    assert_eq!(e["categories"][1], "국내도서 > 추천도서");
+    assert_eq!(e["category"], "국내도서 > 컴퓨터/모바일 > 컴퓨터 공학 > 데이터베이스 개론");
+    assert!(e["formHint"].is_null());
 }
 
 #[tokio::test]

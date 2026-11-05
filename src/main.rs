@@ -123,6 +123,7 @@ async fn main() -> Result<(), std::io::Error> {
         eprintln!("[covers] 썸네일 폴더를 만들지 못했습니다: {e}");
     }
     book_info::spawn_worker_from_env(db.clone());
+    book_info::yes24::spawn_worker_from_env(db.clone());
 
     // gotolib 찜한 책 소장 알림(Web Push). GOTOLIB_PUSH_ENABLED=true일 때만 켜진다.
     let push = gotolib_push::handle_from_env();

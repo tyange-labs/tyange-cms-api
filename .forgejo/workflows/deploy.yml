@@ -76,6 +76,10 @@ jobs:
           echo COVERS_DIR=${{ vars.COVERS_DIR }} >> .env
           echo COVER_FETCH_ENABLED=${{ vars.COVER_FETCH_ENABLED || 'true' }} >> .env
           echo COVER_CONTACT=${{ vars.COVER_CONTACT }} >> .env
+          # YES24 "한국 장편소설"/"한국 단편소설" 분류 수집(src/book_info/yes24.rs). 기본 켜짐(코드는 정확히 "true"일 때만 돈다).
+          # 끄려면 Forgejo vars에 YES24_FETCH_ENABLED=false. 선택: YES24_FETCH_INTERVAL_SECS(기본 5, 최소 3).
+          echo YES24_FETCH_ENABLED=${{ vars.YES24_FETCH_ENABLED || 'true' }} >> .env
+          echo YES24_FETCH_INTERVAL_SECS=${{ vars.YES24_FETCH_INTERVAL_SECS }} >> .env
           # gotolib 찜한 책 소장 알림(Web Push). 기본 켜짐이다(코드는 정확히 "true"일 때만 돈다). VAPID 키는 서버가 처음
           # 켜질 때 만들어 VAPID_KEY_PATH(비우면 ./data/vapid_private.key; 배포가 지우지 않는 곳)에 보관하므로 비밀값을 따로 두지 않는다.
           # 끄려면 Forgejo vars에 GOTOLIB_PUSH_ENABLED=false를 만들고 다시 배포한다. 선택: VAPID_SUBJECT(mailto:/https:),
