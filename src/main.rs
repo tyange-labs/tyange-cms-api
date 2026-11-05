@@ -21,6 +21,7 @@ use crate::routes::create_wedding_guest::create_wedding_guest;
 use crate::routes::get_count_with_tags::get_count_with_tags;
 use crate::routes::get_posts_with_tags::get_posts_with_tags;
 use crate::routes::gotolib_book_info::get_book_info;
+use crate::routes::gotolib_korean_novels::get_korean_novels;
 use crate::routes::gotolib_covers::{get_covers, IMAGE_PATH_PREFIX};
 use crate::routes::gotolib_push::{
     push_key, push_subscribe, push_test, push_unsubscribe, PUSH_BODY_MAX_BYTES,
@@ -264,6 +265,13 @@ async fn main() -> Result<(), std::io::Error> {
             .at(
                 "/gotolib/book-info",
                 get(get_book_info)
+                    .with(RateLimit::new(60, Duration::from_secs(60)))
+                    .with(RateLimit::new(600, Duration::from_secs(60 * 60))),
+            )
+            // "한국문학" 탭 목록: YES24 "한국 장편소설"에서 모은 책(연도별). DB만 본다.
+            .at(
+                "/gotolib/korean-novels",
+                get(get_korean_novels)
                     .with(RateLimit::new(60, Duration::from_secs(60)))
                     .with(RateLimit::new(600, Duration::from_secs(60 * 60))),
             )

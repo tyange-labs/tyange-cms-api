@@ -10,6 +10,7 @@ pub mod get_tags_with_category;
 pub mod get_wedding_guests;
 pub mod gotolib_book_info;
 pub mod gotolib_covers;
+pub mod gotolib_korean_novels;
 pub mod gotolib_push;
 pub mod gotolib_sync;
 pub mod login;
@@ -26,6 +27,8 @@ mod api_keys_test;
 mod gotolib_book_info_test;
 #[cfg(test)]
 mod gotolib_covers_test;
+#[cfg(test)]
+mod gotolib_korean_novels_test;
 #[cfg(test)]
 mod gotolib_push_test;
 #[cfg(test)]

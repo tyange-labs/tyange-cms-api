@@ -268,6 +268,57 @@ pub async fn forms_by_isbn(pool: &SqlitePool, isbns: &[String]) -> Result<HashMa
     Ok(map)
 }
 
+/// "한국문학" 탭 목록 한 권: YES24 "한국 장편소설"에 있고 상품 페이지에서 ISBN까지 받은 책.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NovelListItem {
+    pub isbn13: String,
+    pub goods_no: i64,
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subtitle: Option<String>,
+    /// 표기 그대로("양귀자 저")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub publisher: Option<String>,
+    /// "2026-11"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pub_month: Option<String>,
+}
+
+/// 한 해(`"2026"`)에 나온 YES24 장편소설(대상 출판사, ISBN 있는 것만). 최근 달·최근 상품 순.
+/// 같은 ISBN이 상품 번호 여러 개로 올라 있으면 가장 최근 상품 하나만 둔다.
+pub async fn novels_of_year(pool: &SqlitePool, year: &str) -> Result<Vec<NovelListItem>, sqlx::Error> {
+    let rows = query(
+        "SELECT goods_no, title, subtitle, author, publisher, pub_month, isbn13 FROM yes24_books
+         WHERE form = ? AND isbn13 IS NOT NULL AND pub_month LIKE ?
+         ORDER BY pub_month DESC, goods_no DESC",
+    )
+    .bind(FORM_NOVEL)
+    .bind(format!("{year}-%"))
+    .fetch_all(pool)
+    .await?;
+    let mut seen = std::collections::HashSet::new();
+    let mut items = Vec::new();
+    for row in rows {
+        let isbn13: String = row.try_get("isbn13")?;
+        if !seen.insert(isbn13.clone()) {
+            continue;
+        }
+        items.push(NovelListItem {
+            isbn13,
+            goods_no: row.try_get("goods_no")?,
+            title: row.try_get("title")?,
+            subtitle: row.try_get("subtitle")?,
+            author: row.try_get("author")?,
+            publisher: row.try_get("publisher")?,
+            pub_month: row.try_get("pub_month")?,
+        });
+    }
+    Ok(items)
+}
+
 // ── 수집 작업 ────────────────────────────────────────────────────────────────
 /// 지금 해도 되는 한 건을 처리한다. 순서: ① ISBN이 아직 없는 책의 상품 페이지 ② 백필(아직 끝나지 않은 분류)
 /// ③ 진행 중이거나 때가 된 앞쪽 재확인. 시간 대기는 하지 않는다(대기는 `run_worker`의 몫).
