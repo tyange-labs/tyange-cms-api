@@ -156,6 +156,8 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
       지적재산권 침해·업무 방해를 금지해서, 사실 정보(제목·부제·저자 표기·출판사·출간 연월·ISBN·분류)만 저장한다(소개글·표지·리뷰·가격 X).
     - **기본 켜짐**: 배포 워크플로가 vars가 없으면 `YES24_FETCH_ENABLED=true`를 넣는다. 끄려면 vars `YES24_FETCH_ENABLED=false` + 재배포.
     - `db.rs`는 lib 크레이트에도 들어가서 `book_info`를 못 본다 — 그래서 `yes24_scan`의 초기 행(두 분류 번호)을 SQL에 직접 적어 뒀다.
+    - gotolib "한국문학" 탭은 **YES24가 장편으로 분류한 책만** 보여준다(사용자 결정). 출간 전 책은 `GET /gotolib/book-info?…&enqueue=false`로
+      묻는다: 읽기만 하고 모르는 ISBN을 알라딘 큐에 넣지 않는다(알라딘 상품 페이지가 아직 없어서 — "출간 예정 도서는 알라딘에서 조회하지 않는다").
 - **패스키(WebAuthn) 로그인 + gotolib 동기화 추가** (2026-10, `feat/passkeys`). `webauthn-rs`(0.5,
   `conditional-ui` feature = discoverable 로그인용). 로그인 검증이 끝나면 기존 `issue_login_response()`로
   같은 JWT를 발급하므로 `Auth`/`AuthGuard`는 바뀐 게 없다. 모듈: `src/passkey.rs`(설정·진행 중인 의식

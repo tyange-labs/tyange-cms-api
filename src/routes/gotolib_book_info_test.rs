@@ -108,6 +108,31 @@ async fn reports_the_fields_collected_alongside_the_cover() {
 }
 
 #[tokio::test]
+async fn enqueue_false_only_reads_and_never_queues_or_requeues() {
+    // 출간 전 책: 앱이 YES24 분류만 보려고 묻는다(알라딘 상품 페이지가 아직 없어서 큐에 넣으면 헛걸음이다).
+    let state = test_state().await;
+    let (unknown, stale) = (isbn(11), isbn(12));
+    set_row(&state, &stale, book_info::STATUS_MISSING, None, None, None).await; // next_try_at = 0 → 다시 볼 때가 지났다
+    query("INSERT INTO yes24_books (goods_no, form, title, isbn13, status, created_at) VALUES (1, '장편', 't', ?, 'ok', 1)")
+        .bind(&unknown)
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+    let cli = TestClient::new(app(state.clone()));
+    let body = json(cli.get(format!("/gotolib/book-info?isbn={unknown},{stale}&enqueue=false")).send().await).await;
+    assert_eq!(body["info"][&unknown]["status"], "pending");
+    assert_eq!(body["info"][&unknown]["yes24Form"], "장편");
+    assert_eq!(row_count(&state).await, 1, "모르는 ISBN을 큐에 넣지 않는다");
+    let status: String = sqlx::query_scalar("SELECT status FROM book_covers WHERE isbn13 = ?")
+        .bind(&stale)
+        .fetch_one(&state.db)
+        .await
+        .unwrap();
+    assert_eq!(status, book_info::STATUS_MISSING, "오래된 missing도 대기로 돌리지 않는다");
+}
+
+#[tokio::test]
 async fn yes24_form_is_reported_even_while_the_aladin_row_is_pending() {
     let state = test_state().await;
     let id = isbn(9);

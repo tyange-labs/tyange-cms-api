@@ -23,6 +23,9 @@ pub const MAX_ISBNS_PER_REQUEST: usize = 50;
 #[derive(Deserialize)]
 pub struct BookInfoQuery {
     isbn: Option<String>,
+    /// `false`면 읽기만 한다: 모르는 ISBN을 알라딘 수집 큐에 넣지 않고, 오래된 missing도 다시 대기로 돌리지 않는다.
+    /// 앱이 출간 전 책(알라딘 상품 페이지가 아직 없다)을 YES24 분류만 보려고 물을 때 쓴다. 기본은 `true`.
+    enqueue: Option<bool>,
 }
 
 #[derive(Serialize, Default)]
@@ -154,17 +157,20 @@ pub async fn get_book_info(
         return Err(bad_request("isbn이 필요합니다."));
     }
     let isbns = parse_isbns(&raw)?;
+    let enqueue = params.enqueue.unwrap_or(true);
     let now = book_info::now();
     let pool = &data.db;
 
     // 표지와 같은 규칙: 오래된 "표지 없음" 기록은 다시 확인하도록 대기로 돌린다.
-    book_info::requeue_stale_missing(pool, &isbns, now).await.map_err(db_error)?;
+    if enqueue {
+        book_info::requeue_stale_missing(pool, &isbns, now).await.map_err(db_error)?;
+    }
 
     let known = book_info::book_infos(pool, &isbns).await.map_err(db_error)?;
     let yes24_forms = book_info::yes24::forms_by_isbn(pool, &isbns).await.map_err(db_error)?;
 
     let unknown: Vec<String> = isbns.iter().filter(|isbn| !known.contains_key(*isbn)).cloned().collect();
-    if !unknown.is_empty() {
+    if enqueue && !unknown.is_empty() {
         let room = (queue_max() - book_info::queue_len(pool).await.map_err(db_error)?).max(0) as usize;
         let to_register = &unknown[..unknown.len().min(room)];
         book_info::enqueue(pool, to_register, now).await.map_err(db_error)?;
