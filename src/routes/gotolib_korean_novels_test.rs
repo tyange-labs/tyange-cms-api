@@ -41,6 +41,30 @@ async fn rejects_missing_or_malformed_year() {
 }
 
 #[tokio::test]
+async fn rejects_unknown_form() {
+    let cli = TestClient::new(app(test_state().await));
+    for path in ["/gotolib/korean-novels?year=2026&form=poem", "/gotolib/korean-novels?year=2026&form="] {
+        cli.get(path).send().await.assert_status(StatusCode::BAD_REQUEST);
+    }
+}
+
+#[tokio::test]
+async fn form_short_returns_short_story_collections_only() {
+    let state = test_state().await;
+    insert(&state, 1, "장편", "장편 책", "2026-03", Some("9791167903952")).await;
+    insert(&state, 2, "단편", "소설집 하나", "2026-05", Some("9788936431808")).await;
+    insert(&state, 3, "단편", "작년 소설집", "2025-05", Some("9788936431815")).await;
+
+    let cli = TestClient::new(app(state));
+    let response = cli.get("/gotolib/korean-novels?year=2026&form=short").send().await;
+    response.assert_status_is_ok();
+    let body: Value = serde_json::from_str(&response.0.into_body().into_string().await.unwrap()).unwrap();
+    assert_eq!(body["form"], "short");
+    let titles: Vec<&str> = body["books"].as_array().unwrap().iter().map(|b| b["title"].as_str().unwrap()).collect();
+    assert_eq!(titles, ["소설집 하나"]);
+}
+
+#[tokio::test]
 async fn returns_only_that_years_novels_with_isbn_newest_first() {
     let state = test_state().await;
     insert(&state, 1, "장편", "작년 책", "2025-12", Some("9788936431815")).await;
@@ -56,6 +80,7 @@ async fn returns_only_that_years_novels_with_isbn_newest_first() {
     response.assert_status_is_ok();
     let body: Value = serde_json::from_str(&response.0.into_body().into_string().await.unwrap()).unwrap();
     assert_eq!(body["year"], "2026");
+    assert_eq!(body["form"], "novel");
     let titles: Vec<&str> = body["books"].as_array().unwrap().iter().map(|b| b["title"].as_str().unwrap()).collect();
     assert_eq!(titles, ["올해 11월", "올해 3월(재등록)"]);
     assert_eq!(

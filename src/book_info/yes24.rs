@@ -268,7 +268,7 @@ pub async fn forms_by_isbn(pool: &SqlitePool, isbns: &[String]) -> Result<HashMa
     Ok(map)
 }
 
-/// "한국문학" 탭 목록 한 권: YES24 "한국 장편소설"에 있고 상품 페이지에서 ISBN까지 받은 책.
+/// "한국문학" 탭 목록 한 권: YES24 "한국 장편소설"/"한국 단편소설"에 있고 상품 페이지에서 ISBN까지 받은 책.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NovelListItem {
@@ -287,15 +287,15 @@ pub struct NovelListItem {
     pub pub_month: Option<String>,
 }
 
-/// 한 해(`"2026"`)에 나온 YES24 장편소설(대상 출판사, ISBN 있는 것만). 최근 달·최근 상품 순.
-/// 같은 ISBN이 상품 번호 여러 개로 올라 있으면 가장 최근 상품 하나만 둔다.
-pub async fn novels_of_year(pool: &SqlitePool, year: &str) -> Result<Vec<NovelListItem>, sqlx::Error> {
+/// 한 해(`"2026"`)에 나온 YES24 분류(`form`: `FORM_NOVEL`/`FORM_SHORT`) 책(대상 출판사, ISBN 있는 것만).
+/// 최근 달·최근 상품 순. 같은 ISBN이 상품 번호 여러 개로 올라 있으면 가장 최근 상품 하나만 둔다.
+pub async fn novels_of_year(pool: &SqlitePool, form: &str, year: &str) -> Result<Vec<NovelListItem>, sqlx::Error> {
     let rows = query(
         "SELECT goods_no, title, subtitle, author, publisher, pub_month, isbn13 FROM yes24_books
          WHERE form = ? AND isbn13 IS NOT NULL AND pub_month LIKE ?
          ORDER BY pub_month DESC, goods_no DESC",
     )
-    .bind(FORM_NOVEL)
+    .bind(form)
     .bind(format!("{year}-%"))
     .fetch_all(pool)
     .await?;
