@@ -1,6 +1,6 @@
 //! gotolib "한국문학" 탭 목록: `GET /gotolib/korean-novels?year=2026&form=novel`
 //!
-//! YES24 "한국 장편소설"(`form=novel`, 기본)·"한국 단편소설"(`form=short`) 분류에서 모은 17개 출판사 책
+//! YES24 "한국 장편소설"(`form=novel`, 기본)·"한국 단편소설"(`form=short`)·"한국 시"(`form=poem`) 분류에서 모은 17개 출판사 책
 //! (종이책, ISBN 있는 것) 중 그해에 나온 것을 돌려준다.
 //! DB만 본다 — YES24에는 가지 않는다(수집은 `book_info::yes24::run_worker` 한 곳에서 한다).
 
@@ -39,6 +39,7 @@ fn parse_form(raw: Option<&str>) -> Option<(&'static str, &'static str)> {
     match raw.unwrap_or("novel") {
         "novel" => Some(("novel", yes24::FORM_NOVEL)),
         "short" => Some(("short", yes24::FORM_SHORT)),
+        "poem" => Some(("poem", yes24::FORM_POEM)),
         _ => None,
     }
 }
@@ -53,7 +54,7 @@ pub async fn get_korean_novels(
         return Err(Error::from_string("year(네 자리 연도)가 필요합니다.", StatusCode::BAD_REQUEST));
     }
     let Some((form, db_form)) = parse_form(params.form.as_deref()) else {
-        return Err(Error::from_string("form은 novel 또는 short입니다.", StatusCode::BAD_REQUEST));
+        return Err(Error::from_string("form은 novel, short, poem 중 하나입니다.", StatusCode::BAD_REQUEST));
     };
     let books = yes24::novels_of_year(&data.db, db_form, &year).await.map_err(|e| {
         eprintln!("Database error: {:?}", e);

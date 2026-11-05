@@ -43,7 +43,7 @@ async fn rejects_missing_or_malformed_year() {
 #[tokio::test]
 async fn rejects_unknown_form() {
     let cli = TestClient::new(app(test_state().await));
-    for path in ["/gotolib/korean-novels?year=2026&form=poem", "/gotolib/korean-novels?year=2026&form="] {
+    for path in ["/gotolib/korean-novels?year=2026&form=essay", "/gotolib/korean-novels?year=2026&form="] {
         cli.get(path).send().await.assert_status(StatusCode::BAD_REQUEST);
     }
 }
@@ -62,6 +62,21 @@ async fn form_short_returns_short_story_collections_only() {
     assert_eq!(body["form"], "short");
     let titles: Vec<&str> = body["books"].as_array().unwrap().iter().map(|b| b["title"].as_str().unwrap()).collect();
     assert_eq!(titles, ["소설집 하나"]);
+}
+
+#[tokio::test]
+async fn form_poem_returns_poetry_only() {
+    let state = test_state().await;
+    insert(&state, 1, "단편", "소설집", "2026-05", Some("9788936431808")).await;
+    insert(&state, 2, "시", "시집 하나", "2026-04", Some("9788932040516")).await;
+
+    let cli = TestClient::new(app(state));
+    let response = cli.get("/gotolib/korean-novels?year=2026&form=poem").send().await;
+    response.assert_status_is_ok();
+    let body: Value = serde_json::from_str(&response.0.into_body().into_string().await.unwrap()).unwrap();
+    assert_eq!(body["form"], "poem");
+    let titles: Vec<&str> = body["books"].as_array().unwrap().iter().map(|b| b["title"].as_str().unwrap()).collect();
+    assert_eq!(titles, ["시집 하나"]);
 }
 
 #[tokio::test]

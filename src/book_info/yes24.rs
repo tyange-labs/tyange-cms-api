@@ -1,5 +1,5 @@
-//! YES24 분류로 장편/단편을 가른다: "한국 장편소설"(`001001046001002`)과 "한국 단편소설"(`001001046001001`)
-//! 목록을 신상품순으로 읽어 **17개 대상 출판사 책만** 모으고, 그 책들의 상품 페이지에서 ISBN을 받아 둔다.
+//! YES24 분류로 장편/단편/시를 가른다: "한국 장편소설"(`001001046001002`), "한국 단편소설"(`001001046001001`),
+//! "한국 시"(`001001046014003`) 목록을 신상품순으로 읽어 **17개 대상 출판사 책만** 모으고, 그 책들의 상품 페이지에서 ISBN을 받아 둔다.
 //! gotolib "한국문학" 탭은 ISBN으로 이 분류를 찾아 장편/소설집 판정에 쓴다(`GET /gotolib/book-info`의 `yes24Form`).
 //!
 //! 설계 약속(알라딘 수집과 같다):
@@ -25,9 +25,14 @@ pub const CATEGORY_NOVEL: &str = "001001046001002";
 pub const CATEGORY_SHORT: &str = "001001046001001";
 pub const FORM_NOVEL: &str = "장편";
 pub const FORM_SHORT: &str = "단편";
+/// "한국 시"(2026-11 추가). gotolib 장르 칩 '시'.
+pub const CATEGORY_POEM: &str = "001001046014003";
+pub const FORM_POEM: &str = "시";
 
 /// (분류 번호, 형식). 백필·재확인은 이 순서(장편 먼저)로 한다.
-const CATEGORIES: [(&str, &str); 2] = [(CATEGORY_NOVEL, FORM_NOVEL), (CATEGORY_SHORT, FORM_SHORT)];
+/// 분류를 늘리면 `db.rs`의 `yes24_scan` 초기 행도 같이 늘린다.
+const CATEGORIES: [(&str, &str); 3] =
+    [(CATEGORY_NOVEL, FORM_NOVEL), (CATEGORY_SHORT, FORM_SHORT), (CATEGORY_POEM, FORM_POEM)];
 
 /// 대상 출판사. gotolib `src/lib/novelClassify.ts`의 `TARGET_PUBLISHERS`와 같은 목록이다 — 함께 고친다.
 pub const TARGET_PUBLISHERS: [&str; 17] = [
@@ -243,7 +248,7 @@ async fn insert_items(pool: &SqlitePool, form: &str, items: &[ListItem], now: i6
     Ok((new, known))
 }
 
-/// ISBN별 YES24 형식("장편"/"단편"). 한 ISBN이 두 분류에 다 걸리면 장편으로 본다.
+/// ISBN별 YES24 형식("장편"/"단편"/"시"). 한 ISBN이 여러 분류에 걸리면 장편 > 단편 > 시 순으로 고른다.
 pub async fn forms_by_isbn(pool: &SqlitePool, isbns: &[String]) -> Result<HashMap<String, &'static str>, sqlx::Error> {
     if isbns.is_empty() {
         return Ok(HashMap::new());
@@ -259,10 +264,14 @@ pub async fn forms_by_isbn(pool: &SqlitePool, isbns: &[String]) -> Result<HashMa
     let mut map: HashMap<String, &'static str> = HashMap::new();
     for row in q.fetch_all(pool).await? {
         let isbn: String = row.try_get("isbn13")?;
-        let form = if row.try_get::<String, _>("form")? == FORM_NOVEL { FORM_NOVEL } else { FORM_SHORT };
+        let raw: String = row.try_get("form")?;
+        let Some(form) = [FORM_NOVEL, FORM_SHORT, FORM_POEM].into_iter().find(|f| *f == raw) else {
+            continue;
+        };
+        let rank = |f: &str| [FORM_NOVEL, FORM_SHORT, FORM_POEM].iter().position(|x| *x == f);
         let entry = map.entry(isbn).or_insert(form);
-        if form == FORM_NOVEL {
-            *entry = FORM_NOVEL;
+        if rank(form) < rank(entry) {
+            *entry = form;
         }
     }
     Ok(map)

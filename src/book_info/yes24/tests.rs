@@ -482,7 +482,8 @@ async fn backfill_keeps_only_target_publishers_and_fetches_their_isbns_first() {
 
     f.drain(1_000, 50).await;
     // 1쪽 → 그 쪽 대상 출판사 책들의 상품 페이지 → 2쪽 → … 순서다(대상이 아닌 2번은 상품 페이지도 안 본다)
-    let novel_requests: Vec<String> = f.requests().into_iter().filter(|r| !r.contains(CATEGORY_SHORT)).collect();
+    let novel_requests: Vec<String> =
+        f.requests().into_iter().filter(|r| !r.contains(CATEGORY_SHORT) && !r.contains(CATEGORY_POEM)).collect();
     assert_eq!(
         novel_requests,
         vec![
@@ -498,6 +499,7 @@ async fn backfill_keeps_only_target_publishers_and_fetches_their_isbns_first() {
     assert_eq!(f.book(2).await, None, "대상 출판사가 아니면 저장하지 않는다");
     assert_eq!(f.scan(CATEGORY_NOVEL, "backfill_done").await, Some(1));
     assert_eq!(f.scan(CATEGORY_SHORT, "backfill_done").await, Some(1));
+    assert_eq!(f.scan(CATEGORY_POEM, "backfill_done").await, Some(1));
 
     let forms = forms_by_isbn(&f.pool, &[isbn(1), isbn(4), isbn(99)]).await.unwrap();
     assert_eq!(forms.get(&isbn(1)), Some(&FORM_NOVEL));
@@ -603,4 +605,36 @@ async fn a_book_in_both_categories_counts_as_a_novel() {
         .unwrap();
     }
     assert_eq!(forms_by_isbn(&f.pool, &[isbn(7)]).await.unwrap().get(&isbn(7)), Some(&FORM_NOVEL));
+}
+
+#[tokio::test]
+async fn poetry_category_is_collected_as_poem_after_the_novel_categories() {
+    let f = fixture().await;
+    f.page(CATEGORY_POEM, 1, &[(20, "문학과지성사", "2026년 10월"), (21, "무제", "2026년 10월")]);
+    f.goods(20, Goods::Isbn(isbn(20)));
+    f.drain(1_000, 50).await;
+    let requests = f.requests();
+    let first_poem = requests.iter().position(|r| r.contains(CATEGORY_POEM)).expect("시 분류도 읽는다");
+    let last_short = requests.iter().rposition(|r| r.contains(CATEGORY_SHORT)).unwrap();
+    assert!(last_short < first_poem, "장편·단편 백필이 먼저다: {requests:?}");
+    assert_eq!(f.book(20).await, Some((FORM_POEM.to_string(), Some(isbn(20)), STATUS_OK.to_string())));
+    assert_eq!(f.book(21).await, None);
+    assert_eq!(forms_by_isbn(&f.pool, &[isbn(20)]).await.unwrap().get(&isbn(20)), Some(&FORM_POEM));
+}
+
+#[tokio::test]
+async fn a_book_in_short_and_poem_counts_as_short() {
+    let f = fixture().await;
+    for (no, form) in [(1, FORM_POEM), (2, FORM_SHORT)] {
+        query(
+            "INSERT INTO yes24_books (goods_no, form, title, isbn13, status, created_at) VALUES (?, ?, 't', ?, 'ok', 1)",
+        )
+        .bind(no)
+        .bind(form)
+        .bind(isbn(8))
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    }
+    assert_eq!(forms_by_isbn(&f.pool, &[isbn(8)]).await.unwrap().get(&isbn(8)), Some(&FORM_SHORT));
 }

@@ -341,8 +341,9 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
             retry_at INTEGER NOT NULL DEFAULT 0
         )
         "#,
-        // book_info::yes24::CATEGORY_NOVEL / CATEGORY_SHORT (db는 lib 크레이트에도 들어가서 그 상수를 못 본다)
-        "INSERT OR IGNORE INTO yes24_scan (category) VALUES ('001001046001002'), ('001001046001001')",
+        // book_info::yes24::CATEGORY_NOVEL / CATEGORY_SHORT / CATEGORY_POEM (db는 lib 크레이트에도 들어가서 그 상수를 못 본다).
+        // 시작할 때마다 돌아서, 분류를 늘리면 운영 DB에도 새 행이 생겨 그 분류의 백필이 시작된다.
+        "INSERT OR IGNORE INTO yes24_scan (category) VALUES ('001001046001002'), ('001001046001001'), ('001001046014003')",
     ] {
         query(stmt).execute(pool).await.map_err(InternalServerError)?;
     }

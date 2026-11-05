@@ -160,7 +160,7 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
       `yes24_books`의 장편·ISBN 있는 행만, 최근 달·최근 상품 순, 같은 ISBN은 하나만(`yes24::novels_of_year`). 예전에는 NL 서지 전자책 레코드를
       후보로 삼고 `book-info`의 `yes24Form`으로 걸렀는데, 전자책 ISBN이 섞여 종이책이 아닌 책이 끼었다. 앱은 이제 NL 서지를 전자책 배지에만 쓴다.
       `GET /gotolib/book-info`(`enqueue=false` 포함)는 남아 있지만 이 탭은 더 부르지 않는다.
-      `form=novel`(기본, 파라미터 이전 앱 호환)·`form=short`(단편)로 장르를 고른다 — 주소에 한글을 넣지 않으려고 영문 값. 그 밖의 값은 400.
+      `form=novel`(기본, 파라미터 이전 앱 호환)·`form=short`(단편)·`form=poem`(시, YES24 "한국 시" `001001046014003`, 2026-11 추가)로 장르를 고른다 — 주소에 한글을 넣지 않으려고 영문 값. 그 밖의 값은 400.
       앱의 장르 칩은 `koreanGenres.ts` 배열 하나에서 나오므로, 장르(예: 한국 시)를 늘릴 때는 그 배열·`parse_form`·YES24 수집 분류를 함께 늘린다.
 - **패스키(WebAuthn) 로그인 + gotolib 동기화 추가** (2026-10, `feat/passkeys`). `webauthn-rs`(0.5,
   `conditional-ui` feature = discoverable 로그인용). 로그인 검증이 끝나면 기존 `issue_login_response()`로
