@@ -1,0 +1,126 @@
+name: workflow
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: "Skip tests"
+        required: false
+        default: false
+        type: boolean
+      deploy_only:
+        description: "Deploy only (skip build)"
+        required: false
+        default: false
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: deploy on tyange-home-server
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure Rust toolchain
+        run: |
+          if ! command -v cargo >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      # ubuntu-latest는 매 실행마다 새 VM이라 로컬 볼륨 캐시를 쓸 수 없다.
+      # 대신 actions/cache로 ~/.cargo와 target/을 Cargo.lock 해시 기준으로 캐시한다.
+      - name: Cache cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Create .env file
+        run: |
+          echo JWT_ACCESS_SECRET=${{ secrets.JWT_ACCESS_SECRET }} > .env
+          echo TYANGE_BLOG_REDEPLOY_TOKEN=${{ secrets.TYANGE_BLOG_REDEPLOY_TOKEN }} >> .env
+          echo TRUST_PROXY_FORWARDED_FOR=true >> .env
+          # 패스키(WebAuthn). 비밀이 아니라 값을 그대로 둔다. RP ID가 tyange.com이면 그 아래
+          # 서브도메인 어디서든 같은 패스키를 쓰고, ORIGIN은 패스키 의식을 시작하는 페이지다
+          # (쉼표로 추가). 이 줄들을 빼면 패스키 엔드포인트는 503이 된다.
+          echo PASSKEY_RP_ID=tyange.com >> .env
+          echo PASSKEY_RP_ORIGIN=https://gotolib.tyange.com >> .env
+          echo UPLOAD_PATH=${{ vars.UPLOAD_PATH }} >> .env
+          echo DATABASE_PATH=${{ vars.DATABASE_PATH }} >> .env
+          # gotolib 책 표지 수집. 기본은 켜짐. 끄려면 repo variable COVER_FETCH_ENABLED=false.
+          echo COVERS_DIR=${{ vars.COVERS_DIR }} >> .env
+          echo COVER_FETCH_ENABLED=${{ vars.COVER_FETCH_ENABLED || 'true' }} >> .env
+          echo COVER_CONTACT=${{ vars.COVER_CONTACT }} >> .env
+          # YES24 "한국 장편소설"/"한국 단편소설" 분류 수집. 기본 켜짐. 끄려면 YES24_FETCH_ENABLED=false.
+          echo YES24_FETCH_ENABLED=${{ vars.YES24_FETCH_ENABLED || 'true' }} >> .env
+          echo YES24_FETCH_INTERVAL_SECS=${{ vars.YES24_FETCH_INTERVAL_SECS }} >> .env
+          # gotolib 찜한 책 소장 알림(Web Push). 기본 켜짐. 끄려면 GOTOLIB_PUSH_ENABLED=false.
+          echo GOTOLIB_PUSH_ENABLED=${{ vars.GOTOLIB_PUSH_ENABLED || 'true' }} >> .env
+          # Craft 폴더 → 포스트 동기화. CRAFT_API_URL이 없으면 코드가 알아서 꺼진다.
+          echo CRAFT_API_URL=${{ secrets.CRAFT_API_URL }} >> .env
+          echo CRAFT_SYNC_ENABLED=${{ vars.CRAFT_SYNC_ENABLED || 'true' }} >> .env
+          echo CRAFT_SYNC_FOLDER_ID=${{ vars.CRAFT_SYNC_FOLDER_ID || 'C67928AC-9BC9-4343-A7A3-22115AA0DB74' }} >> .env
+          echo CRAFT_SYNC_INTERVAL_SECS=${{ vars.CRAFT_SYNC_INTERVAL_SECS }} >> .env
+          echo CRAFT_SYNC_STATUS=${{ vars.CRAFT_SYNC_STATUS }} >> .env
+          echo CRAFT_SYNC_IMAGE_BASE_URL=${{ vars.CRAFT_SYNC_IMAGE_BASE_URL }} >> .env
+          echo CRAFT_SYNC_WRITER_ID=${{ vars.CRAFT_SYNC_WRITER_ID }} >> .env
+
+      - name: Build
+        if: ${{ !inputs.deploy_only }}
+        run: cargo build --release --verbose
+
+      - name: Run tests
+        # 수동 실행(workflow_dispatch)에서만 돌리며, skip_tests를 켜면 그때도 건너뛴다.
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.skip_tests && !inputs.deploy_only }}
+        run: cargo test --release --verbose
+
+      - name: Stop service
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          script: |
+            sudo systemctl stop tyange-cms-api.service
+
+      - name: Prepare deployment files
+        if: ${{ !inputs.deploy_only }}
+        run: |
+          mkdir -p deploy
+          cp "target/release/tyange-cms-api" deploy/
+          cp .env deploy/
+
+      - name: Deploy files via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          source: "deploy/*"
+          target: ${{ vars.SERVICE_PATH }}
+          strip_components: 1
+          overwrite: true
+          debug: true
+
+      - name: Start service
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          script: |
+            sudo systemctl start tyange-cms-api.service
