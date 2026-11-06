@@ -93,7 +93,7 @@ jobs:
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             sudo systemctl stop tyange-cms-api.service
 
@@ -109,7 +109,7 @@ jobs:
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "deploy/*"
           target: ${{ vars.SERVICE_PATH }}
           strip_components: 1
@@ -121,6 +121,6 @@ jobs:
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             sudo systemctl start tyange-cms-api.service
