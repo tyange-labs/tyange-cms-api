@@ -2,6 +2,8 @@ mod display;
 mod pokemon;
 mod types;
 
+use std::rc::Weak;
+
 use display::{pad_left, pad_right};
 
 use pokemon::{Pokemon, find, load_pokedex};
@@ -110,6 +112,18 @@ fn team_weakness(team: &[&Pokemon]) -> Vec<Weakness> {
     result
 }
 
+fn weak_spot(weaknesses: &[Weakness]) -> Vec<Type> {
+    let mut result: Vec<Type> = Vec::new();
+
+    for weakness in weaknesses {
+        if weakness.twice_multiplier_count > weakness.under_multiplier_count {
+            result.push(weakness.attack_type);
+        }
+    }
+
+    result
+}
+
 fn print_team_weakness(team: &[&Pokemon]) {
     // 출력 정렬은 Claude 담당: 열 폭은 화면 칸 수 기준입니다.
     println!("\n팀 약점표:");
@@ -119,7 +133,10 @@ fn print_team_weakness(team: &[&Pokemon]) {
         pad_left("약점", 6),
         pad_left("반감/무효", 12)
     );
-    for w in team_weakness(team) {
+
+    let tw: Vec<Weakness> = team_weakness(team);
+
+    for w in &tw {
         // 약점인 팀원이 있는데 받아 줄 팀원이 없거나, 받아 줄 팀원보다 약점이 많으면 표시합니다.
         let weak = w.twice_multiplier_count;
         let resist = w.under_multiplier_count;
@@ -137,6 +154,17 @@ fn print_team_weakness(team: &[&Pokemon]) {
             w.under_multiplier_count,
         );
     }
+
+    let spots = weak_spot(&tw);
+
+    println!(
+        "보완할 타입: {}",
+        spots
+            .iter()
+            .map(|t| t.name())
+            .collect::<Vec<&str>>()
+            .join(", ")
+    );
 }
 
 // [6단계 — 직접 작성] 빈자리 추천
