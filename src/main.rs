@@ -53,6 +53,11 @@ fn main() {
         for (i, p) in recommend(&team, &pokedex).iter().enumerate() {
             println!("  {}. {}", i + 1, p.label());
         }
+    } else if team.len() == 6 {
+        println!("\n교체 추천:");
+        for p in recommend_swap(&team, &pokedex).iter().enumerate() {
+            println!("  {} => {}", p.1.0.label(), p.1.1.label());
+        }
     }
 }
 
@@ -171,7 +176,7 @@ fn print_team_weakness(team: &[&Pokemon]) {
 // pokedex 에서 team 에 없는 포켓몬을 한 마리씩 넣어 보고, 점수가 좋은 3마리를 출력합니다.
 // 점수 공식은 직접 정합니다.
 fn recommend<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<&'a Pokemon> {
-    let mut result: Vec<(i32, &Pokemon)> = Vec::new();
+    let mut result: Vec<(usize, i32, &Pokemon)> = Vec::new();
 
     let candidates: Vec<&Pokemon> = pokedex
         .iter()
@@ -183,11 +188,38 @@ fn recommend<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<&'a Pokemon> 
         new_team.push(candidate);
         let weaknesses = team_weakness(&new_team);
         let score = team_score(&weaknesses);
-        result.push((score, candidate));
+        let spot_count = weaknesses.len();
+        result.push((spot_count, score, candidate));
     }
 
-    result.sort_by_key(|k| -k.0);
-    result.into_iter().map(|r| r.1).take(3).collect()
+    result.sort_by_key(|k| (k.0, -k.1));
+    result.into_iter().map(|r| r.2).take(3).collect()
+}
+
+fn recommend_swap<'a>(
+    team: &[&'a Pokemon],
+    pokedex: &'a [Pokemon],
+) -> Vec<(&'a Pokemon, &'a Pokemon)> {
+    let mut result: Vec<(usize, i32, &Pokemon, &Pokemon)> = Vec::new();
+
+    let candidates: Vec<&Pokemon> = pokedex
+        .iter()
+        .filter(|p| !team.iter().any(|t| t.name == p.name))
+        .collect();
+
+    for i in 0..team.len() {
+        for candidate in &candidates {
+            let mut new_team = team.to_vec();
+            new_team[i] = candidate;
+            let weaknesses = team_weakness(&new_team);
+            let score = team_score(&weaknesses);
+            let spot_count = weak_spot(&weaknesses).len();
+            result.push((spot_count, score, team[i], candidate));
+        }
+    }
+
+    result.sort_by_key(|k| (k.0, -k.1));
+    result.into_iter().map(|r| (r.2, r.3)).take(3).collect()
 }
 
 fn team_score(weakness: &[Weakness]) -> i32 {
