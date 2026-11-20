@@ -71,11 +71,13 @@ def types_of(pokemon: dict) -> tuple[str, str | None]:
     return ts[0], (ts[1] if len(ts) > 1 else None)
 
 
-def entry(name: str, pokemon: dict) -> dict:
+def entry(name: str, pokemon: dict, capture_rate: int) -> dict:
     t1, t2 = types_of(pokemon)
     e = {"name": name, "type1": t1}
     if t2:
         e["type2"] = t2
+    # 포획률은 종(species) 정보라서 메가 폼도 원래 종과 같은 값을 씁니다.
+    e["capture_rate"] = capture_rate
     return e
 
 
@@ -97,7 +99,7 @@ for i, s in enumerate(species_names, 1):
     for v in species["varieties"]:
         vname = v["pokemon"]["name"]
         if v["is_default"]:
-            result.append(entry(base_name, get(f"pokemon/{vname}/")))
+            result.append(entry(base_name, get(f"pokemon/{vname}/"), species["capture_rate"]))
         elif "-mega" in vname:
             pokemon = get(f"pokemon/{vname}/")
             form = get(f"pokemon-form/{pokemon['forms'][0]['name']}/")
@@ -105,7 +107,7 @@ for i, s in enumerate(species_names, 1):
             if not mega_name:
                 missing.append(vname)
                 mega_name = f"메가{base_name}" + vname.split("-mega")[-1].replace("-", "").upper()
-            result.append(entry(mega_name, pokemon))
+            result.append(entry(mega_name, pokemon, species["capture_rate"]))
 
 print(file=sys.stderr)
 # 이름과 타입이 모두 같은 줄은 하나만 남깁니다. 이름만 같고 타입이 다르면 멈춥니다.

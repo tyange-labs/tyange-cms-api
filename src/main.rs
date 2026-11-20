@@ -192,6 +192,18 @@ fn recommend<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<&'a Pokemon> 
         result.push((spot_count, score, candidate));
     }
 
+    // TODO(B단계): 정렬 3순위로 포획률을 추가하세요. 목표 key: (구멍 수, -점수, -포획률)
+    //
+    // 1. 포획률은 후보에서 꺼냅니다: `candidate.capture_rate` (타입은 u8)
+    //    튜플에 따로 넣을 필요는 없어요. 튜플의 후보(k.2)에서 바로 꺼낼 수 있습니다.
+    //
+    // 2. "큰 순"으로 하려면 부호를 뒤집어야 하는데, u8 은 음수가 될 수 없어서
+    //    `-k.2.capture_rate` 는 컴파일 에러입니다. 방법은 둘 중 하나:
+    //    - 부호 있는 정수로 바꾼 뒤 뒤집기: `-(값 as i32)`   (`as` 는 타입 변환)
+    //    - 뒤집기 전용 감싸개 쓰기: `std::cmp::Reverse(값)`  (Reverse 로 감싸면 큰 값이 앞에 옵니다)
+    //
+    // 3. 확인: 5마리 예시(리자몽 가디안 루카리오 갸라도스 마기라스)로 실행해서
+    //    같은 조합끼리는 포획률이 큰 포켓몬이 먼저 나오는지 보세요.
     result.sort_by_key(|k| (k.0, -k.1));
     result.into_iter().map(|r| r.2).take(3).collect()
 }
@@ -218,6 +230,13 @@ fn recommend_swap<'a>(
         }
     }
 
+    // TODO(B단계): recommend 와 같은 방식으로 포획률을 정렬 3순위에 추가하세요.
+    //
+    // - 여기서는 튜플이 (구멍 수, 점수, 뺄 팀원, 넣을 후보) 라서
+    //   포획률은 "넣을 후보"(k.3)의 것을 씁니다. 뺄 팀원(k.2)의 포획률이 아니에요!
+    //
+    // - 확인: 6마리 예시(… 님피아)로 실행하면 지금은 무장조(25) → 메가무장조(25) → 아머까오(45)
+    //   순서인데, 포획률이 들어가면 아머까오(45)가 1등으로 올라와야 합니다.
     result.sort_by_key(|k| (k.0, -k.1));
     result.into_iter().map(|r| (r.2, r.3)).take(3).collect()
 }
@@ -241,6 +260,7 @@ mod tests {
             name: "테스트".to_string(),
             type1,
             type2,
+            capture_rate: 45, // 상성 테스트에는 쓰이지 않는 값
         }
     }
 

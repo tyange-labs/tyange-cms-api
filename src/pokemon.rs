@@ -12,6 +12,10 @@ pub struct Pokemon {
     pub type1: Type,
     #[serde(default)]
     pub type2: Option<Type>,
+    /// 포획률(3~255). 클수록 잡기 쉽습니다. 메가 폼은 원래 종과 같은 값입니다.
+    /// 예: 마기아나 3(매우 어려움), 무장조 25, 아머까오 45, 구구 255(매우 쉬움)
+    /// u8 은 0~255 범위의 부호 없는 정수라 포획률에 딱 맞습니다.
+    pub capture_rate: u8,
 }
 
 impl Pokemon {
