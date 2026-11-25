@@ -209,15 +209,12 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<Slo
             //   - `best` 가 `None` 이면(아직 아무것도 안 봄) 무조건 바꿉니다.
             //   - `Some((_, best_key))` 이면 `key < best_key` 일 때만 바꿉니다(튜플은 앞 칸부터 비교, 작을수록 좋음).
             //   `match &best { None => true, Some((_, best_key)) => … }` 로 bool 을 만들고 `if` 로 대입하세요.
-            match &best {
-                Some(best) => {
-                    if best.1.0 < key.0 || best.1.1 < key.1 {
-                        best = &(&candidate.types(), (key.0, key.1));
-                    }
-                }
-                None => {
-                    best = &(&candidate.types(), (key.0, key.1));
-                }
+            let better = match &best {
+                None => true,
+                Some((_, best_key)) => key < *best_key,
+            };
+            if better {
+                best = Some((shape, key));
             }
         }
 
@@ -225,7 +222,9 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<Slo
         //   - `best` 에서 조합을 꺼냅니다(`let (shape, _) = best.unwrap();` — 후보가 105가지라 비는 일은 없어요).
         //   - `chosen` 에는 `shape.clone()` 을, `chosen_mons` 에는 `virtual_mon(shape)` 를 넣습니다.
         //     그래야 다음 자리를 고를 때 이번 자리까지 채운 팀으로 계산하고, 같은 조합을 또 고르지 않아요.
-        let _ = &mut best;
+        let (shape, _) = best.unwrap();
+        chosen.push(shape.clone());
+        chosen_mons.push(virtual_mon(shape));
     }
 
     // TODO(C4단계 ① 마): 다듬기 — 한 자리씩 다른 조합으로 바꿔 보고, 나아지면 바꾸기를 더 이상 안 나아질 때까지 반복하세요.
