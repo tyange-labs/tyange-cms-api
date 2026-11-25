@@ -15,6 +15,13 @@ const POKEDEX_JSON: &str = include_str!("../pokemon.json");
 /// 포켓몬 한 마리. 단일 타입이면 `type2` 가 `None` 입니다.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Pokemon {
+    /// 이 줄(폼)의 번호 — PokeAPI 의 pokemon id. 리자몽 6, 메가리자몽X 10034.
+    /// 이름은 바뀔 수 있으니(PokeAPI 에 한국어 이름이 새로 생기는 등) 저장하거나 API 로 주고받을 때는 이걸 씁니다.
+    pub id: u32,
+    /// 종 번호(전국도감 번호). 메가 폼은 원래 종과 같은 값입니다 — 메가리자몽X 도 6.
+    /// `evolutions.json` 의 진화 계통 노드가 이 번호로 도감과 이어집니다.
+    pub species_id: u32,
+    /// 표시용 한국어 이름.
     pub name: String,
     pub type1: Type,
     #[serde(default)]
@@ -93,6 +100,21 @@ mod tests {
     #[test]
     fn 내장_도감을_읽는다() {
         assert!(!pokedex().is_empty());
+    }
+
+    #[test]
+    fn id는_겹치지_않는다() {
+        let mut ids: Vec<u32> = pokedex().iter().map(|p| p.id).collect();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), pokedex().len());
+    }
+
+    #[test]
+    fn 메가_폼은_원래_종과_species_id가_같다() {
+        let team = find_team(&["리자몽", "메가리자몽X"]).unwrap();
+        assert_ne!(team[0].id, team[1].id);
+        assert_eq!(team[0].species_id, team[1].species_id);
     }
 
     #[test]

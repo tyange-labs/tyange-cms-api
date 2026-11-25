@@ -5,15 +5,19 @@
 //!
 //! - `poketry/pokemon.json`: 종마다 기본 폼 1줄 + 메가진화 폼(이름에 "-mega")을 따로 넣습니다.
 //!   도감: lumiose-city(본편), hyperspace(DLC 메가 디멘션). 겹치는 종은 한 번만.
-//! - `poketry/evolutions.json`: 진화 계통(나무 모양). 도감의 종은 모두 정확히 한 계통에 들어갑니다.
+//!   `id` 는 PokeAPI 의 폼(pokemon) 번호(리자몽 6, 메가리자몽X 10034), `species_id` 는 전국도감 번호.
+//!   메가 폼은 원래 종과 `species_id` 가 같습니다 — "이 메가는 어느 종의 폼인가"는 이걸로 압니다.
+//! - `poketry/evolutions.json`: 진화 계통(나무 모양). 노드는 `species_id` 로 도감과 이어지고,
+//!   `name` 은 표시용입니다. 도감의 종은 모두 정확히 한 계통에 들어갑니다.
 //!   도감에 없는 진화 전·후 단계도 `in_dex: false` 로 넣습니다(화면에 계통을 통째로 보여주려고).
-//!   메가진화는 진화 단계가 아니라 그 종의 폼이라 `megas` 에 이름만 붙입니다.
+//!   메가진화는 진화 단계가 아니라 그 종의 폼이라 나무에 넣지 않습니다(도감에서 같은 `species_id` 로 찾기).
 //! - 응답은 캐시 폴더(기본 `poketry/.pokeapi-cache`, git 제외)에 저장하고 다시 실행하면 재사용합니다.
 //!
 //! poketry 라이브러리와 달리 네트워크 의존성(reqwest·tokio)이 필요해서 별도 크레이트로 뒀습니다.
 //! 서버 빌드(`cargo build` 루트)에는 들어가지 않습니다.
 
-use serde_json::{Value, json};
+use serde::Serialize;
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -131,8 +135,25 @@ fn ko(names: &Value) -> Option<String> {
     })
 }
 
-#[derive(Debug, Clone, PartialEq)]
+fn id_at(v: &Value, pointer: &str) -> Result<u64> {
+    v.pointer(pointer)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| format!("응답에 {pointer} 가 없습니다").into())
+}
+
+/// `https://pokeapi.co/api/v2/pokemon-species/25/` → 25
+fn id_from_url(url: &str) -> Result<u64> {
+    url.trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .and_then(|s| s.parse().ok())
+        .ok_or_else(|| format!("주소에서 번호를 못 찾았습니다: {url}").into())
+}
+
+#[derive(Debug, Clone)]
 struct Entry {
+    id: u64,
+    species_id: u64,
     name: String,
     type1: &'static str,
     type2: Option<&'static str>,
@@ -140,13 +161,15 @@ struct Entry {
 }
 
 impl Entry {
-    fn new(name: String, pokemon: &Value, capture_rate: u64) -> Result<Self> {
+    fn new(name: String, species_id: u64, pokemon: &Value, capture_rate: u64) -> Result<Self> {
         let mut types: Vec<(u64, &str)> = arr_at(pokemon, "/types")?
             .iter()
             .map(|t| Ok((t["slot"].as_u64().unwrap_or(0), str_at(t, "/type/name")?)))
             .collect::<Result<_>>()?;
         types.sort();
         Ok(Entry {
+            id: id_at(pokemon, "/id")?,
+            species_id,
             name,
             type1: type_ko(types[0].1)?,
             type2: types.get(1).map(|t| type_ko(t.1)).transpose()?,
@@ -155,11 +178,22 @@ impl Entry {
         })
     }
 
-    /// `{"name": "치코리타", "type1": "풀", "capture_rate": 45}` 모양 한 줄.
-    /// (예전 Python 출력과 글자 하나까지 같게 — 바뀐 게 없으면 git diff 가 비어 있도록)
+    /// 같은 줄로 합쳐도 되는지: id 만 다르고 나머지가 모두 같으면(모습만 다른 폼) 합칩니다.
+    fn same_except_id(&self, other: &Entry) -> bool {
+        (self.species_id, &self.name, self.type1, self.type2, self.capture_rate)
+            == (other.species_id, &other.name, other.type1, other.type2, other.capture_rate)
+    }
+
+    /// `{"id": 152, "species_id": 152, "name": "치코리타", "type1": "풀", "capture_rate": 45}` 모양 한 줄.
     fn to_line(&self) -> String {
         let q = |s: &str| serde_json::to_string(s).unwrap();
-        let mut line = format!("{{\"name\": {}, \"type1\": {}", q(&self.name), q(self.type1));
+        let mut line = format!(
+            "{{\"id\": {}, \"species_id\": {}, \"name\": {}, \"type1\": {}",
+            self.id,
+            self.species_id,
+            q(&self.name),
+            q(self.type1)
+        );
         if let Some(t2) = self.type2 {
             line += &format!(", \"type2\": {}", q(t2));
         }
@@ -167,26 +201,34 @@ impl Entry {
     }
 }
 
-/// 진화 계통 나무를 한국어 이름으로 옮깁니다. `names` 는 종 영문명 → 한국어 이름.
+/// 진화 계통의 한 단계. 필드 순서대로 JSON 에 나옵니다.
+#[derive(Serialize)]
+struct Node {
+    species_id: u64,
+    name: String,
+    in_dex: bool,
+    evolves_to: Vec<Node>,
+}
+
+/// 진화 계통 나무를 옮깁니다. `names` 는 종 영문명 → 한국어 이름(표시용).
 fn chain_node(
     link: &Value,
     names: &HashMap<String, String>,
     in_dex: &HashSet<String>,
-    megas: &HashMap<String, Vec<String>>,
     seen: &mut HashSet<String>,
-) -> Result<Value> {
+) -> Result<Node> {
     let species = str_at(link, "/species/name")?;
     seen.insert(species.to_string());
     let evolves_to = arr_at(link, "/evolves_to")?
         .iter()
-        .map(|next| chain_node(next, names, in_dex, megas, seen))
+        .map(|next| chain_node(next, names, in_dex, seen))
         .collect::<Result<Vec<_>>>()?;
-    Ok(json!({
-        "name": names[species],
-        "in_dex": in_dex.contains(species),
-        "megas": megas.get(species).cloned().unwrap_or_default(),
-        "evolves_to": evolves_to,
-    }))
+    Ok(Node {
+        species_id: id_from_url(str_at(link, "/species/url")?)?,
+        name: names[species].clone(),
+        in_dex: in_dex.contains(species),
+        evolves_to,
+    })
 }
 
 /// 계통 나무에 나오는 종 이름(영문)을 전부 모읍니다.
@@ -231,7 +273,6 @@ async fn main() -> Result<()> {
     let mut result: Vec<Entry> = Vec::new();
     let mut missing: Vec<String> = Vec::new();
     let mut ko_names: HashMap<String, String> = HashMap::new(); // 종 영문명 → 한국어 이름
-    let mut mega_names: HashMap<String, Vec<String>> = HashMap::new();
     let mut chain_urls: Vec<String> = Vec::new(); // 처음 나온 순서대로
 
     for (i, s) in species_names.iter().enumerate() {
@@ -242,6 +283,7 @@ async fn main() -> Result<()> {
             s.clone()
         });
         ko_names.insert(s.clone(), base_name.clone());
+        let species_id = id_at(&species, "/id")?;
         let capture_rate = species["capture_rate"]
             .as_u64()
             .ok_or("capture_rate 가 없습니다")?;
@@ -255,7 +297,7 @@ async fn main() -> Result<()> {
             let vname = str_at(v, "/pokemon/name")?;
             if v["is_default"].as_bool() == Some(true) {
                 let pokemon = api.get(&format!("pokemon/{vname}/")).await?;
-                result.push(Entry::new(base_name.clone(), &pokemon, capture_rate)?);
+                result.push(Entry::new(base_name.clone(), species_id, &pokemon, capture_rate)?);
             } else if vname.contains("-mega") {
                 let pokemon = api.get(&format!("pokemon/{vname}/")).await?;
                 let form_name = str_at(&pokemon, "/forms/0/name")?;
@@ -270,22 +312,18 @@ async fn main() -> Result<()> {
                         let suffix = vname.rsplit("-mega").next().unwrap_or("");
                         format!("메가{base_name}{}", suffix.replace('-', "").to_uppercase())
                     });
-                let megas = mega_names.entry(s.clone()).or_default();
-                if !megas.contains(&mega_name) {
-                    megas.push(mega_name.clone());
-                }
-                result.push(Entry::new(mega_name, &pokemon, capture_rate)?);
+                result.push(Entry::new(mega_name, species_id, &pokemon, capture_rate)?);
             }
         }
     }
     eprintln!();
 
-    // 이름과 타입이 모두 같은 줄은 하나만 남깁니다. 이름만 같고 타입이 다르면 멈춥니다.
+    // 이름과 타입이 모두 같은 줄(모습만 다른 폼)은 먼저 나온 id 하나만 남깁니다. 이름만 같고 타입이 다르면 멈춥니다.
     let mut seen: HashMap<String, Entry> = HashMap::new();
     let mut unique: Vec<Entry> = Vec::new();
     for e in result {
         match seen.get(&e.name) {
-            Some(prev) if *prev != e => {
+            Some(prev) if !prev.same_except_id(&e) => {
                 return Err(format!(
                     "이름은 같은데 타입이 다릅니다. NAME_OVERRIDES 를 고치세요: {}",
                     e.name
@@ -301,7 +339,7 @@ async fn main() -> Result<()> {
     }
 
     // ── 3. 진화 계통 ──
-    let mut chains: Vec<Value> = Vec::new();
+    let mut chains: Vec<Node> = Vec::new();
     let mut covered: HashSet<String> = HashSet::new();
     for (i, url) in chain_urls.iter().enumerate() {
         eprint!("\r진화 계통 {}/{}", i + 1, chain_urls.len());
@@ -319,7 +357,7 @@ async fn main() -> Result<()> {
                 ko_names.insert(m, name);
             }
         }
-        chains.push(chain_node(&chain["chain"], &ko_names, &in_dex, &mega_names, &mut covered)?);
+        chains.push(chain_node(&chain["chain"], &ko_names, &in_dex, &mut covered)?);
     }
     eprintln!();
     let uncovered: Vec<&String> = species_names.iter().filter(|s| !covered.contains(*s)).collect();

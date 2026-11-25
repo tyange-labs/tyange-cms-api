@@ -27,12 +27,17 @@ Rust + Poem 프레임워크. cargo 사용.
 - 프레임워크 비의존: poketry는 poem/poem-openapi에 의존하지 않는다(serde만). API 응답 모양(`Object` DTO)은
   cms-api `src/poketry_api.rs`가 정한다(아직 가이드 주석만 있음 → D·E단계).
 - 도감 `poketry/pokemon.json`은 `include_str!`로 내장, `OnceLock`으로 한 번만 파싱.
-- 진화 계통 `poketry/evolutions.json`(2026-11): 계통 179개, 나무 모양 노드 `{name, in_dex, megas, evolves_to}`.
-  도감의 종은 모두 정확히 한 계통에 있다(단일 종 계통 57개 포함). 메가는 단계가 아니라 그 종의 `megas`.
-  지금 도감 범위에선 `in_dex: false` 노드가 없지만 DLC 등으로 생길 수 있어 필드를 둔다. Rust 쪽 읽기는 아직 없음(C3).
+- **이름이 아니라 id로 잇는다**(2026-11, 사용자 결정). 이름은 바뀔 수 있어서다 — 메가 42개는 PokeAPI에 한국어 이름이 없어
+  `메가메가니움` 같은 대체 이름이고, 공식 이름이 생기면 다음 수집 때 바뀐다. `Pokemon.id`=PokeAPI pokemon id(폼 단위,
+  메가리자몽X 10034), `species_id`=전국도감 번호(메가도 원래 종과 같음). 저장·API 입출력에는 id를 쓰고 `name`은 표시용.
+  도감·진화는 바뀌지 않는 참조 데이터라 SQLite가 아니라 JSON 내장을 유지한다 — 나중에 사용자 데이터(저장한 팀 등)를 DB에 두면 거기엔 id를 저장.
+- 진화 계통 `poketry/evolutions.json`(2026-11): 계통 179개, 나무 모양 노드 `{species_id, name, in_dex, evolves_to}`.
+  도감의 종은 모두 정확히 한 계통에 있다(단일 종 계통 57개 포함). 메가는 진화 단계가 아니라 폼이라 나무에 없다 —
+  도감에서 같은 `species_id`로 찾는다. 지금 도감 범위에선 `in_dex: false` 노드가 없지만 DLC 등으로 생길 수 있어 필드를 둔다.
+  Rust 쪽 읽기는 아직 없음(C3).
 - **갱신은 `cargo run -p poketry-fetch`**(루트에서, `poketry/fetch/` 크레이트) — 두 JSON을 함께 다시 만든다.
-  **저장소에 Python을 두지 않는다**는 사용자 요청으로 예전 `scripts/fetch_pokedex.py`를 Rust로 옮겼고, 같은 입력이면
-  `pokemon.json`이 글자 하나까지 같게 나온다(옮긴 직후 git diff 없음을 확인). 응답 캐시는 `poketry/.pokeapi-cache`(git 제외).
+  **저장소에 Python을 두지 않는다**는 사용자 요청으로 예전 `scripts/fetch_pokedex.py`를 Rust로 옮겼다(옮긴 직후 출력이
+  Python과 글자 하나까지 같음을 확인, 그 뒤 id 열 추가). 응답 캐시는 `poketry/.pokeapi-cache`(git 제외).
   reqwest에 `rustls-tls-native-roots`를 켰다 — TLS 검사 프록시가 있는 망에서 내장 루트만으론 `UnknownIssuer`가 났다.
   서버 빌드(루트 `cargo build`)에는 이 크레이트가 들어가지 않는다.
 - 테스트: 루트 `cargo test`는 cms-api만 돈다. poketry 포함은 `cargo test --workspace`(또는 `-p poketry`).

@@ -34,7 +34,7 @@
 //! | B | `poketry/src/analysis.rs` `recommend`, `recommend_swap` | 정렬 3순위에 포획률 추가 |
 //! | C | `poketry/src/analysis.rs` `recommend` | 구멍 수(`spot_count`) 계산 버그 점검 |
 //! | C2 (계획) | `poketry/src/analysis.rs` | `recommend` 가 3마리가 아니라 후보 전체를 근거(구멍 수·점수 등)와 함께 순위대로 돌려주게 |
-//! | C3 (계획) | `poketry/src/` 새 모듈 | `evolutions.json` 을 읽어 포켓몬 이름 → 진화 계통(나무)을 찾기 |
+//! | C3 (계획) | `poketry/src/` 새 모듈 | `evolutions.json` 을 읽어 `species_id` → 진화 계통(나무)을 찾기 |
 //! | D | cms-api `src/poketry_api.rs` | `POST /poketry/analyze` 라우트 작성 |
 //! | E | cms-api `src/main.rs` | 라우트를 `OpenApiService` 에 등록하고 curl 로 확인 |
 //!

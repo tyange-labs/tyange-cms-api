@@ -180,6 +180,8 @@ mod tests {
 
     fn mon(type1: Type, type2: Option<Type>) -> Pokemon {
         Pokemon {
+            id: 0,         // 상성 테스트에는 쓰이지 않는 값
+            species_id: 0, // 〃
             name: "테스트".to_string(),
             type1,
             type2,

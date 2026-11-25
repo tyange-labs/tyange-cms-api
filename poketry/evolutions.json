@@ -1,2537 +1,2357 @@
 [
   {
+    "species_id": 152,
+    "name": "치코리타",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 153,
+        "name": "베이리프",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 154,
+            "name": "메가니움",
             "in_dex": true,
-            "megas": [
-              "메가메가니움"
-            ],
-            "name": "메가니움"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "베이리프"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "치코리타"
+    ]
   },
   {
+    "species_id": 498,
+    "name": "뚜꾸리",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 499,
+        "name": "차오꿀",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 500,
+            "name": "염무왕",
             "in_dex": true,
-            "megas": [
-              "메가염무왕"
-            ],
-            "name": "염무왕"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "차오꿀"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "뚜꾸리"
+    ]
   },
   {
+    "species_id": 158,
+    "name": "리아코",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 159,
+        "name": "엘리게이",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 160,
+            "name": "장크로다일",
             "in_dex": true,
-            "megas": [
-              "메가장크로다일"
-            ],
-            "name": "장크로다일"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "엘리게이"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "리아코"
+    ]
   },
   {
+    "species_id": 661,
+    "name": "화살꼬빈",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 662,
+        "name": "불화살빈",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 663,
+            "name": "파이어로",
             "in_dex": true,
-            "megas": [],
-            "name": "파이어로"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "불화살빈"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "화살꼬빈"
+    ]
   },
   {
+    "species_id": 659,
+    "name": "파르빗",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 660,
+        "name": "파르토",
         "in_dex": true,
-        "megas": [],
-        "name": "파르토"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "파르빗"
+    ]
   },
   {
+    "species_id": 664,
+    "name": "분이벌레",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 665,
+        "name": "분떠도리",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 666,
+            "name": "비비용",
             "in_dex": true,
-            "megas": [],
-            "name": "비비용"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "분떠도리"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "분이벌레"
+    ]
   },
   {
+    "species_id": 13,
+    "name": "뿔충이",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 14,
+        "name": "딱충이",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 15,
+            "name": "독침붕",
             "in_dex": true,
-            "megas": [
-              "메가독침붕"
-            ],
-            "name": "독침붕"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "딱충이"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "뿔충이"
+    ]
   },
   {
+    "species_id": 16,
+    "name": "구구",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 17,
+        "name": "피죤",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 18,
+            "name": "피죤투",
             "in_dex": true,
-            "megas": [
-              "메가피죤투"
-            ],
-            "name": "피죤투"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "피죤"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "구구"
+    ]
   },
   {
+    "species_id": 179,
+    "name": "메리프",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 180,
+        "name": "보송송",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 181,
+            "name": "전룡",
             "in_dex": true,
-            "megas": [
-              "메가전룡"
-            ],
-            "name": "전룡"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "보송송"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "메리프"
+    ]
   },
   {
+    "species_id": 504,
+    "name": "보르쥐",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 505,
+        "name": "보르그",
         "in_dex": true,
-        "megas": [],
-        "name": "보르그"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "보르쥐"
+    ]
   },
   {
+    "species_id": 406,
+    "name": "꼬몽울",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 315,
+        "name": "로젤리아",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 407,
+            "name": "로즈레이드",
             "in_dex": true,
-            "megas": [],
-            "name": "로즈레이드"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "로젤리아"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "꼬몽울"
+    ]
   },
   {
+    "species_id": 129,
+    "name": "잉어킹",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 130,
+        "name": "갸라도스",
         "in_dex": true,
-        "megas": [
-          "메가갸라도스"
-        ],
-        "name": "갸라도스"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "잉어킹"
+    ]
   },
   {
+    "species_id": 688,
+    "name": "거북손손",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 689,
+        "name": "거북손데스",
         "in_dex": true,
-        "megas": [
-          "메가거북손데스"
-        ],
-        "name": "거북손데스"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "거북손손"
+    ]
   },
   {
+    "species_id": 120,
+    "name": "별가사리",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 121,
+        "name": "아쿠스타",
         "in_dex": true,
-        "megas": [
-          "메가아쿠스타"
-        ],
-        "name": "아쿠스타"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "별가사리"
+    ]
   },
   {
+    "species_id": 669,
+    "name": "플라베베",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 670,
+        "name": "플라엣테",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 671,
+            "name": "플라제스",
             "in_dex": true,
-            "megas": [],
-            "name": "플라제스"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [
-          "메가플라엣테"
-        ],
-        "name": "플라엣테"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "플라베베"
+    ]
   },
   {
+    "species_id": 672,
+    "name": "메이클",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 673,
+        "name": "고고트",
         "in_dex": true,
-        "megas": [],
-        "name": "고고트"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "메이클"
+    ]
   },
   {
+    "species_id": 677,
+    "name": "냐스퍼",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 678,
+        "name": "냐오닉스",
         "in_dex": true,
-        "megas": [
-          "메가냐오닉스"
-        ],
-        "name": "냐오닉스"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "냐스퍼"
+    ]
   },
   {
+    "species_id": 667,
+    "name": "레오꼬",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 668,
+        "name": "화염레오",
         "in_dex": true,
-        "megas": [
-          "메가화염레오"
-        ],
-        "name": "화염레오"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "레오꼬"
+    ]
   },
   {
+    "species_id": 674,
+    "name": "판짱",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 675,
+        "name": "부란다",
         "in_dex": true,
-        "megas": [],
-        "name": "부란다"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "판짱"
+    ]
   },
   {
+    "species_id": 568,
+    "name": "깨봉이",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 569,
+        "name": "더스트나",
         "in_dex": true,
-        "megas": [],
-        "name": "더스트나"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "깨봉이"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 702,
+    "name": "데덴네",
     "in_dex": true,
-    "megas": [],
-    "name": "데덴네"
+    "evolves_to": []
   },
   {
+    "species_id": 172,
+    "name": "피츄",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 25,
+        "name": "피카츄",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 26,
+            "name": "라이츄",
             "in_dex": true,
-            "megas": [
-              "메가라이츄X",
-              "메가라이츄Y"
-            ],
-            "name": "라이츄"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "피카츄"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "피츄"
+    ]
   },
   {
+    "species_id": 173,
+    "name": "삐",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 35,
+        "name": "삐삐",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 36,
+            "name": "픽시",
             "in_dex": true,
-            "megas": [
-              "메가픽시"
-            ],
-            "name": "픽시"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "삐삐"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "삐"
+    ]
   },
   {
+    "species_id": 167,
+    "name": "페이검",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 168,
+        "name": "아리아도스",
         "in_dex": true,
-        "megas": [],
-        "name": "아리아도스"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "페이검"
+    ]
   },
   {
+    "species_id": 23,
+    "name": "아보",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 24,
+        "name": "아보크",
         "in_dex": true,
-        "megas": [],
-        "name": "아보크"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "아보"
+    ]
   },
   {
+    "species_id": 63,
+    "name": "캐이시",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 64,
+        "name": "윤겔라",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 65,
+            "name": "후딘",
             "in_dex": true,
-            "megas": [
-              "메가후딘"
-            ],
-            "name": "후딘"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "윤겔라"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "캐이시"
+    ]
   },
   {
+    "species_id": 92,
+    "name": "고오스",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 93,
+        "name": "고우스트",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 94,
+            "name": "팬텀",
             "in_dex": true,
-            "megas": [
-              "메가팬텀"
-            ],
-            "name": "팬텀"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "고우스트"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "고오스"
+    ]
   },
   {
+    "species_id": 543,
+    "name": "마디네",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 544,
+        "name": "휠구",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 545,
+            "name": "펜드라",
             "in_dex": true,
-            "megas": [
-              "메가펜드라"
-            ],
-            "name": "펜드라"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "휠구"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "마디네"
+    ]
   },
   {
+    "species_id": 679,
+    "name": "단칼빙",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 680,
+        "name": "쌍검킬",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 681,
+            "name": "킬가르도",
             "in_dex": true,
-            "megas": [],
-            "name": "킬가르도"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "쌍검킬"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "단칼빙"
+    ]
   },
   {
+    "species_id": 69,
+    "name": "모다피",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 70,
+        "name": "우츠동",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 71,
+            "name": "우츠보트",
             "in_dex": true,
-            "megas": [
-              "메가우츠보트"
-            ],
-            "name": "우츠보트"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "우츠동"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "모다피"
+    ]
   },
   {
+    "species_id": 511,
+    "name": "야나프",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 512,
+        "name": "야나키",
         "in_dex": true,
-        "megas": [],
-        "name": "야나키"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "야나프"
+    ]
   },
   {
+    "species_id": 513,
+    "name": "바오프",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 514,
+        "name": "바오키",
         "in_dex": true,
-        "megas": [],
-        "name": "바오키"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "바오프"
+    ]
   },
   {
+    "species_id": 515,
+    "name": "앗차프",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 516,
+        "name": "앗차키",
         "in_dex": true,
-        "megas": [],
-        "name": "앗차키"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "앗차프"
+    ]
   },
   {
+    "species_id": 307,
+    "name": "요가랑",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 308,
+        "name": "요가램",
         "in_dex": true,
-        "megas": [
-          "메가요가램"
-        ],
-        "name": "요가램"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "요가랑"
+    ]
   },
   {
+    "species_id": 309,
+    "name": "썬더라이",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 310,
+        "name": "썬더볼트",
         "in_dex": true,
-        "megas": [
-          "메가썬더볼트"
-        ],
-        "name": "썬더볼트"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "썬더라이"
+    ]
   },
   {
+    "species_id": 280,
+    "name": "랄토스",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 281,
+        "name": "킬리아",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 282,
+            "name": "가디안",
             "in_dex": true,
-            "megas": [
-              "메가가디안"
-            ],
-            "name": "가디안"
+            "evolves_to": []
           },
           {
-            "evolves_to": [],
+            "species_id": 475,
+            "name": "엘레이드",
             "in_dex": true,
-            "megas": [
-              "메가엘레이드"
-            ],
-            "name": "엘레이드"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "킬리아"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "랄토스"
+    ]
   },
   {
+    "species_id": 228,
+    "name": "델빌",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 229,
+        "name": "헬가",
         "in_dex": true,
-        "megas": [
-          "메가헬가"
-        ],
-        "name": "헬가"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "델빌"
+    ]
   },
   {
+    "species_id": 333,
+    "name": "파비코",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 334,
+        "name": "파비코리",
         "in_dex": true,
-        "megas": [
-          "메가파비코리"
-        ],
-        "name": "파비코리"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "파비코"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 531,
+    "name": "다부니",
     "in_dex": true,
-    "megas": [
-      "메가다부니"
-    ],
-    "name": "다부니"
+    "evolves_to": []
   },
   {
+    "species_id": 682,
+    "name": "슈쁘",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 683,
+        "name": "프레프티르",
         "in_dex": true,
-        "megas": [],
-        "name": "프레프티르"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "슈쁘"
+    ]
   },
   {
+    "species_id": 684,
+    "name": "나룸퍼프",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 685,
+        "name": "나루림",
         "in_dex": true,
-        "megas": [],
-        "name": "나루림"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "나룸퍼프"
+    ]
   },
   {
+    "species_id": 133,
+    "name": "이브이",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 134,
+        "name": "샤미드",
         "in_dex": true,
-        "megas": [],
-        "name": "샤미드"
+        "evolves_to": []
       },
       {
-        "evolves_to": [],
+        "species_id": 135,
+        "name": "쥬피썬더",
         "in_dex": true,
-        "megas": [],
-        "name": "쥬피썬더"
+        "evolves_to": []
       },
       {
-        "evolves_to": [],
+        "species_id": 136,
+        "name": "부스터",
         "in_dex": true,
-        "megas": [],
-        "name": "부스터"
+        "evolves_to": []
       },
       {
-        "evolves_to": [],
+        "species_id": 196,
+        "name": "에브이",
         "in_dex": true,
-        "megas": [],
-        "name": "에브이"
+        "evolves_to": []
       },
       {
-        "evolves_to": [],
+        "species_id": 197,
+        "name": "블래키",
         "in_dex": true,
-        "megas": [],
-        "name": "블래키"
+        "evolves_to": []
       },
       {
-        "evolves_to": [],
+        "species_id": 470,
+        "name": "리피아",
         "in_dex": true,
-        "megas": [],
-        "name": "리피아"
+        "evolves_to": []
       },
       {
-        "evolves_to": [],
+        "species_id": 471,
+        "name": "글레이시아",
         "in_dex": true,
-        "megas": [],
-        "name": "글레이시아"
+        "evolves_to": []
       },
       {
-        "evolves_to": [],
+        "species_id": 700,
+        "name": "님피아",
         "in_dex": true,
-        "megas": [],
-        "name": "님피아"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "이브이"
+    ]
   },
   {
+    "species_id": 427,
+    "name": "이어롤",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 428,
+        "name": "이어롭",
         "in_dex": true,
-        "megas": [
-          "메가이어롭"
-        ],
-        "name": "이어롭"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "이어롤"
+    ]
   },
   {
+    "species_id": 353,
+    "name": "어둠대신",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 354,
+        "name": "다크펫",
         "in_dex": true,
-        "megas": [
-          "메가다크펫"
-        ],
-        "name": "다크펫"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "어둠대신"
+    ]
   },
   {
+    "species_id": 582,
+    "name": "바닐프티",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 583,
+        "name": "바닐리치",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 584,
+            "name": "배바닐라",
             "in_dex": true,
-            "megas": [],
-            "name": "배바닐라"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "바닐리치"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "바닐프티"
+    ]
   },
   {
+    "species_id": 322,
+    "name": "둔타",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 323,
+        "name": "폭타",
         "in_dex": true,
-        "megas": [
-          "메가폭타"
-        ],
-        "name": "폭타"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "둔타"
+    ]
   },
   {
+    "species_id": 449,
+    "name": "히포포타스",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 450,
+        "name": "하마돈",
         "in_dex": true,
-        "megas": [],
-        "name": "하마돈"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "히포포타스"
+    ]
   },
   {
+    "species_id": 529,
+    "name": "두더류",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 530,
+        "name": "몰드류",
         "in_dex": true,
-        "megas": [
-          "메가몰드류"
-        ],
-        "name": "몰드류"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "두더류"
+    ]
   },
   {
+    "species_id": 551,
+    "name": "깜눈크",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 552,
+        "name": "악비르",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 553,
+            "name": "악비아르",
             "in_dex": true,
-            "megas": [],
-            "name": "악비아르"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "악비르"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "깜눈크"
+    ]
   },
   {
+    "species_id": 66,
+    "name": "알통몬",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 67,
+        "name": "근육몬",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 68,
+            "name": "괴력몬",
             "in_dex": true,
-            "megas": [],
-            "name": "괴력몬"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "근육몬"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "알통몬"
+    ]
   },
   {
+    "species_id": 443,
+    "name": "딥상어동",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 444,
+        "name": "한바이트",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 445,
+            "name": "한카리아스",
             "in_dex": true,
-            "megas": [
-              "메가한카리아스",
-              "메가한카리아스Z"
-            ],
-            "name": "한카리아스"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "한바이트"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "딥상어동"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 703,
+    "name": "멜리시",
     "in_dex": true,
-    "megas": [],
-    "name": "멜리시"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 302,
+    "name": "깜까미",
     "in_dex": true,
-    "megas": [
-      "메가깜까미"
-    ],
-    "name": "깜까미"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 303,
+    "name": "입치트",
     "in_dex": true,
-    "megas": [
-      "메가입치트"
-    ],
-    "name": "입치트"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 359,
+    "name": "앱솔",
     "in_dex": true,
-    "megas": [
-      "메가앱솔",
-      "메가앱솔Z"
-    ],
-    "name": "앱솔"
+    "evolves_to": []
   },
   {
+    "species_id": 447,
+    "name": "리오르",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 448,
+        "name": "루카리오",
         "in_dex": true,
-        "megas": [
-          "메가루카리오",
-          "메가루카리오Z"
-        ],
-        "name": "루카리오"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "리오르"
+    ]
   },
   {
+    "species_id": 79,
+    "name": "야돈",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 80,
+        "name": "야도란",
         "in_dex": true,
-        "megas": [
-          "메가야도란"
-        ],
-        "name": "야도란"
+        "evolves_to": []
       },
       {
-        "evolves_to": [],
+        "species_id": 199,
+        "name": "야도킹",
         "in_dex": true,
-        "megas": [],
-        "name": "야도킹"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "야돈"
+    ]
   },
   {
+    "species_id": 318,
+    "name": "샤프니아",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 319,
+        "name": "샤크니아",
         "in_dex": true,
-        "megas": [
-          "메가샤크니아"
-        ],
-        "name": "샤크니아"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "샤프니아"
+    ]
   },
   {
+    "species_id": 602,
+    "name": "저리어",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 603,
+        "name": "저리릴",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 604,
+            "name": "저리더프",
             "in_dex": true,
-            "megas": [
-              "메가저리더프"
-            ],
-            "name": "저리더프"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "저리릴"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "저리어"
+    ]
   },
   {
+    "species_id": 147,
+    "name": "미뇽",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 148,
+        "name": "신뇽",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 149,
+            "name": "망나뇽",
             "in_dex": true,
-            "megas": [
-              "메가망나뇽"
-            ],
-            "name": "망나뇽"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "신뇽"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "미뇽"
+    ]
   },
   {
+    "species_id": 1,
+    "name": "이상해씨",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 2,
+        "name": "이상해풀",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 3,
+            "name": "이상해꽃",
             "in_dex": true,
-            "megas": [
-              "메가이상해꽃"
-            ],
-            "name": "이상해꽃"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "이상해풀"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "이상해씨"
+    ]
   },
   {
+    "species_id": 4,
+    "name": "파이리",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 5,
+        "name": "리자드",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 6,
+            "name": "리자몽",
             "in_dex": true,
-            "megas": [
-              "메가리자몽X",
-              "메가리자몽Y"
-            ],
-            "name": "리자몽"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "리자드"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "파이리"
+    ]
   },
   {
+    "species_id": 7,
+    "name": "꼬부기",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 8,
+        "name": "어니부기",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 9,
+            "name": "거북왕",
             "in_dex": true,
-            "megas": [
-              "메가거북왕"
-            ],
-            "name": "거북왕"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "어니부기"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "꼬부기"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 618,
+    "name": "메더",
     "in_dex": true,
-    "megas": [],
-    "name": "메더"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 676,
+    "name": "트리미앙",
     "in_dex": true,
-    "megas": [],
-    "name": "트리미앙"
+    "evolves_to": []
   },
   {
+    "species_id": 686,
+    "name": "오케이징",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 687,
+        "name": "칼라마네로",
         "in_dex": true,
-        "megas": [
-          "메가칼라마네로"
-        ],
-        "name": "칼라마네로"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "오케이징"
+    ]
   },
   {
+    "species_id": 690,
+    "name": "수레기",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 691,
+        "name": "드래캄",
         "in_dex": true,
-        "megas": [
-          "메가드래캄"
-        ],
-        "name": "드래캄"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "수레기"
+    ]
   },
   {
+    "species_id": 692,
+    "name": "완철포",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 693,
+        "name": "블로스터",
         "in_dex": true,
-        "megas": [],
-        "name": "블로스터"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "완철포"
+    ]
   },
   {
+    "species_id": 704,
+    "name": "미끄메라",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 705,
+        "name": "미끄네일",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 706,
+            "name": "미끄래곤",
             "in_dex": true,
-            "megas": [],
-            "name": "미끄래곤"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "미끄네일"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "미끄메라"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 225,
+    "name": "딜리버드",
     "in_dex": true,
-    "megas": [],
-    "name": "딜리버드"
+    "evolves_to": []
   },
   {
+    "species_id": 361,
+    "name": "눈꼬마",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 362,
+        "name": "얼음귀신",
         "in_dex": true,
-        "megas": [
-          "메가얼음귀신"
-        ],
-        "name": "얼음귀신"
+        "evolves_to": []
       },
       {
-        "evolves_to": [],
+        "species_id": 478,
+        "name": "눈여아",
         "in_dex": true,
-        "megas": [
-          "메가눈여아"
-        ],
-        "name": "눈여아"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "눈꼬마"
+    ]
   },
   {
+    "species_id": 459,
+    "name": "눈쓰개",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 460,
+        "name": "눈설왕",
         "in_dex": true,
-        "megas": [
-          "메가눈설왕"
-        ],
-        "name": "눈설왕"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "눈쓰개"
+    ]
   },
   {
+    "species_id": 712,
+    "name": "꽁어름",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 713,
+        "name": "크레베이스",
         "in_dex": true,
-        "megas": [],
-        "name": "크레베이스"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "꽁어름"
+    ]
   },
   {
+    "species_id": 123,
+    "name": "스라크",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 212,
+        "name": "핫삼",
         "in_dex": true,
-        "megas": [
-          "메가핫삼"
-        ],
-        "name": "핫삼"
+        "evolves_to": []
       },
       {
-        "evolves_to": [],
+        "species_id": 900,
+        "name": "사마자르",
         "in_dex": true,
-        "megas": [],
-        "name": "사마자르"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "스라크"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 127,
+    "name": "쁘사이저",
     "in_dex": true,
-    "megas": [
-      "메가쁘사이저"
-    ],
-    "name": "쁘사이저"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 214,
+    "name": "헤라크로스",
     "in_dex": true,
-    "megas": [
-      "메가헤라크로스"
-    ],
-    "name": "헤라크로스"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 587,
+    "name": "에몽가",
     "in_dex": true,
-    "megas": [],
-    "name": "에몽가"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 701,
+    "name": "루차불",
     "in_dex": true,
-    "megas": [
-      "메가루차불"
-    ],
-    "name": "루차불"
+    "evolves_to": []
   },
   {
+    "species_id": 708,
+    "name": "나목령",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 709,
+        "name": "대로트",
         "in_dex": true,
-        "megas": [],
-        "name": "대로트"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "나목령"
+    ]
   },
   {
+    "species_id": 559,
+    "name": "곤율랭",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 560,
+        "name": "곤율거니",
         "in_dex": true,
-        "megas": [
-          "메가곤율거니"
-        ],
-        "name": "곤율거니"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "곤율랭"
+    ]
   },
   {
+    "species_id": 714,
+    "name": "음뱃",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 715,
+        "name": "음번",
         "in_dex": true,
-        "megas": [],
-        "name": "음번"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "음뱃"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 707,
+    "name": "클레피",
     "in_dex": true,
-    "megas": [],
-    "name": "클레피"
+    "evolves_to": []
   },
   {
+    "species_id": 607,
+    "name": "불켜미",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 608,
+        "name": "램프라",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 609,
+            "name": "샹델라",
             "in_dex": true,
-            "megas": [
-              "메가샹델라"
-            ],
-            "name": "샹델라"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "램프라"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "불켜미"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 142,
+    "name": "프테라",
     "in_dex": true,
-    "megas": [
-      "메가프테라"
-    ],
-    "name": "프테라"
+    "evolves_to": []
   },
   {
+    "species_id": 696,
+    "name": "티고라스",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 697,
+        "name": "견고라스",
         "in_dex": true,
-        "megas": [],
-        "name": "견고라스"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "티고라스"
+    ]
   },
   {
+    "species_id": 698,
+    "name": "아마루스",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 699,
+        "name": "아마루르가",
         "in_dex": true,
-        "megas": [],
-        "name": "아마루르가"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "아마루스"
+    ]
   },
   {
+    "species_id": 95,
+    "name": "롱스톤",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 208,
+        "name": "강철톤",
         "in_dex": true,
-        "megas": [
-          "메가강철톤"
-        ],
-        "name": "강철톤"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "롱스톤"
+    ]
   },
   {
+    "species_id": 304,
+    "name": "가보리",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 305,
+        "name": "갱도라",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 306,
+            "name": "보스로라",
             "in_dex": true,
-            "megas": [
-              "메가보스로라"
-            ],
-            "name": "보스로라"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "갱도라"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "가보리"
+    ]
   },
   {
+    "species_id": 694,
+    "name": "목도리키텔",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 695,
+        "name": "일레도리자드",
         "in_dex": true,
-        "megas": [],
-        "name": "일레도리자드"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "목도리키텔"
+    ]
   },
   {
+    "species_id": 710,
+    "name": "호바귀",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 711,
+        "name": "펌킨인",
         "in_dex": true,
-        "megas": [],
-        "name": "펌킨인"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "호바귀"
+    ]
   },
   {
+    "species_id": 246,
+    "name": "애버라스",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 247,
+        "name": "데기라스",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 248,
+            "name": "마기라스",
             "in_dex": true,
-            "megas": [
-              "메가마기라스"
-            ],
-            "name": "마기라스"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "데기라스"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "애버라스"
+    ]
   },
   {
+    "species_id": 656,
+    "name": "개구마르",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 657,
+        "name": "개굴반장",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 658,
+            "name": "개굴닌자",
             "in_dex": true,
-            "megas": [
-              "메가개굴닌자"
-            ],
-            "name": "개굴닌자"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "개굴반장"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "개구마르"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 870,
+    "name": "대여르",
     "in_dex": true,
-    "megas": [
-      "메가대여르"
-    ],
-    "name": "대여르"
+    "evolves_to": []
   },
   {
+    "species_id": 650,
+    "name": "도치마론",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 651,
+        "name": "도치보구",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 652,
+            "name": "브리가론",
             "in_dex": true,
-            "megas": [
-              "메가브리가론"
-            ],
-            "name": "브리가론"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "도치보구"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "도치마론"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 227,
+    "name": "무장조",
     "in_dex": true,
-    "megas": [
-      "메가무장조"
-    ],
-    "name": "무장조"
+    "evolves_to": []
   },
   {
+    "species_id": 653,
+    "name": "푸호꼬",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 654,
+        "name": "테르나",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 655,
+            "name": "마폭시",
             "in_dex": true,
-            "megas": [
-              "메가마폭시"
-            ],
-            "name": "마폭시"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "테르나"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "푸호꼬"
+    ]
   },
   {
+    "species_id": 371,
+    "name": "아공이",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 372,
+        "name": "쉘곤",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 373,
+            "name": "보만다",
             "in_dex": true,
-            "megas": [
-              "메가보만다"
-            ],
-            "name": "보만다"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "쉘곤"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "아공이"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 115,
+    "name": "캥카",
     "in_dex": true,
-    "megas": [
-      "메가캥카"
-    ],
-    "name": "캥카"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 780,
+    "name": "할비롱",
     "in_dex": true,
-    "megas": [
-      "메가할비롱"
-    ],
-    "name": "할비롱"
+    "evolves_to": []
   },
   {
+    "species_id": 374,
+    "name": "메탕",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 375,
+        "name": "메탕구",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 376,
+            "name": "메타그로스",
             "in_dex": true,
-            "megas": [
-              "메가메타그로스"
-            ],
-            "name": "메타그로스"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "메탕구"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "메탕"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 716,
+    "name": "제르네아스",
     "in_dex": true,
-    "megas": [],
-    "name": "제르네아스"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 717,
+    "name": "이벨타르",
     "in_dex": true,
-    "megas": [],
-    "name": "이벨타르"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 718,
+    "name": "지가르데",
     "in_dex": true,
-    "megas": [
-      "메가지가르데"
-    ],
-    "name": "지가르데"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 719,
+    "name": "디안시",
     "in_dex": true,
-    "megas": [
-      "메가디안시"
-    ],
-    "name": "디안시"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 150,
+    "name": "뮤츠",
     "in_dex": true,
-    "megas": [
-      "메가뮤츠X",
-      "메가뮤츠Y"
-    ],
-    "name": "뮤츠"
+    "evolves_to": []
   },
   {
+    "species_id": 56,
+    "name": "망키",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 57,
+        "name": "성원숭",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 979,
+            "name": "저승갓숭",
             "in_dex": true,
-            "megas": [],
-            "name": "저승갓숭"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "성원숭"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "망키"
+    ]
   },
   {
+    "species_id": 52,
+    "name": "나옹",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 53,
+        "name": "페르시온",
         "in_dex": true,
-        "megas": [],
-        "name": "페르시온"
+        "evolves_to": []
       },
       {
-        "evolves_to": [],
+        "species_id": 863,
+        "name": "나이킹",
         "in_dex": true,
-        "megas": [],
-        "name": "나이킹"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "나옹"
+    ]
   },
   {
+    "species_id": 83,
+    "name": "파오리",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 865,
+        "name": "창파나이트",
         "in_dex": true,
-        "megas": [],
-        "name": "창파나이트"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "파오리"
+    ]
   },
   {
+    "species_id": 104,
+    "name": "탕구리",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 105,
+        "name": "텅구리",
         "in_dex": true,
-        "megas": [],
-        "name": "텅구리"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "탕구리"
+    ]
   },
   {
+    "species_id": 137,
+    "name": "폴리곤",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 233,
+        "name": "폴리곤2",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 474,
+            "name": "폴리곤Z",
             "in_dex": true,
-            "megas": [],
-            "name": "폴리곤Z"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "폴리곤2"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "폴리곤"
+    ]
   },
   {
+    "species_id": 951,
+    "name": "캡싸이",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 952,
+        "name": "스코빌런",
         "in_dex": true,
-        "megas": [
-          "메가스코빌런"
-        ],
-        "name": "스코빌런"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "캡싸이"
+    ]
   },
   {
+    "species_id": 957,
+    "name": "어리짱",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 958,
+        "name": "벼리짱",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 959,
+            "name": "두드리짱",
             "in_dex": true,
-            "megas": [],
-            "name": "두드리짱"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "벼리짱"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "어리짱"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 967,
+    "name": "모토마",
     "in_dex": true,
-    "megas": [],
-    "name": "모토마"
+    "evolves_to": []
   },
   {
+    "species_id": 969,
+    "name": "초롱순",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 970,
+        "name": "킬라플로르",
         "in_dex": true,
-        "megas": [
-          "메가킬라플로르"
-        ],
-        "name": "킬라플로르"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "초롱순"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 479,
+    "name": "로토무",
     "in_dex": true,
-    "megas": [],
-    "name": "로토무"
+    "evolves_to": []
   },
   {
+    "species_id": 971,
+    "name": "망망이",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 972,
+        "name": "묘두기",
         "in_dex": true,
-        "megas": [],
-        "name": "묘두기"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "망망이"
+    ]
   },
   {
+    "species_id": 769,
+    "name": "모래꿍",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 770,
+        "name": "모래성이당",
         "in_dex": true,
-        "megas": [],
-        "name": "모래성이당"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "모래꿍"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 352,
+    "name": "켈리몬",
     "in_dex": true,
-    "megas": [],
-    "name": "켈리몬"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 973,
+    "name": "꼬이밍고",
     "in_dex": true,
-    "megas": [],
-    "name": "꼬이밍고"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 615,
+    "name": "프리지오",
     "in_dex": true,
-    "megas": [],
-    "name": "프리지오"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 977,
+    "name": "어써러셔",
     "in_dex": true,
-    "megas": [],
-    "name": "어써러셔"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 978,
+    "name": "싸리용",
     "in_dex": true,
-    "megas": [
-      "메가싸리용"
-    ],
-    "name": "싸리용"
+    "evolves_to": []
   },
   {
+    "species_id": 996,
+    "name": "드니차",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 997,
+        "name": "드니꽁",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 998,
+            "name": "드닐레이브",
             "in_dex": true,
-            "megas": [
-              "메가드닐레이브"
-            ],
-            "name": "드닐레이브"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "드니꽁"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "드니차"
+    ]
   },
   {
+    "species_id": 999,
+    "name": "모으령",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 1000,
+        "name": "타부자고",
         "in_dex": true,
-        "megas": [],
-        "name": "타부자고"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "모으령"
+    ]
   },
   {
+    "species_id": 211,
+    "name": "침바루",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 904,
+        "name": "장침바루",
         "in_dex": true,
-        "megas": [],
-        "name": "장침바루"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "침바루"
+    ]
   },
   {
+    "species_id": 252,
+    "name": "나무지기",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 253,
+        "name": "나무돌이",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 254,
+            "name": "나무킹",
             "in_dex": true,
-            "megas": [
-              "메가나무킹"
-            ],
-            "name": "나무킹"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "나무돌이"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "나무지기"
+    ]
   },
   {
+    "species_id": 255,
+    "name": "아차모",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 256,
+        "name": "영치코",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 257,
+            "name": "번치코",
             "in_dex": true,
-            "megas": [
-              "메가번치코"
-            ],
-            "name": "번치코"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "영치코"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "아차모"
+    ]
   },
   {
+    "species_id": 258,
+    "name": "물짱이",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 259,
+        "name": "늪짱이",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 260,
+            "name": "대짱이",
             "in_dex": true,
-            "megas": [
-              "메가대짱이"
-            ],
-            "name": "대짱이"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "늪짱이"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "물짱이"
+    ]
   },
   {
+    "species_id": 349,
+    "name": "빈티나",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 350,
+        "name": "밀로틱",
         "in_dex": true,
-        "megas": [],
-        "name": "밀로틱"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "빈티나"
+    ]
   },
   {
+    "species_id": 433,
+    "name": "랑딸랑",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 358,
+        "name": "치렁",
         "in_dex": true,
-        "megas": [
-          "메가치렁"
-        ],
-        "name": "치렁"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "랑딸랑"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 876,
+    "name": "에써르",
     "in_dex": true,
-    "megas": [],
-    "name": "에써르"
+    "evolves_to": []
   },
   {
+    "species_id": 509,
+    "name": "쌔비냥",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 510,
+        "name": "레파르다스",
         "in_dex": true,
-        "megas": [],
-        "name": "레파르다스"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "쌔비냥"
+    ]
   },
   {
+    "species_id": 517,
+    "name": "몽나",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 518,
+        "name": "몽얌나",
         "in_dex": true,
-        "megas": [],
-        "name": "몽얌나"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "몽나"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 538,
+    "name": "던지미",
     "in_dex": true,
-    "megas": [],
-    "name": "던지미"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 539,
+    "name": "타격귀",
     "in_dex": true,
-    "megas": [],
-    "name": "타격귀"
+    "evolves_to": []
   },
   {
+    "species_id": 562,
+    "name": "데스마스",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 563,
+        "name": "데스니칸",
         "in_dex": true,
-        "megas": [],
-        "name": "데스니칸"
+        "evolves_to": []
       },
       {
-        "evolves_to": [],
+        "species_id": 867,
+        "name": "데스판",
         "in_dex": true,
-        "megas": [],
-        "name": "데스판"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "데스마스"
+    ]
   },
   {
+    "species_id": 767,
+    "name": "꼬시레",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 768,
+        "name": "갑주무사",
         "in_dex": true,
-        "megas": [
-          "메가갑주무사"
-        ],
-        "name": "갑주무사"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "꼬시레"
+    ]
   },
   {
+    "species_id": 827,
+    "name": "훔처우",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 828,
+        "name": "폭슬라이",
         "in_dex": true,
-        "megas": [],
-        "name": "폭슬라이"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "훔처우"
+    ]
   },
   {
+    "species_id": 852,
+    "name": "때때무노",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 853,
+        "name": "케오퍼스",
         "in_dex": true,
-        "megas": [],
-        "name": "케오퍼스"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "때때무노"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 778,
+    "name": "따라큐",
     "in_dex": true,
-    "megas": [],
-    "name": "따라큐"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 877,
+    "name": "모르페코",
     "in_dex": true,
-    "megas": [],
-    "name": "모르페코"
+    "evolves_to": []
   },
   {
+    "species_id": 622,
+    "name": "골비람",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 623,
+        "name": "골루그",
         "in_dex": true,
-        "megas": [
-          "메가골루그"
-        ],
-        "name": "골루그"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "골비람"
+    ]
   },
   {
+    "species_id": 821,
+    "name": "파라꼬",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 822,
+        "name": "파크로우",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 823,
+            "name": "아머까오",
             "in_dex": true,
-            "megas": [],
-            "name": "아머까오"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "파크로우"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "파라꼬"
+    ]
   },
   {
+    "species_id": 174,
+    "name": "푸푸린",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 39,
+        "name": "푸린",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 40,
+            "name": "푸크린",
             "in_dex": true,
-            "megas": [],
-            "name": "푸크린"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "푸린"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "푸푸린"
+    ]
   },
   {
+    "species_id": 926,
+    "name": "쫀도기",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 927,
+        "name": "바우첼",
         "in_dex": true,
-        "megas": [],
-        "name": "바우첼"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "쫀도기"
+    ]
   },
   {
+    "species_id": 396,
+    "name": "찌르꼬",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 397,
+        "name": "찌르버드",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 398,
+            "name": "찌르호크",
             "in_dex": true,
-            "megas": [
-              "메가찌르호크"
-            ],
-            "name": "찌르호크"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "찌르버드"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "찌르꼬"
+    ]
   },
   {
+    "species_id": 325,
+    "name": "피그점프",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 326,
+        "name": "피그킹",
         "in_dex": true,
-        "megas": [],
-        "name": "피그킹"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "피그점프"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 931,
+    "name": "시비꼬",
     "in_dex": true,
-    "megas": [],
-    "name": "시비꼬"
+    "evolves_to": []
   },
   {
+    "species_id": 739,
+    "name": "오기지게",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 740,
+        "name": "모단단게",
         "in_dex": true,
-        "megas": [
-          "메가모단단게"
-        ],
-        "name": "모단단게"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "오기지게"
+    ]
   },
   {
+    "species_id": 932,
+    "name": "베베솔트",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 933,
+        "name": "스태솔트",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 934,
+            "name": "콜로솔트",
             "in_dex": true,
-            "megas": [],
-            "name": "콜로솔트"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "스태솔트"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "베베솔트"
+    ]
   },
   {
+    "species_id": 316,
+    "name": "꼴깍몬",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 317,
+        "name": "꿀꺽몬",
         "in_dex": true,
-        "megas": [],
-        "name": "꿀꺽몬"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "꼴깍몬"
+    ]
   },
   {
+    "species_id": 41,
+    "name": "주뱃",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 42,
+        "name": "골뱃",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 169,
+            "name": "크로뱃",
             "in_dex": true,
-            "megas": [],
-            "name": "크로뱃"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "골뱃"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "주뱃"
+    ]
   },
   {
+    "species_id": 935,
+    "name": "카르본",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 936,
+        "name": "카디나르마",
         "in_dex": true,
-        "megas": [],
-        "name": "카디나르마"
+        "evolves_to": []
       },
       {
-        "evolves_to": [],
+        "species_id": 937,
+        "name": "파라블레이즈",
         "in_dex": true,
-        "megas": [],
-        "name": "파라블레이즈"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "카르본"
+    ]
   },
   {
+    "species_id": 942,
+    "name": "오라티프",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 943,
+        "name": "마피티프",
         "in_dex": true,
-        "megas": [],
-        "name": "마피티프"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "오라티프"
+    ]
   },
   {
+    "species_id": 848,
+    "name": "일레즌",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 849,
+        "name": "스트린더",
         "in_dex": true,
-        "megas": [],
-        "name": "스트린더"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "일레즌"
+    ]
   },
   {
+    "species_id": 944,
+    "name": "땃쭈르",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 945,
+        "name": "태깅구르",
         "in_dex": true,
-        "megas": [],
-        "name": "태깅구르"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "땃쭈르"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 335,
+    "name": "쟝고",
     "in_dex": true,
-    "megas": [],
-    "name": "쟝고"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 336,
+    "name": "세비퍼",
     "in_dex": true,
-    "megas": [],
-    "name": "세비퍼"
+    "evolves_to": []
   },
   {
+    "species_id": 439,
+    "name": "흉내내",
+    "in_dex": true,
     "evolves_to": [
       {
+        "species_id": 122,
+        "name": "마임맨",
+        "in_dex": true,
         "evolves_to": [
           {
-            "evolves_to": [],
+            "species_id": 866,
+            "name": "마임꽁꽁",
             "in_dex": true,
-            "megas": [],
-            "name": "마임꽁꽁"
+            "evolves_to": []
           }
-        ],
-        "in_dex": true,
-        "megas": [],
-        "name": "마임맨"
+        ]
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "흉내내"
+    ]
   },
   {
+    "species_id": 590,
+    "name": "깜놀버슬",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 591,
+        "name": "뽀록나",
         "in_dex": true,
-        "megas": [],
-        "name": "뽀록나"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "깜놀버슬"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 485,
+    "name": "히드런",
     "in_dex": true,
-    "megas": [
-      "메가히드런"
-    ],
-    "name": "히드런"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 721,
+    "name": "볼케니온",
     "in_dex": true,
-    "megas": [],
-    "name": "볼케니온"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 638,
+    "name": "코바르온",
     "in_dex": true,
-    "megas": [],
-    "name": "코바르온"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 639,
+    "name": "테라키온",
     "in_dex": true,
-    "megas": [],
-    "name": "테라키온"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 640,
+    "name": "비리디온",
     "in_dex": true,
-    "megas": [],
-    "name": "비리디온"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 647,
+    "name": "케르디오",
     "in_dex": true,
-    "megas": [],
-    "name": "케르디오"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 648,
+    "name": "메로엣타",
     "in_dex": true,
-    "megas": [],
-    "name": "메로엣타"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 649,
+    "name": "게노세크트",
     "in_dex": true,
-    "megas": [],
-    "name": "게노세크트"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 720,
+    "name": "후파",
     "in_dex": true,
-    "megas": [],
-    "name": "후파"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 802,
+    "name": "마샤도",
     "in_dex": true,
-    "megas": [],
-    "name": "마샤도"
+    "evolves_to": []
   },
   {
+    "species_id": 808,
+    "name": "멜탄",
+    "in_dex": true,
     "evolves_to": [
       {
-        "evolves_to": [],
+        "species_id": 809,
+        "name": "멜메탈",
         "in_dex": true,
-        "megas": [],
-        "name": "멜메탈"
+        "evolves_to": []
       }
-    ],
-    "in_dex": true,
-    "megas": [],
-    "name": "멜탄"
+    ]
   },
   {
-    "evolves_to": [],
+    "species_id": 491,
+    "name": "다크라이",
     "in_dex": true,
-    "megas": [
-      "메가다크라이"
-    ],
-    "name": "다크라이"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 380,
+    "name": "라티아스",
     "in_dex": true,
-    "megas": [
-      "메가라티아스"
-    ],
-    "name": "라티아스"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 381,
+    "name": "라티오스",
     "in_dex": true,
-    "megas": [
-      "메가라티오스"
-    ],
-    "name": "라티오스"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 382,
+    "name": "가이오가",
     "in_dex": true,
-    "megas": [],
-    "name": "가이오가"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 383,
+    "name": "그란돈",
     "in_dex": true,
-    "megas": [],
-    "name": "그란돈"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 384,
+    "name": "레쿠쟈",
     "in_dex": true,
-    "megas": [
-      "메가레쿠쟈"
-    ],
-    "name": "레쿠쟈"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 801,
+    "name": "마기아나",
     "in_dex": true,
-    "megas": [
-      "메가마기아나"
-    ],
-    "name": "마기아나"
+    "evolves_to": []
   },
   {
-    "evolves_to": [],
+    "species_id": 807,
+    "name": "제라오라",
     "in_dex": true,
-    "megas": [
-      "메가제라오라"
-    ],
-    "name": "제라오라"
+    "evolves_to": []
   }
 ]
