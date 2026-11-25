@@ -52,8 +52,42 @@ pub struct AnalyzeResponse {
     pub weaknesses: Vec<WeaknessRow>,
     pub weak_spots: Vec<String>,
     pub score: i32,
-    pub recommendations: Vec<RecommendationItem>,
+    pub slots: Vec<SlotItem>,
+    pub fixes: Vec<FixItem>,
+}
+
+#[derive(Debug, Object)]
+#[oai(rename_all = "snake_case")]
+pub struct SlotItem {
+    pub slot_type: String,
+    pub picks: Vec<RecommendationItem>,
+}
+
+#[derive(Debug, Object)]
+#[oai(rename_all = "snake_case")]
+pub struct FixItem {
+    pub weak_type: String,
     pub swaps: Vec<SwapItem>,
+}
+
+const PICKS_PER_GROUP: usize = 10;
+
+impl From<poketry::SlotPick<'_>> for SlotItem {
+    fn from(s: poketry::SlotPick<'_>) -> Self {
+        SlotItem {
+            slot_type: s.slot_type.name().to_string(),
+            picks: s.picks.into_iter().take(PICKS_PER_GROUP).map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<poketry::WeakSpotFix<'_>> for FixItem {
+    fn from(f: poketry::WeakSpotFix<'_>) -> Self {
+        FixItem {
+            weak_type: f.weak_type.name().to_string(),
+            swaps: f.swaps.into_iter().take(PICKS_PER_GROUP).map(Into::into).collect(),
+        }
+    }
 }
 
 impl From<&poketry::Pokemon> for PokemonItem {
@@ -146,13 +180,15 @@ impl PoketryApi {
         let spots = weak_spot(&weakness);
         let score = team_score(&weakness);
         //
-        // 4. 추천: 5마리면 `poketry::recommend(&team, poketry::pokedex())`, 6마리면 `poketry::recommend_swap(..)`,
-        //    그 밖에는 둘 다 빈 목록. 후보 "전체"가 좋은 순서대로 오니 몇 개를 줄지 정해서 자르세요(예: 20개).
-        //    `match team.len() { 5 => …, 6 => …, _ => … }` 로 (추천 목록, 교체 목록) 두 개를 한 번에 만들면 깔끔합니다.
+        // 4. 추천 (poketry C4단계 함수): 6마리면 `poketry::recommend_fixes(&team, poketry::pokedex())`
+        //    (약점 타입별 교체 후보), 그보다 적으면 `poketry::recommend_slots(..)`(빈자리별 타입 + 그 타입 포켓몬).
+        //    둘 중 하나만 채우고 다른 쪽은 빈 Vec 입니다.
+        //    `if team.len() == 6 { … } else { … }` 로 (slots, fixes) 두 개를 한 번에 만들면 깔끔합니다.
+        //    그룹마다 몇 개까지 줄지는 `SlotItem`·`FixItem` 의 `From` 이 `PICKS_PER_GROUP` 으로 잘라 줍니다.
         //
         // 5. 응답으로 옮겨 담기: 결과 타입마다 `From` 이 있어서(①과 이 파일 위쪽) `.into()` 로 바뀝니다.
         //    `From` 이 참조(`&T`)를 받는지 값(`T`)을 받는지 보고 `iter()` 와 `into_iter()` 중에 고르세요.
-        //    `Pokemon`·`Weakness` 는 참조로, `Recommendation`·`Swap` 은 값으로 받게 만들어 뒀습니다.
+        //    `Pokemon`·`Weakness` 는 참조로, `SlotPick`·`WeakSpotFix` 는 값으로 받게 만들어 뒀습니다.
         //    `weak_spots` 는 `Vec<Type>` → `Vec<String>` (①의 types 와 같은 방법).
         //    마지막은 `Ok(Json(ApiResponse { status: true, data: Some(AnalyzeResponse { … }), message: None }))`.
         //
@@ -160,7 +196,7 @@ impl PoketryApi {
         //
         // 생각해 볼 거리 (선택):
         // - 같은 이름이 두 번 들어오면? 지금은 막지 않습니다. 400 으로 막을지 정해 보세요.
-        // - 자르는 개수를 요청의 `limit: Option<u32>` 로 받기, 이름 대신 `ids: Vec<u32>` 로 받기
+        // - 그룹당 개수를 요청의 `limit: Option<u32>` 로 받기, 이름 대신 `ids: Vec<u32>` 로 받기
         //   (GUI 가 붙으면 id 쪽이 안전합니다 — 이름은 표시용).
         let _ = (body, StatusCode::BAD_REQUEST);
         todo!()
