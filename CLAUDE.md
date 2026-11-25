@@ -22,10 +22,18 @@ Rust + Poem 프레임워크. cargo 사용.
 진화 전부터 최종 진화형까지 이어진(갈라지는) 계통을 보여준다. 상성 분석·추천은 한 마리 단위(진화하면
 타입이 바뀌므로), 화면 표시는 계통 단위로 나눈다.
 
-- **사용자가 Rust 학습용으로 직접 작성하는 코드다.** `TODO(B단계)`·`TODO(C단계)` 등 "직접 작성"
-  표시가 있는 곳은 대신 구현하지 말고, 요청받으면 가이드·힌트만 준다. 진행 표는 `poketry/src/lib.rs` 맨 위.
+- **사용자가 Rust 학습용으로 직접 작성하는 코드다.** `TODO(C3단계)` 등 단계 TODO가 있는 곳은 대신 구현하지 말고,
+  요청받으면 가이드·힌트·리뷰만 준다. 커밋할 때는 사용자가 쓴 코드와 Claude가 쓴 주석·문서를 **나눠서** 커밋한다
+  (사용자 코드 커밋에는 Co-Authored-By를 넣지 않는다).
+- **코드에는 "다음 단계" TODO 주석만 남긴다**(2026-11, 사용자 요청). 문서 주석·설명 주석·진행 표를 두지 않는다.
+  한 단계가 끝나면 그 TODO를 지우고(설명으로 바꾸지 않는다) 다음 단계 TODO를 단다. TODO는 그것만 읽고 따라 할 수 있게 쓴다.
+  `poketry/fetch`(수집 도구, 학습 코드 아님)는 예외로 주석을 둔다.
+- 단계와 순서: B(포획률 정렬)·C(구멍 수 버그)·C2(추천 전체 목록 + 근거, `Recommendation`·`Swap`) 완료 →
+  **C3(`poketry/src/evolution.rs`, `species_id` → 진화 계통 뿌리, 진행 중)** → D(cms-api `src/poketry_api.rs`에 `POST /poketry/analyze`)
+  → E(`main.rs`의 `OpenApiService`에 등록, curl 확인). C2의 남은 선택 과제: 결과 개수 테스트, 팀원 제외 비교를 `name` 대신 `id`로.
 - 프레임워크 비의존: poketry는 poem/poem-openapi에 의존하지 않는다(serde만). API 응답 모양(`Object` DTO)은
-  cms-api `src/poketry_api.rs`가 정한다(아직 가이드 주석만 있음 → D·E단계).
+  cms-api `src/poketry_api.rs`가 정한다. 이 파일은 지금 비어 있다 — D단계를 시작할 때 TODO를 단다. 예전에 쓴 자세한 D·E 가이드
+  (DTO·`From`·400 처리·등록·curl·`limit`/`ids` 아이디어)는 커밋 `06e2960`의 `src/poketry_api.rs`에 있으니 거기서 살린다.
 - 도감 `poketry/pokemon.json`은 `include_str!`로 내장, `OnceLock`으로 한 번만 파싱.
 - **이름이 아니라 id로 잇는다**(2026-11, 사용자 결정). 이름은 바뀔 수 있어서다 — 메가 42개는 PokeAPI에 한국어 이름이 없어
   `메가메가니움` 같은 대체 이름이고, 공식 이름이 생기면 다음 수집 때 바뀐다. `Pokemon.id`=PokeAPI pokemon id(폼 단위,
@@ -34,14 +42,13 @@ Rust + Poem 프레임워크. cargo 사용.
 - 진화 계통 `poketry/evolutions.json`(2026-11): 계통 179개, 나무 모양 노드 `{species_id, name, in_dex, evolves_to}`.
   도감의 종은 모두 정확히 한 계통에 있다(단일 종 계통 57개 포함). 메가는 진화 단계가 아니라 폼이라 나무에 없다 —
   도감에서 같은 `species_id`로 찾는다. 지금 도감 범위에선 `in_dex: false` 노드가 없지만 DLC 등으로 생길 수 있어 필드를 둔다.
-  Rust 쪽 읽기는 아직 없음(C3).
+  Rust 쪽 읽기는 C3단계에서 사용자가 작성한다.
 - **갱신은 `cargo run -p poketry-fetch`**(루트에서, `poketry/fetch/` 크레이트) — 두 JSON을 함께 다시 만든다.
   **저장소에 Python을 두지 않는다**는 사용자 요청으로 예전 `scripts/fetch_pokedex.py`를 Rust로 옮겼다(옮긴 직후 출력이
   Python과 글자 하나까지 같음을 확인, 그 뒤 id 열 추가). 응답 캐시는 `poketry/.pokeapi-cache`(git 제외).
   reqwest에 `rustls-tls-native-roots`를 켰다 — TLS 검사 프록시가 있는 망에서 내장 루트만으론 `UnknownIssuer`가 났다.
   서버 빌드(루트 `cargo build`)에는 이 크레이트가 들어가지 않는다.
 - 테스트: 루트 `cargo test`는 cms-api만 돈다. poketry 포함은 `cargo test --workspace`(또는 `-p poketry`).
-  B·C단계 확인 테스트 2개는 `#[ignore]`로 꺼져 있다.
 
 ## OpenAPI 스펙 (2026-09)
 
