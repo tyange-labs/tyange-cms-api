@@ -1,7 +1,7 @@
 //! poketry(포켓몬 Z-A 엔트리 상성 분석) API 라우트.
 //!
 //! 이 파일은 아직 **가이드 주석만** 있습니다. 아래 D단계 → E단계 순서대로 직접 채우면 됩니다.
-//! (선행: `poketry/src/analysis.rs` 의 B·C단계. 순서는 `poketry/src/lib.rs` 맨 위 표 참고)
+//! (선행: `poketry/src/analysis.rs` 의 B·C·C2단계. 순서는 `poketry/src/lib.rs` 맨 위 표 참고)
 //!
 //! ════════════════════════════════════════════════════════════════════════════════
 //! 만들 것: `POST /poketry/analyze`
@@ -17,12 +17,12 @@
 //! {
 //!   "status": true,
 //!   "data": {
-//!     "team":       [{ "name": "리자몽", "types": ["불꽃", "비행"], "capture_rate": 45 }, …],
+//!     "team":       [{ "id": 6, "species_id": 6, "name": "리자몽", "types": ["불꽃", "비행"], "capture_rate": 45 }, …],
 //!     "weaknesses": [{ "attack_type": "노말", "weak_count": 0, "resist_count": 1 }, … 18줄],
 //!     "weak_spots": ["바위", "전기"],
 //!     "score": 12,
-//!     "recommendations": [ …5마리일 때만, 포켓몬 3마리… ],
-//!     "swaps": [ …6마리일 때만, { "remove": {포켓몬}, "add": {포켓몬} } 3개… ]
+//!     "recommendations": [ …5마리일 때만, { "pokemon": {포켓몬}, "spot_count": 2, "score": 14 } 를 좋은 순서대로… ],
+//!     "swaps": [ …6마리일 때만, { "remove": {포켓몬}, "add": {포켓몬}, "spot_count": 2, "score": 14 } 를 좋은 순서대로… ]
 //!   },
 //!   "message": null
 //! }
@@ -65,6 +65,8 @@
 //!
 //! #[derive(Debug, Object)]
 //! pub struct PokemonItem {
+//!     pub id: u32,              // GUI 가 고른 포켓몬을 다시 보낼 때는 이름 말고 이걸 쓰게 (이름은 표시용)
+//!     pub species_id: u32,      // 진화 계통(C3단계)을 찾을 때 쓰는 번호
 //!     pub name: String,
 //!     pub types: Vec<String>,   // Type → String: `t.name().to_string()`
 //!     pub capture_rate: u8,
@@ -74,7 +76,11 @@
 //! pub struct WeaknessRow { /* attack_type: String, weak_count: i32, resist_count: i32 */ }
 //!
 //! #[derive(Debug, Object)]
-//! pub struct SwapItem { /* remove: PokemonItem, add: PokemonItem */ }
+//! pub struct RecommendationItem { /* pokemon: PokemonItem, spot_count: u32, score: i32 */ }
+//! //  poketry 의 `spot_count` 는 `usize` 인데, OpenAPI 스키마에는 `u32` 같은 고정 크기가 무난합니다(`as u32`).
+//!
+//! #[derive(Debug, Object)]
+//! pub struct SwapItem { /* remove: PokemonItem, add: PokemonItem, spot_count: u32, score: i32 */ }
 //! //  ⚠ `in` 은 Rust 예약어라 필드 이름으로 못 씁니다. 그래서 remove/add 로 했어요.
 //!
 //! #[derive(Debug, Object)]
@@ -87,6 +93,8 @@
 //! impl From<&poketry::Pokemon> for PokemonItem {
 //!     fn from(p: &poketry::Pokemon) -> Self {
 //!         PokemonItem {
+//!             id: p.id,
+//!             species_id: p.species_id,
 //!             name: p.name.clone(),
 //!             types: p.types().iter().map(|t| t.name().to_string()).collect(),
 //!             capture_rate: p.capture_rate,
@@ -152,11 +160,17 @@
 //! ③ 계산 함수들은 `&[&Pokemon]` 을 받습니다. `find_team` 이 `Vec<&'static Pokemon>` 을
 //!    주니까 `&team` 으로 넘기면 됩니다.
 //!
-//! ④ `recommend` 결과는 `Vec<&Pokemon>`, `recommend_swap` 결과는 `Vec<(&Pokemon, &Pokemon)>`
-//!    입니다. 튜플은 `.map(|(remove, add)| SwapItem { remove: remove.into(), add: add.into() })`
-//!    처럼 풀어서 담으면 됩니다. (`From` 을 만들어 두면 `.into()` 도 공짜로 생깁니다)
+//! ④ `recommend` 결과는 `Vec<poketry::Recommendation>`(`candidate`·`spot_count`·`score`),
+//!    `recommend_swap` 결과는 `Vec<poketry::Swap>`(`out`·`candidate`·`spot_count`·`score`)입니다(C2단계).
+//!    후보 **전체**가 좋은 순서대로 오고 개수 제한이 없습니다 — 몇 개를 줄지는 이 라우트가 정합니다
+//!    (예: `.into_iter().take(20)`). 담을 때는 필드 이름으로 꺼내면 됩니다:
+//!    `.map(|s| SwapItem { remove: s.out.into(), add: s.candidate.into(), … })`
+//!    (`From<&Pokemon>` 을 만들어 두면 `.into()` 도 공짜로 생깁니다. 두 결과 구조체에도 `From` 을 만들면 더 깔끔합니다)
 //!
 //! 생각해 볼 거리 (선택):
+//!   - 개수: 위에서 고정으로 자른 개수를 요청 본문의 `limit: Option<u32>` 로 받게 할 수도 있습니다.
+//!   - 요청을 이름 대신 `ids: Vec<u32>` 로 받기: GUI 가 붙으면 그쪽이 안전합니다(CLAUDE.md "이름이 아니라 id로 잇는다").
+//!     지금은 curl 로 확인하기 쉬운 이름으로 시작하고, 나중에 둘 다 받게 해도 됩니다.
 //!   - 같은 이름이 두 번 들어오면? 지금 poketry 는 막지 않습니다. 400 으로 막을지 정해 보세요.
 //!   - 인증: 지금 설계는 누구나 호출 가능(공개)입니다. 관리자만 쓰게 하려면 `/admin/posts`
 //!     처럼 핸들러 인자에 `guard: AuthGuard` 를 추가하고 `ensure_admin(&guard.0)?;` 를 부릅니다.

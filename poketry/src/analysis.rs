@@ -94,43 +94,9 @@ pub fn team_score(weakness: &[Weakness]) -> i32 {
     result
 }
 
-// [6단계 — 직접 작성] 빈자리 추천
-// pokedex 에서 team 에 없는 포켓몬을 한 마리씩 넣어 보고, 점수가 좋은 3마리를 돌려줍니다.
-//
-// TODO(C2단계): 3마리만 돌려주지 말고, 후보 "전체"를 근거와 함께 순위대로 돌려주세요.
-//
-// 왜: 나중에 GUI 에서 추천 목록을 쭉 보여주고 사용자가 고르게 하려고 합니다. 그런데 지금은
-//   - `take(3)` 으로 함수 안에서 잘라 버려서, 몇 개를 보여줄지 쓰는 쪽(API·GUI)이 못 정하고
-//   - `map(|r| r.2)` 에서 구멍 수·점수를 버려서, 화면에 "넣으면 구멍 2개, 점수 +5" 같은 근거를 못 보여줍니다.
-//
-// 1. 후보 하나의 결과를 담는 구조체를 이 파일에 만드세요. (예: `Recommendation` — 이름은 자유)
-//    - 어떤 필드를 둘지가 이 단계의 핵심입니다. 지금 튜플에 이미 있는 것(후보, 구멍 수, 점수)에서 시작하고,
-//      GUI 에 무엇을 보여주고 싶은지 생각해서 더하세요. 힌트: 구멍 "수" 뿐 아니라 "어떤 타입이" 구멍인지는
-//      `weak_spot` 이 이미 돌려줍니다(`Vec<Type>`).
-//    - 후보는 `&'a Pokemon`(참조)로 들고 있으면 됩니다. 도감이 `'static` 이라 복사(`clone`)할 필요가 없어요.
-//      참조를 필드로 가진 구조체는 수명 매개변수가 붙습니다: `struct 이름<'a> { pokemon: &'a Pokemon, … }`
-//    - JSON 으로 나가야 하니 위의 `Weakness` 처럼 `#[derive(Debug, Clone, Serialize)]` 를 붙이세요.
-//      (`&Pokemon` 필드도 `Pokemon` 이 `Serialize` 라서 그대로 됩니다)
-//
-// 2. 튜플 대신 그 구조체를 `Vec` 에 쌓고, 정렬 key 도 필드 이름으로 바꾸세요.
-//    `k.0`, `k.1` 보다 `k.spot_count` 처럼 이름이 보이면 B단계의 `k.2`/`k.3` 같은 실수가 줄어듭니다.
-//    정렬 순서(구멍 수 → 점수 → 포획률)는 그대로 둡니다.
-//
-// 3. 반환 타입을 `Vec<구조체<'a>>` 로 바꾸고 `take(3)` 을 지우세요.
-//
-// 4. `recommend_swap` 도 같은 방식으로. 여기선 "뺄 팀원"이 하나 더 있습니다 — 구조체를 따로 만들지,
-//    같은 구조체에 `Option` 필드로 넣을지는 직접 골라 보세요(둘 다 괜찮고, 장단점이 있습니다).
-//
-// 5. 확인: 반환 타입이 바뀌어서 아래 `tests` 의 두 추천 테스트가 컴파일 에러가 납니다
-//    (`picks[0]` 이 이제 `&Pokemon` 이 아니니까). 새 구조체에서 포켓몬을 꺼내도록 고치고,
-//    테스트 하나를 더 써 보세요 — 예: "결과 개수 == 후보 수(도감 수 - 팀에 있는 수)".
-//    그다음 `cargo test -p poketry`.
-//
-// 덤(선택): 후보에서 팀원을 빼는 비교가 지금은 `t.name == p.name` 입니다. 이름은 표시용이라
-//   `id` 로 비교하는 게 더 안전합니다(CLAUDE.md "이름이 아니라 id로 잇는다").
-//
-// 이 단계가 끝나면 cms-api `src/poketry_api.rs` 의 가이드 ④(결과 타입 설명)가 낡게 됩니다 — 말해 주면 맞춰 고쳐 둡니다.
-
+/// 빈자리 추천 결과 하나: 이 후보를 넣었을 때의 구멍 수·점수. (C2단계)
+///
+/// 화면에 근거("넣으면 구멍 2개, 점수 +5")를 보여줄 수 있게 숫자를 함께 돌려줍니다.
 #[derive(Debug, Clone, Serialize)]
 pub struct Recommendation<'a> {
     pub spot_count: usize,
@@ -138,6 +104,9 @@ pub struct Recommendation<'a> {
     pub candidate: &'a Pokemon,
 }
 
+// [6단계 — 직접 작성] 빈자리 추천
+// pokedex 에서 team 에 없는 포켓몬을 한 마리씩 넣어 보고, 후보 "전체"를 좋은 순서대로 돌려줍니다.
+// 몇 개를 보여줄지는 쓰는 쪽(API·GUI)이 정합니다.
 pub fn recommend<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<Recommendation<'a>> {
     let mut result: Vec<Recommendation> = Vec::new();
 
@@ -166,6 +135,7 @@ pub fn recommend<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<Recommend
     result
 }
 
+/// 교체 추천 결과 하나: `out` 을 빼고 `candidate` 를 넣었을 때의 구멍 수·점수.
 #[derive(Debug, Clone, Serialize)]
 pub struct Swap<'a> {
     pub out: &'a Pokemon,
@@ -174,7 +144,7 @@ pub struct Swap<'a> {
     pub score: i32,
 }
 
-/// 6마리 팀에서 (뺄 팀원, 넣을 후보) 쌍을 점수순으로 3개 돌려줍니다.
+/// 6마리 팀에서 (뺄 팀원, 넣을 후보) 쌍 "전체"를 좋은 순서대로 돌려줍니다. 정렬은 `recommend` 와 같습니다.
 pub fn recommend_swap<'a>(team: &[&'a Pokemon], pokedex: &'a [Pokemon]) -> Vec<Swap<'a>> {
     let mut result: Vec<Swap> = Vec::new();
 

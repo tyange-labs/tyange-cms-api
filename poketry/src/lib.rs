@@ -33,7 +33,7 @@
 //! |------|------|------|
 //! | ~~B~~ 완료 | `poketry/src/analysis.rs` `recommend`, `recommend_swap` | 정렬 3순위에 포획률 추가 |
 //! | ~~C~~ 완료 | `poketry/src/analysis.rs` `recommend` | 구멍 수(`spot_count`) 계산 버그 점검 |
-//! | C2 | `poketry/src/analysis.rs` `recommend`, `recommend_swap` | `recommend` 가 3마리가 아니라 후보 전체를 근거(구멍 수·점수 등)와 함께 순위대로 돌려주게 |
+//! | ~~C2~~ 완료 | `poketry/src/analysis.rs` `recommend`, `recommend_swap` | 후보 전체를 근거(구멍 수·점수)와 함께 순위대로 돌려주게 (`Recommendation`, `Swap`). 남은 선택 과제: 결과 개수 테스트, 팀원 제외 비교를 `name` 대신 `id` 로 |
 //! | C3 (계획) | `poketry/src/` 새 모듈 | `evolutions.json` 을 읽어 `species_id` → 진화 계통(나무)을 찾기 |
 //! | D | cms-api `src/poketry_api.rs` | `POST /poketry/analyze` 라우트 작성 |
 //! | E | cms-api `src/main.rs` | 라우트를 `OpenApiService` 에 등록하고 curl 로 확인 |
@@ -48,7 +48,8 @@ pub mod types;
 
 // 자주 쓰는 것들은 `poketry::이름` 으로 바로 쓸 수 있게 다시 내보냅니다.
 pub use analysis::{
-    Weakness, defense_multiplier, recommend, recommend_swap, team_score, team_weakness, weak_spot,
+    Recommendation, Swap, Weakness, defense_multiplier, recommend, recommend_swap, team_score,
+    team_weakness, weak_spot,
 };
 pub use pokemon::{Pokemon, UnknownPokemon, find, find_team, pokedex};
 pub use types::{Type, effectiveness};
