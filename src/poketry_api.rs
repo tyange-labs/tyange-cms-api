@@ -59,7 +59,7 @@ pub struct AnalyzeResponse {
 #[derive(Debug, Object)]
 #[oai(rename_all = "snake_case")]
 pub struct SlotItem {
-    pub slot_type: String,
+    pub slot_types: Vec<String>,
     pub picks: Vec<RecommendationItem>,
 }
 
@@ -75,7 +75,7 @@ const PICKS_PER_GROUP: usize = 10;
 impl From<poketry::SlotPick<'_>> for SlotItem {
     fn from(s: poketry::SlotPick<'_>) -> Self {
         SlotItem {
-            slot_type: s.slot_type.name().to_string(),
+            slot_types: s.slot_types.iter().map(|t| t.name().to_string()).collect(),
             picks: s.picks.into_iter().take(PICKS_PER_GROUP).map(Into::into).collect(),
         }
     }
