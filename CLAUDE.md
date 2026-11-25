@@ -22,18 +22,19 @@ Rust + Poem 프레임워크. cargo 사용.
 진화 전부터 최종 진화형까지 이어진(갈라지는) 계통을 보여준다. 상성 분석·추천은 한 마리 단위(진화하면
 타입이 바뀌므로), 화면 표시는 계통 단위로 나눈다.
 
-- **사용자가 Rust 학습용으로 직접 작성하는 코드다.** `TODO(C3단계)` 등 단계 TODO가 있는 곳은 대신 구현하지 말고,
+- **사용자가 Rust 학습용으로 직접 작성하는 코드다.** `TODO(D단계)` 등 단계 TODO가 있는 곳은 대신 구현하지 말고,
   요청받으면 가이드·힌트·리뷰만 준다. 커밋할 때는 사용자가 쓴 코드와 Claude가 쓴 주석·문서를 **나눠서** 커밋한다
   (사용자 코드 커밋에는 Co-Authored-By를 넣지 않는다).
 - **코드에는 "다음 단계" TODO 주석만 남긴다**(2026-11, 사용자 요청). 문서 주석·설명 주석·진행 표를 두지 않는다.
   한 단계가 끝나면 그 TODO를 지우고(설명으로 바꾸지 않는다) 다음 단계 TODO를 단다. TODO는 그것만 읽고 따라 할 수 있게 쓴다.
   `poketry/fetch`(수집 도구, 학습 코드 아님)는 예외로 주석을 둔다.
-- 단계와 순서: B(포획률 정렬)·C(구멍 수 버그)·C2(추천 전체 목록 + 근거, `Recommendation`·`Swap`) 완료 →
-  **C3(`poketry/src/evolution.rs`, `species_id` → 진화 계통 뿌리, 진행 중)** → D(cms-api `src/poketry_api.rs`에 `POST /poketry/analyze`)
+- 단계와 순서: B(포획률 정렬)·C(구멍 수 버그)·C2(추천 전체 목록 + 근거, `Recommendation`·`Swap`)·
+  C3(`evolution.rs`: `EvolutionNode`, `evolutions()`, `chain_of(species_id)` → 계통 뿌리. 사용자 요청으로 `contains` 재귀·
+  재내보내기·테스트는 Claude가 작성, 변이 검사로 확인) 완료 → **D(cms-api `src/poketry_api.rs`에 `POST /poketry/analyze`, 진행 중)**
   → E(`main.rs`의 `OpenApiService`에 등록, curl 확인). C2의 남은 선택 과제: 결과 개수 테스트, 팀원 제외 비교를 `name` 대신 `id`로.
 - 프레임워크 비의존: poketry는 poem/poem-openapi에 의존하지 않는다(serde만). API 응답 모양(`Object` DTO)은
-  cms-api `src/poketry_api.rs`가 정한다. 이 파일은 지금 비어 있다 — D단계를 시작할 때 TODO를 단다. 예전에 쓴 자세한 D·E 가이드
-  (DTO·`From`·400 처리·등록·curl·`limit`/`ids` 아이디어)는 커밋 `06e2960`의 `src/poketry_api.rs`에 있으니 거기서 살린다.
+  cms-api `src/poketry_api.rs`가 정한다. 지금 그 파일에는 `TODO(D단계)`만 있다. E단계 가이드(등록·curl·통합 테스트)는
+  커밋 `06e2960`의 `src/poketry_api.rs` 끝부분에 있으니 D가 끝나면 거기서 살린다.
 - 도감 `poketry/pokemon.json`은 `include_str!`로 내장, `OnceLock`으로 한 번만 파싱.
 - **이름이 아니라 id로 잇는다**(2026-11, 사용자 결정). 이름은 바뀔 수 있어서다 — 메가 42개는 PokeAPI에 한국어 이름이 없어
   `메가메가니움` 같은 대체 이름이고, 공식 이름이 생기면 다음 수집 때 바뀐다. `Pokemon.id`=PokeAPI pokemon id(폼 단위,
