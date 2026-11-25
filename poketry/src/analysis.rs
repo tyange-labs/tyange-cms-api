@@ -3,6 +3,8 @@
 //! 이 모듈의 함수들은 화면 출력(`println!`)을 하지 않습니다. 계산 결과를 값으로 돌려주고,
 //! 그 값을 JSON 으로 내보내는 일은 cms-api 의 라우트(`src/poketry_api.rs`)가 맡습니다.
 
+use std::cmp::Reverse;
+
 use serde::Serialize;
 
 use crate::pokemon::Pokemon;
@@ -118,7 +120,7 @@ pub fn recommend<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<&'a Pokem
         //
         // 고친 뒤 확인: 맨 아래 `tests` 모듈의 `recommend_구멍_수가_정렬_1순위다` 테스트에서
         // `#[ignore]` 줄을 지우고 `cargo test -p poketry` 를 돌리면 통과해야 합니다.
-        let spot_count = weaknesses.len();
+        let spot_count = weak_spot(&weaknesses).len();
         result.push((spot_count, score, candidate));
     }
 
@@ -134,7 +136,7 @@ pub fn recommend<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<&'a Pokem
     //
     // 3. 확인: CLI 가 없어졌으니 테스트로 확인합니다. 맨 아래 `tests` 모듈의
     //    `recommend_swap_포획률이_정렬_3순위다` 테스트의 `#[ignore]` 를 지우고 돌려 보세요.
-    result.sort_by_key(|k| (k.0, -k.1));
+    result.sort_by_key(|k| (k.0, -k.1, Reverse(k.2.capture_rate)));
     result.into_iter().map(|r| r.2).take(3).collect()
 }
 
@@ -169,7 +171,7 @@ pub fn recommend_swap<'a>(
     // - 확인: 6마리 예시(… 님피아)로 돌리면 지금은 무장조(25) → 메가무장조(25) → 아머까오(45)
     //   순서인데, 포획률이 들어가면 아머까오(45)가 1등으로 올라와야 합니다.
     //   이 확인을 테스트로 옮겨 두었습니다: `recommend_swap_포획률이_정렬_3순위다`
-    result.sort_by_key(|k| (k.0, -k.1));
+    result.sort_by_key(|k| (k.0, -k.1, Reverse(k.3.capture_rate)));
     result.into_iter().map(|r| (r.2, r.3)).take(3).collect()
 }
 
@@ -218,7 +220,6 @@ mod tests {
     /// C단계 확인용. 1등 추천을 넣은 팀의 "보완할 타입" 수가, 모든 후보 중 가장 적어야 합니다.
     /// (지금은 이 예시에서 구멍 2개짜리 후보가 있는데도 구멍 3개짜리가 1등으로 나옵니다)
     #[test]
-    #[ignore = "C단계(recommend 구멍 수)를 고친 뒤에 켭니다"]
     fn recommend_구멍_수가_정렬_1순위다() {
         let team = find_team(&["리자몽", "가디안", "루카리오", "갸라도스", "마기라스"]).unwrap();
         let spots_with = |p: &Pokemon| {
@@ -235,16 +236,26 @@ mod tests {
             .unwrap();
         let picks = recommend(&team, pokedex());
 
-        assert_eq!(spots_with(picks[0]), best_possible, "구멍 수가 가장 적은 후보가 1등이어야 합니다");
+        assert_eq!(
+            spots_with(picks[0]),
+            best_possible,
+            "구멍 수가 가장 적은 후보가 1등이어야 합니다"
+        );
     }
 
     /// B단계 확인용. CLI 시절 6마리 예시를 그대로 옮겼습니다.
     /// 지금은 무장조(25) → 메가무장조(25) → 아머까오(45) 순서라 실패합니다.
     #[test]
-    #[ignore = "B단계(포획률 정렬)를 끝낸 뒤에 켭니다"]
     fn recommend_swap_포획률이_정렬_3순위다() {
-        let team = find_team(&["리자몽", "가디안", "루카리오", "갸라도스", "마기라스", "님피아"])
-            .unwrap();
+        let team = find_team(&[
+            "리자몽",
+            "가디안",
+            "루카리오",
+            "갸라도스",
+            "마기라스",
+            "님피아",
+        ])
+        .unwrap();
         let swaps = recommend_swap(&team, pokedex());
         assert_eq!(swaps[0].1.name, "아머까오");
     }
