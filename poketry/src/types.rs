@@ -1,9 +1,9 @@
 //! 타입 18개와 상성표. (Claude가 만든 뼈대 — 고칠 일은 거의 없습니다)
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-/// 포켓몬 타입. JSON에서는 한국어 이름("불꽃", "물" …)으로 적습니다.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+/// 포켓몬 타입. JSON에서는 읽을 때도 쓸 때도 한국어 이름("불꽃", "물" …)을 씁니다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum Type {
     #[serde(rename = "노말")]
     Normal,

@@ -1,7 +1,9 @@
 [package]
-name = "za-entry"
+name = "poketry"
 version = "0.1.0"
 edition = "2024"
+description = "포켓몬 레전드 Z-A 엔트리 타입 상성 분석 (tyange-cms-api 라우트에서 사용)"
+publish = false
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

@@ -3,7 +3,13 @@ name = "tyange-cms-api"
 version = "0.1.0"
 edition = "2021"
 
+# poketry/ : 포켓몬 Z-A 엔트리 상성 분석 라이브러리 (za-entry 에서 subtree 로 편입)
+# 루트에서 `cargo test` 는 cms-api 만, `cargo test --workspace` 는 poketry 까지 돌립니다.
+[workspace]
+members = ["poketry"]
+
 [dependencies]
+poketry = { path = "poketry" }
 base64 = "0.13.1"
 bcrypt = "0.17.0"
 chrono = "0.4.40"

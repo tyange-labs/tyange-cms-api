@@ -12,6 +12,21 @@ Rust + Poem 프레임워크. cargo 사용.
 - API 변경 시 반드시 tyange-cms와 동기화 필요
 - **글 작업·동기화·배포 확인은 CLI `tyange`(`tyange-cli`)로 한다** — 직접 HTTP 요청이나 브라우저 조작 대신. `tyange cms posts|get|new|update|publish|draft|delete|sync`, `tyange ci --watch`. 쓰는 법과 설정은 `tyange-cli/CLAUDE.md`. API 응답·인증 방식을 바꾸면 그 CLI(`src/cms.rs`)도 같이 고친다.
 
+## poketry 워크스페이스 멤버 (2026-11)
+
+`poketry/`는 포켓몬 레전드 Z-A 엔트리 타입 상성 분석 라이브러리다. 원래 별도 CLI 저장소
+`za-entry`였고 `git subtree add --prefix=poketry`로 히스토리째 편입했다. 루트 `Cargo.toml`에
+`[workspace] members = ["poketry"]` + path 의존성으로 걸려 있다.
+
+- **사용자가 Rust 학습용으로 직접 작성하는 코드다.** `TODO(B단계)`·`TODO(C단계)` 등 "직접 작성"
+  표시가 있는 곳은 대신 구현하지 말고, 요청받으면 가이드·힌트만 준다. 진행 표는 `poketry/src/lib.rs` 맨 위.
+- 프레임워크 비의존: poketry는 poem/poem-openapi에 의존하지 않는다(serde만). API 응답 모양(`Object` DTO)은
+  cms-api `src/poketry_api.rs`가 정한다(아직 가이드 주석만 있음 → D·E단계).
+- 도감 `poketry/pokemon.json`은 `include_str!`로 내장, `OnceLock`으로 한 번만 파싱. 갱신은
+  `poketry/`에서 `python3 scripts/fetch_pokedex.py`.
+- 테스트: 루트 `cargo test`는 cms-api만 돈다. poketry 포함은 `cargo test --workspace`(또는 `-p poketry`).
+  B·C단계 확인 테스트 2개는 `#[ignore]`로 꺼져 있다.
+
 ## OpenAPI 스펙 (2026-09)
 
 tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하려면 스펙이 필요해서 도입했다.

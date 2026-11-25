@@ -1,12 +1,19 @@
-//! 포켓몬 구조체와 데이터 파일 읽기. (Claude가 만든 뼈대)
+//! 포켓몬 구조체와 도감 데이터. (Claude가 만든 뼈대)
+//!
+//! CLI 시절에는 실행할 때마다 `pokemon.json` 을 파일로 읽었는데, API 서버는 어느 폴더에서
+//! 실행될지 모르고 요청마다 파일을 다시 읽을 이유도 없습니다. 그래서 JSON 을 컴파일할 때
+//! 바이너리에 넣고(`include_str!`), 처음 한 번만 파싱해서 프로그램이 끝날 때까지 씁니다.
 
 use crate::types::Type;
-use serde::Deserialize;
-use std::error::Error;
-use std::fs;
+use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::sync::OnceLock;
+
+/// 컴파일할 때 바이너리에 들어가는 도감 원본. 경로는 이 파일(src/pokemon.rs) 기준입니다.
+const POKEDEX_JSON: &str = include_str!("../pokemon.json");
 
 /// 포켓몬 한 마리. 단일 타입이면 `type2` 가 `None` 입니다.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Pokemon {
     pub name: String,
     pub type1: Type,
@@ -35,15 +42,69 @@ impl Pokemon {
     }
 }
 
-/// JSON 파일에서 포켓몬 목록을 읽습니다.
-pub fn load_pokedex(path: &str) -> Result<Vec<Pokemon>, Box<dyn Error>> {
-    let text = fs::read_to_string(path).map_err(|e| format!("{path} 파일을 읽지 못했습니다: {e}"))?;
-    let list: Vec<Pokemon> =
-        serde_json::from_str(&text).map_err(|e| format!("{path} 형식이 잘못됐습니다: {e}"))?;
-    Ok(list)
+/// 내장된 도감 전체.
+///
+/// `OnceLock` 은 "딱 한 번만 채워지는 칸"입니다. 처음 부를 때 JSON 을 파싱해서 넣고,
+/// 그다음부터는 넣어 둔 값을 그대로 돌려줍니다. 여러 요청이 동시에 불러도 안전합니다.
+/// 돌려주는 참조가 `'static` 이라서, 여기서 꺼낸 `&Pokemon` 은 어디에 들고 다녀도
+/// 수명 문제가 생기지 않습니다.
+pub fn pokedex() -> &'static [Pokemon] {
+    static POKEDEX: OnceLock<Vec<Pokemon>> = OnceLock::new();
+    POKEDEX.get_or_init(|| {
+        // 내장 데이터라 형식이 틀리면 프로그램을 고쳐야 하는 버그입니다. 그래서 panic 으로 둡니다.
+        // (`cargo test` 의 `내장_도감을_읽는다` 가 배포 전에 잡아 줍니다)
+        serde_json::from_str(POKEDEX_JSON).expect("pokemon.json 형식이 잘못됐습니다")
+    })
 }
 
 /// 이름으로 포켓몬을 찾습니다. 없으면 `None`.
 pub fn find<'a>(pokedex: &'a [Pokemon], name: &str) -> Option<&'a Pokemon> {
     pokedex.iter().find(|p| p.name == name)
+}
+
+/// 도감에 없는 이름이 들어왔을 때의 오류. API 에서는 400 응답으로 바꿔서 쓰면 됩니다.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownPokemon(pub String);
+
+impl fmt::Display for UnknownPokemon {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "'{}' 은(는) 도감에 없습니다.", self.0)
+    }
+}
+
+impl std::error::Error for UnknownPokemon {}
+
+/// 이름 목록을 포켓몬 목록으로 바꿉니다. 하나라도 없으면 그 이름으로 `Err` 를 돌려줍니다.
+/// (CLI 시절 main 에 있던 "인자 → 팀" 변환을 옮긴 것입니다)
+pub fn find_team<S: AsRef<str>>(names: &[S]) -> Result<Vec<&'static Pokemon>, UnknownPokemon> {
+    names
+        .iter()
+        .map(|name| {
+            let name = name.as_ref();
+            find(pokedex(), name).ok_or_else(|| UnknownPokemon(name.to_string()))
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn 내장_도감을_읽는다() {
+        assert!(!pokedex().is_empty());
+    }
+
+    #[test]
+    fn 이름으로_팀을_만든다() {
+        let team = find_team(&["리자몽", "갸라도스"]).unwrap();
+        assert_eq!(team.len(), 2);
+        assert_eq!(team[0].name, "리자몽");
+    }
+
+    #[test]
+    fn 없는_이름이면_그_이름을_알려준다() {
+        let err = find_team(&["리자몽", "없는몬"]).unwrap_err();
+        assert_eq!(err, UnknownPokemon("없는몬".to_string()));
+    }
 }

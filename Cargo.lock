@@ -2372,6 +2372,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "poketry"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "polyval"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3653,6 +3661,7 @@ dependencies = [
  "jsonwebtoken",
  "poem",
  "poem-openapi",
+ "poketry",
  "reqwest",
  "serde",
  "serde_json",
