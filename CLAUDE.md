@@ -16,14 +16,25 @@ Rust + Poem 프레임워크. cargo 사용.
 
 `poketry/`는 포켓몬 레전드 Z-A 엔트리 타입 상성 분석 라이브러리다. 원래 별도 CLI 저장소
 `za-entry`였고 `git subtree add --prefix=poketry`로 히스토리째 편입했다. 루트 `Cargo.toml`에
-`[workspace] members = ["poketry"]` + path 의존성으로 걸려 있다.
+`[workspace] members = ["poketry", "poketry/fetch"]` + path 의존성으로 걸려 있다.
+
+목표는 나중에 GUI를 붙이는 것 — 추천 목록을 근거와 함께 쭉 보여주고 고르게 하고, 진화형이 있는 포켓몬은
+진화 전부터 최종 진화형까지 이어진(갈라지는) 계통을 보여준다. 상성 분석·추천은 한 마리 단위(진화하면
+타입이 바뀌므로), 화면 표시는 계통 단위로 나눈다.
 
 - **사용자가 Rust 학습용으로 직접 작성하는 코드다.** `TODO(B단계)`·`TODO(C단계)` 등 "직접 작성"
   표시가 있는 곳은 대신 구현하지 말고, 요청받으면 가이드·힌트만 준다. 진행 표는 `poketry/src/lib.rs` 맨 위.
 - 프레임워크 비의존: poketry는 poem/poem-openapi에 의존하지 않는다(serde만). API 응답 모양(`Object` DTO)은
   cms-api `src/poketry_api.rs`가 정한다(아직 가이드 주석만 있음 → D·E단계).
-- 도감 `poketry/pokemon.json`은 `include_str!`로 내장, `OnceLock`으로 한 번만 파싱. 갱신은
-  `poketry/`에서 `python3 scripts/fetch_pokedex.py`.
+- 도감 `poketry/pokemon.json`은 `include_str!`로 내장, `OnceLock`으로 한 번만 파싱.
+- 진화 계통 `poketry/evolutions.json`(2026-11): 계통 179개, 나무 모양 노드 `{name, in_dex, megas, evolves_to}`.
+  도감의 종은 모두 정확히 한 계통에 있다(단일 종 계통 57개 포함). 메가는 단계가 아니라 그 종의 `megas`.
+  지금 도감 범위에선 `in_dex: false` 노드가 없지만 DLC 등으로 생길 수 있어 필드를 둔다. Rust 쪽 읽기는 아직 없음(C3).
+- **갱신은 `cargo run -p poketry-fetch`**(루트에서, `poketry/fetch/` 크레이트) — 두 JSON을 함께 다시 만든다.
+  **저장소에 Python을 두지 않는다**는 사용자 요청으로 예전 `scripts/fetch_pokedex.py`를 Rust로 옮겼고, 같은 입력이면
+  `pokemon.json`이 글자 하나까지 같게 나온다(옮긴 직후 git diff 없음을 확인). 응답 캐시는 `poketry/.pokeapi-cache`(git 제외).
+  reqwest에 `rustls-tls-native-roots`를 켰다 — TLS 검사 프록시가 있는 망에서 내장 루트만으론 `UnknownIssuer`가 났다.
+  서버 빌드(루트 `cargo build`)에는 이 크레이트가 들어가지 않는다.
 - 테스트: 루트 `cargo test`는 cms-api만 돈다. poketry 포함은 `cargo test --workspace`(또는 `-p poketry`).
   B·C단계 확인 테스트 2개는 `#[ignore]`로 꺼져 있다.
 
