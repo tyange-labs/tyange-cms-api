@@ -209,7 +209,16 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<Slo
             //   - `best` 가 `None` 이면(아직 아무것도 안 봄) 무조건 바꿉니다.
             //   - `Some((_, best_key))` 이면 `key < best_key` 일 때만 바꿉니다(튜플은 앞 칸부터 비교, 작을수록 좋음).
             //   `match &best { None => true, Some((_, best_key)) => … }` 로 bool 을 만들고 `if` 로 대입하세요.
-            let _ = key;
+            match &best {
+                Some(best) => {
+                    if best.1.0 < key.0 || best.1.1 < key.1 {
+                        best = &(&candidate.types(), (key.0, key.1));
+                    }
+                }
+                None => {
+                    best = &(&candidate.types(), (key.0, key.1));
+                }
+            }
         }
 
         // TODO(C4단계 ① 다): 1등 타입 조합을 이번 자리로 확정하세요.
