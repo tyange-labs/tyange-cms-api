@@ -130,8 +130,16 @@ pub fn team_score(weakness: &[Weakness]) -> i32 {
 //   `id` 로 비교하는 게 더 안전합니다(CLAUDE.md "이름이 아니라 id로 잇는다").
 //
 // 이 단계가 끝나면 cms-api `src/poketry_api.rs` 의 가이드 ④(결과 타입 설명)가 낡게 됩니다 — 말해 주면 맞춰 고쳐 둡니다.
-pub fn recommend<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<&'a Pokemon> {
-    let mut result: Vec<(usize, i32, &Pokemon)> = Vec::new();
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Recommendation<'a> {
+    pub spot_count: usize,
+    pub score: i32,
+    pub candidate: &'a Pokemon,
+}
+
+pub fn recommend<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<Recommendation<'a>> {
+    let mut result: Vec<Recommendation> = Vec::new();
 
     let candidates: Vec<&Pokemon> = pokedex
         .iter()
@@ -145,21 +153,30 @@ pub fn recommend<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<&'a Pokem
         let score = team_score(&weaknesses);
         // (C단계) `weaknesses.len()` 은 공격 타입 수라 언제나 18 — 구멍 수는 `weak_spot` 으로 셉니다.
         let spot_count = weak_spot(&weaknesses).len();
-        result.push((spot_count, score, candidate));
+        result.push(Recommendation {
+            spot_count,
+            score,
+            candidate,
+        });
     }
 
     // 정렬: 구멍 수 적은 순 → 점수 높은 순 → 포획률 높은 순(잡기 쉬운 순). (B단계)
     // u8 인 포획률은 `-` 를 못 붙여서 `Reverse` 로 뒤집습니다.
-    result.sort_by_key(|k| (k.0, -k.1, Reverse(k.2.capture_rate)));
-    result.into_iter().map(|r| r.2).take(3).collect()
+    result.sort_by_key(|k| (k.spot_count, -k.score, Reverse(k.candidate.capture_rate)));
+    result
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Swap<'a> {
+    pub out: &'a Pokemon,
+    pub candidate: &'a Pokemon,
+    pub spot_count: usize,
+    pub score: i32,
 }
 
 /// 6마리 팀에서 (뺄 팀원, 넣을 후보) 쌍을 점수순으로 3개 돌려줍니다.
-pub fn recommend_swap<'a>(
-    team: &[&'a Pokemon],
-    pokedex: &'a [Pokemon],
-) -> Vec<(&'a Pokemon, &'a Pokemon)> {
-    let mut result: Vec<(usize, i32, &Pokemon, &Pokemon)> = Vec::new();
+pub fn recommend_swap<'a>(team: &[&'a Pokemon], pokedex: &'a [Pokemon]) -> Vec<Swap<'a>> {
+    let mut result: Vec<Swap> = Vec::new();
 
     let candidates: Vec<&Pokemon> = pokedex
         .iter()
@@ -173,13 +190,18 @@ pub fn recommend_swap<'a>(
             let weaknesses = team_weakness(&new_team);
             let score = team_score(&weaknesses);
             let spot_count = weak_spot(&weaknesses).len();
-            result.push((spot_count, score, team[i], candidate));
+            result.push(Swap {
+                out: team[i],
+                candidate,
+                spot_count,
+                score,
+            });
         }
     }
 
     // 정렬은 `recommend` 와 같습니다. 포획률은 "넣을 후보"(k.3)의 것 — 뺄 팀원(k.2)이 아니라.
-    result.sort_by_key(|k| (k.0, -k.1, Reverse(k.3.capture_rate)));
-    result.into_iter().map(|r| (r.2, r.3)).take(3).collect()
+    result.sort_by_key(|k| (k.spot_count, -k.score, Reverse(k.candidate.capture_rate)));
+    result
 }
 
 #[cfg(test)]
@@ -242,7 +264,7 @@ mod tests {
         let picks = recommend(&team, pokedex());
 
         assert_eq!(
-            spots_with(picks[0]),
+            spots_with(picks[0].candidate),
             best_possible,
             "구멍 수가 가장 적은 후보가 1등이어야 합니다"
         );
@@ -262,6 +284,6 @@ mod tests {
         ])
         .unwrap();
         let swaps = recommend_swap(&team, pokedex());
-        assert_eq!(swaps[0].1.name, "아머까오");
+        assert_eq!(swaps[0].candidate.name, "아머까오");
     }
 }
