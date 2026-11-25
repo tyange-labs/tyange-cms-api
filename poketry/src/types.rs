@@ -1,8 +1,5 @@
-//! 타입 18개와 상성표. (Claude가 만든 뼈대 — 고칠 일은 거의 없습니다)
-
 use serde::{Deserialize, Serialize};
 
-/// 포켓몬 타입. JSON에서는 읽을 때도 쓸 때도 한국어 이름("불꽃", "물" …)을 씁니다.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum Type {
     #[serde(rename = "노말")]
@@ -46,13 +43,11 @@ pub enum Type {
 use Type::*;
 
 impl Type {
-    /// 모든 타입. `for t in Type::ALL { … }` 로 순회할 때 씁니다.
     pub const ALL: [Type; 18] = [
         Normal, Fire, Water, Electric, Grass, Ice, Fighting, Poison, Ground, Flying, Psychic, Bug,
         Rock, Ghost, Dragon, Dark, Steel, Fairy,
     ];
 
-    /// 화면에 출력할 한국어 이름.
     pub fn name(self) -> &'static str {
         match self {
             Normal => "노말",
@@ -77,13 +72,8 @@ impl Type {
     }
 }
 
-/// 공격 타입 하나가 방어 타입 "하나"에 주는 배율: 0.0, 0.5, 1.0, 2.0 중 하나.
-///
-/// 복합 타입 포켓몬에 대한 배율은 여기서 계산하지 않습니다.
-/// 그건 main.rs 의 `defense_multiplier` 에서 직접 만듭니다.
 pub fn effectiveness(attack: Type, defend: Type) -> f32 {
     match (attack, defend) {
-        // 효과가 없다 (0배)
         (Normal, Ghost)
         | (Electric, Ground)
         | (Fighting, Ghost)
@@ -93,7 +83,6 @@ pub fn effectiveness(attack: Type, defend: Type) -> f32 {
         | (Ghost, Normal)
         | (Dragon, Fairy) => 0.0,
 
-        // 효과가 굉장하다 (2배)
         (Fire, Grass | Ice | Bug | Steel)
         | (Water, Fire | Ground | Rock)
         | (Electric, Water | Flying)
@@ -112,7 +101,6 @@ pub fn effectiveness(attack: Type, defend: Type) -> f32 {
         | (Steel, Ice | Rock | Fairy)
         | (Fairy, Fighting | Dragon | Dark) => 2.0,
 
-        // 효과가 별로다 (0.5배)
         (Normal, Rock | Steel)
         | (Fire, Fire | Water | Rock | Dragon)
         | (Water, Water | Grass | Dragon)
@@ -150,8 +138,6 @@ mod tests {
         assert_eq!(effectiveness(Dragon, Fairy), 0.0);
     }
 
-    /// 상성표 전체에서 2배·0.5배·0배인 칸의 수는 정해져 있습니다(51·61·8).
-    /// 표를 옮겨 적다 생긴 오타를 잡기 위한 검산입니다.
     #[test]
     fn 상성표_칸_수_검산() {
         let count = |m: f32| {
