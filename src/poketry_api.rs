@@ -1,5 +1,6 @@
 use poem::http::StatusCode;
 use poem_openapi::{payload::Json, Object, OpenApi};
+use poketry::{find_team, team_score, team_weakness, weak_spot};
 
 use crate::models::ApiResponse;
 
@@ -121,14 +122,29 @@ impl PoketryApi {
         //    400 응답은 이 저장소의 다른 라우트와 같은 방식입니다:
         //      `return Err(poem::Error::from_string("1~6마리를 보내 주세요.", StatusCode::BAD_REQUEST));`
         //    (`body.names` 를 바로 쓸 수 있는 건 `Json<T>` 가 안쪽 값으로 자동 역참조(`Deref`)돼서예요)
+
+        if body.names.is_empty() || body.names.len() > 6 {
+            return Err(poem::Error::from_string(
+                "1~6마리를 보내 주세요.",
+                StatusCode::BAD_REQUEST,
+            ));
+        }
+
         //
         // 2. 이름 → 포켓몬: `poketry::find_team(&body.names)` 는 `Result<Vec<&Pokemon>, UnknownPokemon>` 을 줍니다.
         //    도감에 없는 이름이면 `Err` 인데, 이걸 400 으로 바꿔서 바로 돌려보내세요.
         //    힌트: `Result` 의 `map_err` 로 에러를 `poem::Error` 로 바꾸고 끝에 `?` 를 붙이면,
         //    에러일 때 함수가 거기서 바로 끝납니다. 메시지는 `e.to_string()`
         //    (`UnknownPokemon` 이 `Display` 를 구현해서 "'xx' 은(는) 도감에 없습니다." 가 됩니다).
+
+        let team = find_team(&body.names).map_err(poem::error::BadRequest)?;
+
         //
         // 3. 계산: `poketry::team_weakness(&team)` 로 약점표를 만들고, 그걸로 `poketry::weak_spot(..)`·`poketry::team_score(..)`.
+
+        let weakness = team_weakness(&team);
+        let spots = weak_spot(&weakness);
+        let score = team_score(&weakness);
         //
         // 4. 추천: 5마리면 `poketry::recommend(&team, poketry::pokedex())`, 6마리면 `poketry::recommend_swap(..)`,
         //    그 밖에는 둘 다 빈 목록. 후보 "전체"가 좋은 순서대로 오니 몇 개를 줄지 정해서 자르세요(예: 20개).
