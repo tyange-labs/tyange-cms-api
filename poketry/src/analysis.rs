@@ -205,10 +205,6 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<Slo
 
             let key = team_key(&trial);
 
-            // TODO(C4단계 ① 나): 이번 `shape` 가 지금까지의 1등보다 좋으면 `best = Some((shape, key))`.
-            //   - `best` 가 `None` 이면(아직 아무것도 안 봄) 무조건 바꿉니다.
-            //   - `Some((_, best_key))` 이면 `key < best_key` 일 때만 바꿉니다(튜플은 앞 칸부터 비교, 작을수록 좋음).
-            //   `match &best { None => true, Some((_, best_key)) => … }` 로 bool 을 만들고 `if` 로 대입하세요.
             let better = match &best {
                 None => true,
                 Some((_, best_key)) => key < *best_key,
@@ -218,36 +214,31 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<Slo
             }
         }
 
-        // TODO(C4단계 ① 다): 1등 타입 조합을 이번 자리로 확정하세요.
-        //   - `best` 에서 조합을 꺼냅니다(`let (shape, _) = best.unwrap();` — 후보가 105가지라 비는 일은 없어요).
-        //   - `chosen` 에는 `shape.clone()` 을, `chosen_mons` 에는 `virtual_mon(shape)` 를 넣습니다.
-        //     그래야 다음 자리를 고를 때 이번 자리까지 채운 팀으로 계산하고, 같은 조합을 또 고르지 않아요.
         let (shape, _) = best.unwrap();
         chosen.push(shape.clone());
         chosen_mons.push(virtual_mon(shape));
     }
 
-    // TODO(C4단계 ① 마): 다듬기 — 한 자리씩 다른 조합으로 바꿔 보고, 나아지면 바꾸기를 더 이상 안 나아질 때까지 반복하세요.
-    //   욕심쟁이가 "먼저 고른 자리"를 되돌리지 못해 놓친 조합을 여기서 잡습니다.
+    // TODO(C4단계 ① 마): 다듬기 — 이미 고른 자리를 다른 조합으로 바꿔서 팀이 더 좋아지면 바꾸세요.
+    //   왜: 위 욕심쟁이는 한 번 고른 자리를 되돌리지 못해서, 나중 자리를 보고 나면 앞자리를 다르게 골랐어야 했던 경우를 놓칩니다.
     //
-    //   loop {
-    //       let mut improved = false;
-    //       for i in 0..chosen.len() {                      // 바꿔 볼 자리
-    //           let current = /* 지금 팀 전체(team + chosen_mons 전부)의 team_key */;
-    //           for shape in &shapes {
-    //               if chosen.contains(shape) { continue; } // 이미 쓰는 조합(i 자리 자신 포함)은 건너뜀
-    //               /* 시험용 팀 = team + chosen_mons 중 i 번째만 뺀 것 + virtual_mon(shape) */
-    //               /* 그 팀의 team_key 가 current 보다 작으면: chosen[i]·chosen_mons[i] 를 이 조합으로 바꾸고 improved = true */
-    //           }
-    //       }
-    //       if !improved { break; }
-    //   }
+    //   해야 할 일:
+    //   1. 가장 바깥은 "한 바퀴 돌았을 때 바뀐 게 하나라도 있으면 또 한 바퀴"를 되풀이하는 반복입니다.
+    //      바뀐 게 있었는지 기억할 `bool` 변수가 하나 필요하고, 한 바퀴 동안 안 바뀌었으면 반복을 끝냅니다.
+    //   2. 한 바퀴 안에서는 고른 자리(`chosen` 의 0번부터 끝까지)를 하나씩 봅니다.
+    //   3. 자리 하나를 볼 때, 먼저 지금 팀 전체(`team` + `chosen_mons` 전부)의 `team_key` 를 구해 둡니다.
+    //   4. 그 자리에 도감의 모든 조합(`shapes`)을 하나씩 넣어 봅니다. 이미 `chosen` 에 있는 조합은 건너뜁니다.
+    //      넣어 본 팀 = `team` + 그 자리를 뺀 나머지 `chosen_mons` + 후보 조합의 `virtual_mon`.
+    //      위 욕심쟁이에서 `trial` 을 만든 방식과 거의 같고, 다른 건 "i 번째만 뺀다"는 점뿐입니다.
+    //   5. 넣어 본 팀의 `team_key` 가 4번 이전에 구해 둔 값보다 작으면(작을수록 좋음)
+    //      `chosen` 과 `chosen_mons` 의 그 자리를 후보 조합으로 바꾸고, 바뀌었다고 표시하세요.
+    //      같은 자리에서 계속 찾을 거라면, 비교 기준값도 새 점수로 바꿔야 합니다.
     //
-    //   - "i 번째만 뺀 것": `chosen_mons.iter().enumerate().filter(|(j, _)| *j != i).map(|(_, m)| m)` 를 `trial.extend(..)` 에 넣으면 됩니다.
-    //   - 바꾼 직후 `current` 도 새 key 로 갱신해야, 같은 자리에서 그보다 더 나은 것만 다시 받아들입니다.
-    //   - 끝나는 이유: 바꿀 때마다 key 가 엄격히 작아지고(`<`), 가능한 key 는 유한해서 언젠가 멈춥니다.
-    //   - 빌림 주의: `for shape in &shapes` 안에서 `chosen[i] = shape.clone()` 은 됩니다(`shapes` 와 `chosen` 은 다른 Vec).
-    //     다만 `trial` 이 `chosen_mons` 를 빌리고 있는 동안 `chosen_mons[i] = …` 는 안 돼요. key 를 구한 뒤 `trial` 을 다 쓰고 바꾸세요.
+    //   막히기 쉬운 곳:
+    //   - "i 번째만 빼고 모으기"는 `iter()` 에 `enumerate()` 를 붙인 뒤 `filter` 로 거르는 걸 생각해 보세요.
+    //   - `trial` 이 `chosen_mons` 를 빌리고 있는 동안에는 `chosen_mons` 를 못 바꿉니다.
+    //     점수만 구하고 `trial` 을 다 쓴 다음에 바꾸세요. 컴파일러가 알려 줄 겁니다.
+    //   - 안 끝나지 않을까 걱정할 필요는 없습니다. 바꿀 때마다 점수가 엄격히 작아지고 가능한 점수는 유한합니다.
     //
     // 확인: 아래 tests 의 `다듬은_뒤에는_…` 테스트에서 `#[ignore]` 를 지우고 `cargo test -p poketry`.
 
