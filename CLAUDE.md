@@ -32,8 +32,8 @@ Rust + Poem 프레임워크. cargo 사용.
   `poketry/fetch`(수집 도구, 학습 코드 아님)는 예외로 주석을 둔다.
 - 단계와 순서: B(포획률 정렬)·C(구멍 수 버그)·C2(추천 전체 목록 + 근거, `Recommendation`·`Swap`)·
   C3(`evolution.rs`: `EvolutionNode`, `evolutions()`, `chain_of(species_id)` → 계통 뿌리. 사용자 요청으로 `contains` 재귀·
-  재내보내기·테스트는 Claude가 작성, 변이 검사로 확인) 완료 → **C4(`recommend_slots`: 5마리 이하면 빈자리마다 도감에 있는 타입 조합(복합 타입 포함, 105가지)을 욕심쟁이로 하나씩 고른 뒤 한 자리씩 바꿔 보는 다듬기(① 마 완료) + 그 조합 포켓몬(포획률 순). 결과는 `SlotPlan { slots, spot_count, score }` — 점수는 빈자리를 다 채운 팀 하나에 붙는다(같은 조합 포켓몬은 상성 점수가 같아서 자리마다 점수를 두지 않는다. C2의 `recommend`/`Recommendation`은 C4에서 쓰지 않고 C2 결과물로 남김). `recommend_fixes`: 6마리면 약점 타입마다 견디는 교체 후보 — 사용자 요청으로 추천 방식 변경, 진행 중)** + **D(cms-api `src/poketry_api.rs`에 `POST /poketry/analyze`, 응답은 `plan`(5마리 이하, `Option`)/`fixes`(6마리), 진행 중)**
-  → E(`main.rs`의 `OpenApiService`에 등록, curl 확인). C2의 남은 선택 과제: 결과 개수 테스트, 팀원 제외 비교를 `name` 대신 `id`로.
+  재내보내기·테스트는 Claude가 작성, 변이 검사로 확인) 완료 → **C4(`recommend_slots`: 5마리 이하면 빈자리마다 도감에 있는 타입 조합(복합 타입 포함, 105가지)을 욕심쟁이로 하나씩 고른 뒤 한 자리씩 바꿔 보는 다듬기 + 그 조합 포켓몬(포획률 순) — ① 완료. 결과는 `SlotPlan { slots, spot_count, score }` — 점수는 빈자리를 다 채운 팀 하나에 붙는다(같은 조합 포켓몬은 상성 점수가 같아서 자리마다 점수를 두지 않는다. C2의 `recommend`/`Recommendation`은 C4에서 쓰지 않고 C2 결과물로 남김). `recommend_fixes`: 6마리면 약점 타입마다 견디는 교체 후보(② 진행 중) — 사용자 요청으로 추천 방식 변경)** + **D(cms-api `src/poketry_api.rs`에 `POST /poketry/analyze`, 응답은 `plan`(5마리 이하, `Option`)/`fixes`(6마리), 진행 중)**
+  → E(`main.rs`의 `OpenApiService`에 등록, curl 확인). C2의 남은 선택 과제: 결과 개수 테스트, 팀원 제외 비교를 `name` 대신 `id`로. C4 이후 후보 단계(사용자와 얘기만 함): 상성 계산을 `Pokemon` 대신 타입 기준으로(`virtual_mon` 우회 제거), 4배·무효 가중치.
 - 프레임워크 비의존: poketry는 poem/poem-openapi에 의존하지 않는다(serde만). API 응답 모양(`Object` DTO)은
   cms-api `src/poketry_api.rs`가 정한다. 지금 그 파일에는 `TODO(D단계)`만 있다. E단계 가이드(등록·curl·통합 테스트)는
   커밋 `06e2960`의 `src/poketry_api.rs` 끝부분에 있으니 D가 끝나면 거기서 살린다.

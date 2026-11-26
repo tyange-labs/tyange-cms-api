@@ -267,36 +267,12 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> SlotPla
         }
     }
 
-    // TODO(C4단계 ① 라): 고른 타입 조합으로 결과(`SlotPlan`)를 만드세요.
-    //   점수는 자리마다가 아니라 "빈자리를 다 채운 팀" 하나에 붙고, 자리마다에는 그 조합의 포켓몬 목록만 붙습니다.
-    //   (같은 타입 조합의 포켓몬은 상성 점수가 전부 같아서, 자리 안에서 점수로는 순서를 못 정합니다.)
-    //
-    //   1. 최종 팀 점수: `team` + `chosen_mons` 전부로 `team_weakness` 를 구하고,
-    //      `weak_spot(..).len()` 을 `spot_count` 에, `team_score(..)` 를 `score` 에 넣습니다.
-    //      팀을 모으는 방법은 다듬기에서 `current` 를 만든 것과 같습니다.
     let mut v = team.to_vec();
     v.extend(chosen_mons.iter());
-    //   2. 자리마다 포켓몬 목록 만들기
-    //      지금 `chosen` 에는 자리마다 고른 타입 조합이 들어 있습니다. 예: `[[물, 땅], [강철], [페어리]]`.
-    //      "물/땅 타입을 넣으세요"만으로는 불친절하니, 자리마다 "이런 포켓몬이 있어요" 목록을 붙입니다.
-    //
-    //      [물, 땅] 자리 하나만 보면 순서는 이렇습니다.
-    //      ① 도감 전체를 하나씩 봅니다. `pokedex` 의 포켓몬 `p` 마다요.
-    //      ② 팀에 이미 있는 포켓몬은 뺍니다. 사용자가 넣은 팀원을 다시 추천하면 안 되니까요.
-    //         이름이 아니라 `id` 로 비교합니다. 함수 맨 위에서 `shapes` 를 만들 때 쓴 `filter` 조건과 같습니다.
     let fitlered_pokedex: Vec<&Pokemon> = pokedex
         .into_iter()
         .filter(|p| team.iter().all(|c| p.id != c.id))
         .collect();
-    //      ③ 타입 조합이 맞는 것만 남깁니다. `shape_of(p)` 는 `p` 의 타입을 정렬된 `Vec<Type>` 으로 만들어 줍니다.
-    //         이게 이 자리의 조합과 같으면 남깁니다. `for shape in &chosen` 으로 돌면 `shape` 가 `&Vec<Type>`(참조)라서
-    //         `shape_of(p) == *shape` 처럼 `*` 로 한 겹 벗겨 비교합니다.
-    //      ④ 남은 것을 포획률(`capture_rate`) 높은 순으로 정렬합니다. 잡기 쉬운 포켓몬부터 보여 주려는 거예요.
-    //         `recommend` 끝의 `sort_by_key` 와 `Reverse` 를 보세요. 이번엔 기준이 포획률 하나뿐입니다.
-    //      ⑤ `SlotPick` 에 담습니다. `slot_types` 에는 이 자리 조합(`shape.clone()`), `picks` 에는 방금 만든 목록.
-    //      이걸 `chosen` 의 자리마다 되풀이하면 `Vec<SlotPick>` 이 완성됩니다.
-    //
-    //      반복자 체인이 헷갈리면 `for` 로 먼저 써 보세요:
     let mut slots: Vec<SlotPick> = Vec::new();
     for shape in &chosen {
         let mut picks: Vec<&Pokemon> = fitlered_pokedex
@@ -304,15 +280,12 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> SlotPla
             .filter(|fp| shape_of(fp) == *shape)
             .copied()
             .collect();
-        // ④ picks 정렬
         picks.sort_by_key(|p| -(p.capture_rate as i32));
         slots.push(SlotPick {
             slot_types: shape.clone(),
             picks: picks.clone(),
         });
     }
-    //   3. `SlotPlan { slots, spot_count, score }` 를 돌려줍니다.
-    //   6마리면 `chosen` 이 비어서 `slots` 도 비고, 점수는 원래 팀 점수가 됩니다.
     let weaknesses = team_weakness(&v);
     let score = team_score(&weaknesses);
     let spot_count = weak_spot(&weaknesses).len();
@@ -321,9 +294,6 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> SlotPla
         spot_count,
         score,
     }
-
-    // 확인: 아래 tests 의 `#[ignore]` 붙은 테스트 중 `빈자리_…`·`다듬은_뒤에는_…`·`팀이_다_차면_…` 세 개에서
-    //   `#[ignore]` 를 지우고 `cargo test -p poketry`.
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -333,16 +303,36 @@ pub struct WeakSpotFix<'a> {
 }
 
 pub fn recommend_fixes<'a>(team: &[&'a Pokemon], pokedex: &'a [Pokemon]) -> Vec<WeakSpotFix<'a>> {
-    // TODO(C4단계 ②): 약점 타입마다, 그 타입을 견디는 포켓몬으로 바꾸는 교체 후보를 모으세요.
+    // TODO(C4단계 ②): 6마리 팀에서, 약점 타입마다 "누구를 빼고 누구를 넣으면 그 약점을 받아 줄 수 있나" 목록을 만드세요.
+    //   빈자리가 없으니 추천은 "교체"입니다. 교체 후보는 이미 `recommend_swap` 이 전부 계산해 두었고,
+    //   여기서는 그걸 약점 타입별로 나눠 담기만 합니다.
     //
-    // 1. 약점 타입: `weak_spot(&team_weakness(team))`.
-    // 2. 교체 후보 전체: `recommend_swap(team, pokedex)` 를 **한 번만** 부릅니다(이미 좋은 순서로 정렬돼 있어요).
-    // 3. 약점 타입 `w` 마다: 교체 후보 중 들어오는 포켓몬(`candidate`)이 `w` 를 견디는 것만 남깁니다.
-    //    "견딘다" = `defense_multiplier(w, candidate) < 1.0` (반감·무효).
-    //    `WeakSpotFix { weak_type: w, swaps }` 로 담으세요. 순서는 `weak_spot` 이 준 순서 그대로.
+    //   예: 팀이 전기·바위에 약하면 결과는 이런 모양입니다.
+    //     [ WeakSpotFix { weak_type: 전기, swaps: [피카츄 빼고 → 누오 넣기, …] },
+    //       WeakSpotFix { weak_type: 바위, swaps: [리자몽 빼고 → 메탕 넣기, …] } ]
     //
-    // 생각해 볼 거리 (선택): 빠지는 포켓몬(`out`)이 원래 `w` 를 견디던 녀석이면 바꿔 봐야 그 약점은 안 줄어듭니다.
-    // 그런 교체도 걸러 낼지 정해 보세요.
+    //   1. 약점 타입 목록: `weak_spot(&team_weakness(team))`. 예: `[전기, 바위]`.
+    //   2. 교체 후보 전체: `recommend_swap(team, pokedex)` 를 **한 번만** 불러 둡니다.
+    //      `Swap { out, candidate, spot_count, score }` 들이 이미 좋은 순서로 정렬돼 있어요.
+    //      (약점 타입마다 다시 부르면 같은 계산을 여러 번 하게 됩니다.)
+    //   3. 약점 타입 `w` 하나마다:
+    //      - 교체 후보 중 들어오는 포켓몬(`candidate`)이 `w` 를 견디는 것만 남깁니다.
+    //        "견딘다" = `defense_multiplier(w, s.candidate) < 1.0` (반감 또는 무효).
+    //      - 남은 것을 `Vec<Swap>` 으로 모아 `WeakSpotFix { weak_type: w, swaps }` 에 담습니다.
+    //      걸러도 순서는 그대로 유지되니 다시 정렬할 필요는 없습니다.
+    //   4. 약점 타입마다 만든 `WeakSpotFix` 를 1번 순서 그대로 `Vec` 에 모아 돌려줍니다.
+    //
+    //   ①라와 같은 모양이라 `for` 로 쓰면 이렇습니다:
+    //     let mut fixes = Vec::new();
+    //     for w in 약점_타입_목록 {
+    //         let swaps: Vec<Swap> = 교체_후보 /* 에서 w 를 견디는 것만 */;
+    //         fixes.push(WeakSpotFix { weak_type: w, swaps });
+    //     }
+    //   막히기 쉬운 곳: 교체 후보를 `for` 안에서 여러 번 걸러야 하니 `into_iter()` 말고 `iter()` 로 보고,
+    //   `Swap` 은 참조(`&Swap`)로 나오므로 `Vec<Swap>` 으로 모으려면 복사(`.cloned()`)가 필요합니다.
+    //
+    //   생각해 볼 거리 (선택): 빠지는 포켓몬(`out`)이 원래 `w` 를 견디던 녀석이면, 바꿔 봐야 그 약점은 줄지 않습니다.
+    //   그런 교체도 걸러 낼지 정해 보세요.
     //
     // 확인: 아래 tests 의 `약점_타입마다_…` 테스트에서 `#[ignore]` 를 지우고 `cargo test -p poketry`.
     let _ = (team, pokedex);
@@ -463,7 +453,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn 다듬은_뒤에는_한_자리만_바꿔서_나아지는_조합이_없다() {
         for names in [
             &["리자몽"][..],
@@ -514,7 +503,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn 팀이_다_차면_빈자리_추천은_없다() {
         let team = find_team(&[
             "리자몽",
