@@ -30,14 +30,6 @@ pub struct WeaknessRow {
 
 #[derive(Debug, Object)]
 #[oai(rename_all = "snake_case")]
-pub struct RecommendationItem {
-    pub pokemon: PokemonItem,
-    pub spot_count: u32,
-    pub score: i32,
-}
-
-#[derive(Debug, Object)]
-#[oai(rename_all = "snake_case")]
 pub struct SwapItem {
     pub remove: PokemonItem,
     pub add: PokemonItem,
@@ -52,15 +44,23 @@ pub struct AnalyzeResponse {
     pub weaknesses: Vec<WeaknessRow>,
     pub weak_spots: Vec<String>,
     pub score: i32,
-    pub slots: Vec<SlotItem>,
+    pub plan: Option<SlotPlanItem>,
     pub fixes: Vec<FixItem>,
+}
+
+#[derive(Debug, Object)]
+#[oai(rename_all = "snake_case")]
+pub struct SlotPlanItem {
+    pub slots: Vec<SlotItem>,
+    pub spot_count: u32,
+    pub score: i32,
 }
 
 #[derive(Debug, Object)]
 #[oai(rename_all = "snake_case")]
 pub struct SlotItem {
     pub slot_types: Vec<String>,
-    pub picks: Vec<RecommendationItem>,
+    pub picks: Vec<PokemonItem>,
 }
 
 #[derive(Debug, Object)]
@@ -71,6 +71,16 @@ pub struct FixItem {
 }
 
 const PICKS_PER_GROUP: usize = 10;
+
+impl From<poketry::SlotPlan<'_>> for SlotPlanItem {
+    fn from(p: poketry::SlotPlan<'_>) -> Self {
+        SlotPlanItem {
+            slots: p.slots.into_iter().map(Into::into).collect(),
+            spot_count: p.spot_count as u32,
+            score: p.score,
+        }
+    }
+}
 
 impl From<poketry::SlotPick<'_>> for SlotItem {
     fn from(s: poketry::SlotPick<'_>) -> Self {
@@ -116,16 +126,6 @@ impl From<&poketry::Weakness> for WeaknessRow {
             attack_type: w.attack_type.name().to_string(),
             weak_count: w.twice_multiplier_count,
             resist_count: w.under_multiplier_count,
-        }
-    }
-}
-
-impl From<poketry::Recommendation<'_>> for RecommendationItem {
-    fn from(r: poketry::Recommendation<'_>) -> Self {
-        RecommendationItem {
-            pokemon: r.candidate.into(),
-            spot_count: r.spot_count as u32,
-            score: r.score,
         }
     }
 }
@@ -181,14 +181,15 @@ impl PoketryApi {
         let score = team_score(&weakness);
         //
         // 4. 추천 (poketry C4단계 함수): 6마리면 `poketry::recommend_fixes(&team, poketry::pokedex())`
-        //    (약점 타입별 교체 후보), 그보다 적으면 `poketry::recommend_slots(..)`(빈자리별 타입 + 그 타입 포켓몬).
-        //    둘 중 하나만 채우고 다른 쪽은 빈 Vec 입니다.
-        //    `if team.len() == 6 { … } else { … }` 로 (slots, fixes) 두 개를 한 번에 만들면 깔끔합니다.
+        //    (약점 타입별 교체 후보), 그보다 적으면 `poketry::recommend_slots(..)`(빈자리별 타입 조합 + 그 조합 포켓몬,
+        //    점수는 빈자리를 다 채운 팀 기준 하나). 둘 중 하나만 채웁니다: `plan` 은 `None`/`Some(..)`, `fixes` 는 빈 Vec/채운 Vec.
+        //    `if team.len() == 6 { … } else { … }` 로 (plan, fixes) 두 개를 한 번에 만들면 깔끔합니다.
         //    그룹마다 몇 개까지 줄지는 `SlotItem`·`FixItem` 의 `From` 이 `PICKS_PER_GROUP` 으로 잘라 줍니다.
         //
         // 5. 응답으로 옮겨 담기: 결과 타입마다 `From` 이 있어서(①과 이 파일 위쪽) `.into()` 로 바뀝니다.
         //    `From` 이 참조(`&T`)를 받는지 값(`T`)을 받는지 보고 `iter()` 와 `into_iter()` 중에 고르세요.
-        //    `Pokemon`·`Weakness` 는 참조로, `SlotPick`·`WeakSpotFix` 는 값으로 받게 만들어 뒀습니다.
+        //    `Pokemon`·`Weakness` 는 참조로, `SlotPlan`·`WeakSpotFix` 는 값으로 받게 만들어 뒀습니다.
+        //    `Option` 안의 값을 바꿀 때는 `Option` 의 `map` 을 쓰면 됩니다.
         //    `weak_spots` 는 `Vec<Type>` → `Vec<String>` (①의 types 와 같은 방법).
         //    마지막은 `Ok(Json(ApiResponse { status: true, data: Some(AnalyzeResponse { … }), message: None }))`.
         //

@@ -143,7 +143,14 @@ pub fn recommend_swap<'a>(team: &[&'a Pokemon], pokedex: &'a [Pokemon]) -> Vec<S
 #[derive(Debug, Clone, Serialize)]
 pub struct SlotPick<'a> {
     pub slot_types: Vec<Type>,
-    pub picks: Vec<Recommendation<'a>>,
+    pub picks: Vec<&'a Pokemon>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SlotPlan<'a> {
+    pub slots: Vec<SlotPick<'a>>,
+    pub spot_count: usize,
+    pub score: i32,
 }
 
 fn shape_of(p: &Pokemon) -> Vec<Type> {
@@ -179,7 +186,7 @@ fn virtual_mon(shape: &[Type]) -> Pokemon {
     }
 }
 
-pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<SlotPick<'a>> {
+pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> SlotPlan<'a> {
     let empty = 6usize.saturating_sub(team.len());
     let shapes = type_shapes(
         pokedex
@@ -218,29 +225,6 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<Slo
         chosen.push(shape.clone());
         chosen_mons.push(virtual_mon(shape));
     }
-
-    // TODO(C4단계 ① 마): 다듬기 — 이미 고른 자리를 다른 조합으로 바꿔서 팀이 더 좋아지면 바꾸세요.
-    //   왜: 위 욕심쟁이는 한 번 고른 자리를 되돌리지 못해서, 나중 자리를 보고 나면 앞자리를 다르게 골랐어야 했던 경우를 놓칩니다.
-    //
-    //   해야 할 일:
-    //   1. 가장 바깥은 "한 바퀴 돌았을 때 바뀐 게 하나라도 있으면 또 한 바퀴"를 되풀이하는 반복입니다.
-    //      바뀐 게 있었는지 기억할 `bool` 변수가 하나 필요하고, 한 바퀴 동안 안 바뀌었으면 반복을 끝냅니다.
-    //   2. 한 바퀴 안에서는 고른 자리(`chosen` 의 0번부터 끝까지)를 하나씩 봅니다.
-    //   3. 자리 하나를 볼 때, 먼저 지금 팀 전체(`team` + `chosen_mons` 전부)의 `team_key` 를 구해 둡니다.
-    //   4. 그 자리에 도감의 모든 조합(`shapes`)을 하나씩 넣어 봅니다. 이미 `chosen` 에 있는 조합은 건너뜁니다.
-    //      넣어 본 팀 = `team` + 그 자리를 뺀 나머지 `chosen_mons` + 후보 조합의 `virtual_mon`.
-    //      위 욕심쟁이에서 `trial` 을 만든 방식과 거의 같고, 다른 건 "i 번째만 뺀다"는 점뿐입니다.
-    //   5. 넣어 본 팀의 `team_key` 가 4번 이전에 구해 둔 값보다 작으면(작을수록 좋음)
-    //      `chosen` 과 `chosen_mons` 의 그 자리를 후보 조합으로 바꾸고, 바뀌었다고 표시하세요.
-    //      같은 자리에서 계속 찾을 거라면, 비교 기준값도 새 점수로 바꿔야 합니다.
-    //
-    //   막히기 쉬운 곳:
-    //   - "i 번째만 빼고 모으기"는 `iter()` 에 `enumerate()` 를 붙인 뒤 `filter` 로 거르는 걸 생각해 보세요.
-    //   - `trial` 이 `chosen_mons` 를 빌리고 있는 동안에는 `chosen_mons` 를 못 바꿉니다.
-    //     점수만 구하고 `trial` 을 다 쓴 다음에 바꾸세요. 컴파일러가 알려 줄 겁니다.
-    //   - 안 끝나지 않을까 걱정할 필요는 없습니다. 바꿀 때마다 점수가 엄격히 작아지고 가능한 점수는 유한합니다.
-    //
-    // 확인: 아래 tests 의 `다듬은_뒤에는_…` 테스트에서 `#[ignore]` 를 지우고 `cargo test -p poketry`.
 
     loop {
         let mut changed = false;
@@ -283,14 +267,24 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<Slo
         }
     }
 
-    // TODO(C4단계 ① 라): 고른 타입 조합마다 그 조합의 실제 포켓몬을 추천하세요.
-    //   - `recommend(team, pokedex)` 를 **한 번만** 불러 둡니다(원래 팀 기준 순위).
-    //   - `chosen` 의 조합 `shape` 마다: 추천 중 `shape_of(r.candidate) == *shape` 인 것만 걸러 `.cloned()` 로 복사해
-    //     `SlotPick { slot_types: shape.clone(), picks }` 로 담습니다. `iter().map(..).collect()` 모양이에요.
-    //   - 6마리면 `empty` 가 0 이라 `chosen` 이 비고, 결과도 자연히 빈 Vec 입니다.
+    // TODO(C4단계 ① 라): 고른 타입 조합으로 결과(`SlotPlan`)를 만드세요.
+    //   점수는 자리마다가 아니라 "빈자리를 다 채운 팀" 하나에 붙고, 자리마다에는 그 조합의 포켓몬 목록만 붙습니다.
+    //   (같은 타입 조합의 포켓몬은 상성 점수가 전부 같아서, 자리 안에서 점수로는 순서를 못 정합니다.)
     //
-    // 확인: 아래 tests 의 `빈자리_…`·`팀이_다_차면_…` 두 테스트에서 `#[ignore]` 를 지우고 `cargo test -p poketry`.
-    let _ = (chosen, pokedex);
+    //   1. 최종 팀 점수: `team` + `chosen_mons` 전부로 `team_weakness` 를 구하고,
+    //      `weak_spot(..).len()` 을 `spot_count` 에, `team_score(..)` 를 `score` 에 넣습니다.
+    //      팀을 모으는 방법은 다듬기에서 `current` 를 만든 것과 같습니다.
+    //   2. 자리마다 포켓몬: `chosen` 의 조합 `shape` 마다, 도감(`pokedex`)에서
+    //      - 팀에 이미 있는 포켓몬(`id` 로 비교)은 빼고,
+    //      - `shape_of(p) == *shape` 인 것만 남겨 `Vec<&Pokemon>` 으로 모은 뒤,
+    //      - 포획률(`capture_rate`)이 높은 순으로 정렬합니다. 높은 순은 `recommend` 의 정렬에서 쓴 `Reverse` 를 떠올려 보세요.
+    //      `SlotPick { slot_types: shape.clone(), picks }` 로 담아 `Vec<SlotPick>` 을 만듭니다.
+    //   3. `SlotPlan { slots, spot_count, score }` 를 돌려줍니다.
+    //   6마리면 `chosen` 이 비어서 `slots` 도 비고, 점수는 원래 팀 점수가 됩니다.
+    //
+    // 확인: 아래 tests 의 `#[ignore]` 붙은 테스트 중 `빈자리_…`·`다듬은_뒤에는_…`·`팀이_다_차면_…` 세 개에서
+    //   `#[ignore]` 를 지우고 `cargo test -p poketry`.
+    let _ = (team, chosen, chosen_mons, pokedex);
     todo!()
 }
 
@@ -396,7 +390,8 @@ mod tests {
     #[ignore]
     fn 빈자리_수만큼_서로_다른_타입_조합을_고르고_그_조합_포켓몬만_추천한다() {
         let team = find_team(&["리자몽", "가디안", "루카리오"]).unwrap();
-        let slots = recommend_slots(&team, pokedex());
+        let plan = recommend_slots(&team, pokedex());
+        let slots = &plan.slots;
 
         assert_eq!(slots.len(), 3);
         for (i, slot) in slots.iter().enumerate() {
@@ -410,10 +405,24 @@ mod tests {
                 "같은 타입 조합을 두 번 골랐습니다"
             );
             for pick in &slot.picks {
-                assert_eq!(shape_of(pick.candidate), slot.slot_types);
-                assert!(!team.iter().any(|t| t.id == pick.candidate.id));
+                assert_eq!(shape_of(pick), slot.slot_types);
+                assert!(!team.iter().any(|t| t.id == pick.id));
             }
+            assert!(
+                slot.picks
+                    .windows(2)
+                    .all(|w| w[0].capture_rate >= w[1].capture_rate),
+                "{:?} 포켓몬이 포획률 높은 순이 아닙니다",
+                slot.slot_types
+            );
         }
+
+        let mons: Vec<Pokemon> = slots.iter().map(|s| virtual_mon(&s.slot_types)).collect();
+        let mut full = team.clone();
+        full.extend(mons.iter());
+        let weaknesses = team_weakness(&full);
+        assert_eq!(plan.spot_count, weak_spot(&weaknesses).len());
+        assert_eq!(plan.score, team_score(&weaknesses));
     }
 
     #[test]
@@ -426,8 +435,8 @@ mod tests {
             &["갸라도스", "마기라스", "님피아", "루카리오"],
         ] {
             let team = find_team(names).unwrap();
-            let slots = recommend_slots(&team, pokedex());
-            let chosen: Vec<Vec<Type>> = slots.iter().map(|s| s.slot_types.clone()).collect();
+            let plan = recommend_slots(&team, pokedex());
+            let chosen: Vec<Vec<Type>> = plan.slots.iter().map(|s| s.slot_types.clone()).collect();
             let mons: Vec<Pokemon> = chosen.iter().map(|s| virtual_mon(s)).collect();
 
             let mut full = team.clone();
@@ -479,7 +488,11 @@ mod tests {
             "님피아",
         ])
         .unwrap();
-        assert!(recommend_slots(&team, pokedex()).is_empty());
+        let plan = recommend_slots(&team, pokedex());
+        let weaknesses = team_weakness(&team);
+        assert!(plan.slots.is_empty());
+        assert_eq!(plan.spot_count, weak_spot(&weaknesses).len());
+        assert_eq!(plan.score, team_score(&weaknesses));
     }
 
     #[test]
