@@ -5,6 +5,7 @@ use serde::Serialize;
 use crate::pokemon::Pokemon;
 use crate::types::{Type, effectiveness};
 
+// TODO(R4): 상성 계산을 포켓몬이 아니라 타입 기준으로 바꾸기. 계획은 CLAUDE.md "poketry 이어서 하기" 백로그 R4.
 pub fn defense_multiplier(attack: Type, defender: &Pokemon) -> f32 {
     let first_multiplier = effectiveness(attack, defender.type1);
 
@@ -17,6 +18,7 @@ pub fn defense_multiplier(attack: Type, defender: &Pokemon) -> f32 {
     first_multiplier
 }
 
+// TODO(R5): 4배 약점·무효를 2배·반감보다 무겁게 세기. 계획은 CLAUDE.md "poketry 이어서 하기" 백로그 R5.
 #[derive(Debug, Clone, Serialize)]
 pub struct Weakness {
     pub attack_type: Type,
@@ -72,6 +74,7 @@ pub fn team_score(weakness: &[Weakness]) -> i32 {
     result
 }
 
+// TODO(R7): C4부터 `recommend`·`Recommendation`은 C2 테스트만 쓴다. 남길지 지울지 정하기. CLAUDE.md "poketry 이어서 하기" 백로그 R7.
 #[derive(Debug, Clone, Serialize)]
 pub struct Recommendation<'a> {
     pub spot_count: usize,
@@ -84,6 +87,7 @@ pub fn recommend<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<Recommend
 
     let candidates: Vec<&Pokemon> = pokedex
         .iter()
+        // TODO(R2): 팀원 빼기를 `name` 대신 `id` 로 비교하기 (`t.id == p.id`).
         .filter(|p| !team.iter().any(|t| t.name == p.name))
         .collect();
 
@@ -117,6 +121,7 @@ pub fn recommend_swap<'a>(team: &[&'a Pokemon], pokedex: &'a [Pokemon]) -> Vec<S
 
     let candidates: Vec<&Pokemon> = pokedex
         .iter()
+        // TODO(R2): 팀원 빼기를 `name` 대신 `id` 로 비교하기 (`t.id == p.id`).
         .filter(|p| !team.iter().any(|t| t.name == p.name))
         .collect();
 
@@ -146,6 +151,7 @@ pub struct SlotPick<'a> {
     pub picks: Vec<&'a Pokemon>,
 }
 
+// TODO(R6): 자리마다 근거 붙이기(이 조합이 막아 주는 약점 타입, 빼면 늘어나는 구멍 수). CLAUDE.md "poketry 이어서 하기" 백로그 R6.
 #[derive(Debug, Clone, Serialize)]
 pub struct SlotPlan<'a> {
     pub slots: Vec<SlotPick<'a>>,
@@ -175,6 +181,7 @@ fn team_key(members: &[&Pokemon]) -> (usize, i32) {
     (weak_spot(&weaknesses).len(), -team_score(&weaknesses))
 }
 
+// TODO(R4): 타입 기준 상성으로 바꾸면 이 가상 포켓몬과 `chosen_mons` 가 필요 없어진다.
 fn virtual_mon(shape: &[Type]) -> Pokemon {
     Pokemon {
         id: 0,
@@ -269,6 +276,7 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> SlotPla
 
     let mut v = team.to_vec();
     v.extend(chosen_mons.iter());
+    // TODO(R1): `fitlered_pokedex` → `filtered_pokedex` (오타), `pokedex.into_iter()` → `pokedex.iter()`.
     let fitlered_pokedex: Vec<&Pokemon> = pokedex
         .into_iter()
         .filter(|p| team.iter().all(|c| p.id != c.id))
@@ -283,6 +291,7 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> SlotPla
         picks.sort_by_key(|p| -(p.capture_rate as i32));
         slots.push(SlotPick {
             slot_types: shape.clone(),
+            // TODO(R1): `picks` 는 이미 소유한 Vec 이라 `clone()` 없이 그대로 넘기면 된다.
             picks: picks.clone(),
         });
     }
@@ -312,14 +321,28 @@ pub fn recommend_fixes<'a>(team: &[&'a Pokemon], pokedex: &'a [Pokemon]) -> Vec<
     //       WeakSpotFix { weak_type: 바위, swaps: [리자몽 빼고 → 메탕 넣기, …] } ]
     //
     //   1. 약점 타입 목록: `weak_spot(&team_weakness(team))`. 예: `[전기, 바위]`.
+    let weaknesses = team_weakness(team);
+    let weak_spots = weak_spot(&weaknesses);
     //   2. 교체 후보 전체: `recommend_swap(team, pokedex)` 를 **한 번만** 불러 둡니다.
     //      `Swap { out, candidate, spot_count, score }` 들이 이미 좋은 순서로 정렬돼 있어요.
     //      (약점 타입마다 다시 부르면 같은 계산을 여러 번 하게 됩니다.)
+    let swaps = recommend_swap(team, pokedex);
     //   3. 약점 타입 `w` 하나마다:
     //      - 교체 후보 중 들어오는 포켓몬(`candidate`)이 `w` 를 견디는 것만 남깁니다.
     //        "견딘다" = `defense_multiplier(w, s.candidate) < 1.0` (반감 또는 무효).
     //      - 남은 것을 `Vec<Swap>` 으로 모아 `WeakSpotFix { weak_type: w, swaps }` 에 담습니다.
     //      걸러도 순서는 그대로 유지되니 다시 정렬할 필요는 없습니다.
+    let mut fixes: Vec<WeakSpotFix> = Vec::new();
+    for w in weak_spots {
+        for s in &swaps {
+            if defense_multiplier(w, s.candidate) < 1.0 {
+                fixes.push(WeakSpotFix {
+                    weak_type: w,
+                    swaps: swaps.clone(),
+                })
+            }
+        }
+    }
     //   4. 약점 타입마다 만든 `WeakSpotFix` 를 1번 순서 그대로 `Vec` 에 모아 돌려줍니다.
     //
     //   ①라와 같은 모양이라 `for` 로 쓰면 이렇습니다:
@@ -335,8 +358,7 @@ pub fn recommend_fixes<'a>(team: &[&'a Pokemon], pokedex: &'a [Pokemon]) -> Vec<
     //   그런 교체도 걸러 낼지 정해 보세요.
     //
     // 확인: 아래 tests 의 `약점_타입마다_…` 테스트에서 `#[ignore]` 를 지우고 `cargo test -p poketry`.
-    let _ = (team, pokedex);
-    todo!()
+    fixes
 }
 
 #[cfg(test)]
@@ -375,6 +397,7 @@ mod tests {
         assert_eq!(defense_multiplier(Type::Ground, &p), 0.0);
     }
 
+    // TODO(R3): `recommend` 결과 개수 = 도감 수 − 팀 수, `recommend_swap` 결과 개수 = 팀 수 × (도감 수 − 팀 수) 테스트 추가.
     #[test]
     fn recommend_구멍_수가_정렬_1순위다() {
         let team = find_team(&["리자몽", "가디안", "루카리오", "갸라도스", "마기라스"]).unwrap();
@@ -386,6 +409,7 @@ mod tests {
 
         let best_possible = pokedex()
             .iter()
+            // TODO(R2): 위 `recommend` 와 함께 `id` 비교로.
             .filter(|c| !team.iter().any(|t| t.name == c.name))
             .map(|c| spots_with(c))
             .min()
@@ -521,7 +545,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn 약점_타입마다_그_타입을_견디는_교체만_추천한다() {
         let team = find_team(&[
             "리자몽",

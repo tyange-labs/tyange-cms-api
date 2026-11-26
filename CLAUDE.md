@@ -27,16 +27,49 @@ Rust + Poem 프레임워크. cargo 사용.
   뼈대는 Claude가 쓰고, 사용자에게 배움이 되는 핵심 로직만 `todo!()` + TODO로 남긴다. **다음 단계로 넘어갈 때마다**
   이 상태(뼈대 완성 + 핵심만 비움, `cargo build` 통과)로 준비해 둔다. 커밋할 때는 사용자가 쓴 코드와 Claude가 쓴 주석·문서를 **나눠서** 커밋한다
   (사용자 코드 커밋에는 Co-Authored-By를 넣지 않는다).
-- **코드에는 "다음 단계" TODO 주석만 남긴다**(2026-11, 사용자 요청). 문서 주석·설명 주석·진행 표를 두지 않는다.
+- **코드에는 TODO 주석만 남긴다**(2026-11, 사용자 요청). 문서 주석·설명 주석·진행 표를 두지 않는다.
   한 단계가 끝나면 그 TODO를 지우고(설명으로 바꾸지 않는다) 다음 단계 TODO를 단다. TODO는 그것만 읽고 따라 할 수 있게 쓴다.
+  예외: 아래 "백로그" 항목은 고칠 자리에 한 줄짜리 `TODO(R번호)` 표시만 단다(2026-11, 사용자 요청 — 세션이 바뀌어도 이어가려고).
+  그 단계를 시작할 때 Claude가 그 자리를 다른 단계 TODO처럼 풀어 쓴다(예시 데이터·번호 단계·`for` 뼈대·막히기 쉬운 곳·확인 방법).
   `poketry/fetch`(수집 도구, 학습 코드 아님)는 예외로 주석을 둔다.
-- 단계와 순서: B(포획률 정렬)·C(구멍 수 버그)·C2(추천 전체 목록 + 근거, `Recommendation`·`Swap`)·
+- 끝난 단계: B(포획률 정렬)·C(구멍 수 버그)·C2(추천 전체 목록 + 근거, `Recommendation`·`Swap`)·
   C3(`evolution.rs`: `EvolutionNode`, `evolutions()`, `chain_of(species_id)` → 계통 뿌리. 사용자 요청으로 `contains` 재귀·
-  재내보내기·테스트는 Claude가 작성, 변이 검사로 확인) 완료 → **C4(`recommend_slots`: 5마리 이하면 빈자리마다 도감에 있는 타입 조합(복합 타입 포함, 105가지)을 욕심쟁이로 하나씩 고른 뒤 한 자리씩 바꿔 보는 다듬기 + 그 조합 포켓몬(포획률 순) — ① 완료. 결과는 `SlotPlan { slots, spot_count, score }` — 점수는 빈자리를 다 채운 팀 하나에 붙는다(같은 조합 포켓몬은 상성 점수가 같아서 자리마다 점수를 두지 않는다. C2의 `recommend`/`Recommendation`은 C4에서 쓰지 않고 C2 결과물로 남김). `recommend_fixes`: 6마리면 약점 타입마다 견디는 교체 후보(② 진행 중) — 사용자 요청으로 추천 방식 변경)** + **D(cms-api `src/poketry_api.rs`에 `POST /poketry/analyze`, 응답은 `plan`(5마리 이하, `Option`)/`fixes`(6마리), 진행 중)**
-  → E(`main.rs`의 `OpenApiService`에 등록, curl 확인). C2의 남은 선택 과제: 결과 개수 테스트, 팀원 제외 비교를 `name` 대신 `id`로. C4 이후 후보 단계(사용자와 얘기만 함): 상성 계산을 `Pokemon` 대신 타입 기준으로(`virtual_mon` 우회 제거), 4배·무효 가중치.
+  재내보내기·테스트는 Claude가 작성, 변이 검사로 확인)·C4 ①(`recommend_slots`: 5마리 이하면 빈자리마다 도감에 있는 타입 조합(복합 타입 포함, 105가지)을
+  욕심쟁이로 하나씩 고른 뒤 한 자리씩 바꿔 보는 다듬기 + 그 조합 포켓몬(포획률 순). 결과는 `SlotPlan { slots, spot_count, score }` —
+  점수는 빈자리를 다 채운 팀 하나에 붙는다. 같은 조합 포켓몬은 상성 점수가 같아서 자리마다 점수를 두지 않는다).
 - 프레임워크 비의존: poketry는 poem/poem-openapi에 의존하지 않는다(serde만). API 응답 모양(`Object` DTO)은
-  cms-api `src/poketry_api.rs`가 정한다. 지금 그 파일에는 `TODO(D단계)`만 있다. E단계 가이드(등록·curl·통합 테스트)는
+  cms-api `src/poketry_api.rs`가 정한다. E단계 가이드(등록·curl·통합 테스트)는
   커밋 `06e2960`의 `src/poketry_api.rs` 끝부분에 있으니 D가 끝나면 거기서 살린다.
+
+### poketry 이어서 하기 (세션이 바뀌면 여기부터)
+
+남은 일 전체는 `grep -rn "TODO(" poketry/src src/poketry_api.rs`로 볼 수 있다. `todo!()`가 붙은 TODO가 지금 단계이고,
+한 줄짜리 `TODO(R번호)`는 백로그 표시다. 커밋 나누는 법·설명 방식은 Claude 메모리에도 있다.
+
+**지금 단계와 순서**
+1. **C4 ②** — `poketry/src/analysis.rs` `recommend_fixes`(`TODO(C4단계 ②)`, 사용자 작성). 6마리 팀에서 약점 타입마다
+   `recommend_swap` 결과 중 들어오는 포켓몬이 그 타입을 견디는(`defense_multiplier < 1.0`) 교체만 모은다.
+   확인: `약점_타입마다_…` 테스트의 `#[ignore]` 해제 후 `cargo test -p poketry`.
+2. **D** — `src/poketry_api.rs`(사용자 작성). `TODO(D단계 ①)`: `From<&Pokemon> for PokemonItem`(아직 `todo!()`).
+   `TODO(D단계 ②)`: `POST /poketry/analyze` 핸들러 — 1~3(마릿수 검사·`find_team`·약점 계산)은 작성됨, 4~5(추천·응답 담기) 남음.
+   응답은 `plan: Option<SlotPlanItem>`(5마리 이하) / `fixes: Vec<FixItem>`(6마리). 확인: 루트 `cargo build`.
+3. **E** — `main.rs`의 `OpenApiService` 튜플에 `PoketryApi` 등록, curl로 확인, 통합 테스트(가이드는 커밋 `06e2960`).
+
+**백로그** (E 뒤, 위에서부터 권장. R1~R3은 작아서 언제 끼워도 된다)
+- **R1** `recommend_slots` 정리(사용자 코드라 사용자가 고친다): `picks.clone()` → `picks`, `fitlered_pokedex` 오타,
+  `pokedex.into_iter()` → `iter()`.
+- **R2** 팀원 제외 비교를 `name` 대신 `id`로 — `recommend`·`recommend_swap`의 `filter`와 테스트 `recommend_구멍_수가_정렬_1순위다`.
+  "이름이 아니라 id로 잇는다" 결정의 남은 부분.
+- **R3** C2 결과 개수 테스트 — `recommend` = 도감 수 − 팀 수, `recommend_swap` = 팀 수 × (도감 수 − 팀 수).
+- **R4** 상성 계산을 타입 기준으로 — 바닥을 `fn multiplier_for(attack, types: &[Type])`·`fn weakness_of(members: &[Vec<Type>])`로 두고
+  `defense_multiplier`·`team_weakness`(`&Pokemon` 버전)는 타입을 꺼내 그걸 부르는 얇은 함수로. 그러면 욕심쟁이·다듬기·최종 점수가
+  `Vec<Type>`만 다뤄 `virtual_mon`·`chosen_mons`가 없어진다. API와 기존 테스트는 그대로 통과해야 한다(테스트가 안전망).
+  계기: 사용자가 "가상 포켓몬을 왜 만드나 → Pokemon만 받는 게 문제"라고 짚음. 뼈대는 Claude, 핵심 로직은 사용자.
+- **R5** 4배·무효 가중치 — 지금은 2배 이상이면 약점 1, 1배 미만이면 내성 1로 똑같이 센다(설명·계산이 쉬워서 고른 단순화).
+  예: 4배는 약점 2, 무효는 내성 2. `Weakness` 필드가 개수 → 가중합이 되고 `weak_spot`·`team_score`·테스트 기대값이 바뀐다. R4 뒤에.
+- **R6** 자리별 근거 — `SlotPick`에 "이 조합이 막아 주는 약점 타입" 또는 "이 조합을 빼면 늘어나는 구멍 수". GUI에서 근거를 보여 줄 때.
+- **R7** `recommend`·`Recommendation` 정리 — C4부터 API는 안 쓰고 C2 테스트만 쓴다. R2·R3 할 때 남길지 지울지 정한다.
+- 각 단계 TODO 안의 "생각해 볼 거리"(C4 ②: 빠지는 포켓몬이 원래 그 타입을 견디면 거르기, D ②: 중복 이름·`limit`·`ids` 입력)도 선택 과제다.
 - 도감 `poketry/pokemon.json`은 `include_str!`로 내장, `OnceLock`으로 한 번만 파싱.
 - **이름이 아니라 id로 잇는다**(2026-11, 사용자 결정). 이름은 바뀔 수 있어서다 — 메가 42개는 PokeAPI에 한국어 이름이 없어
   `메가메가니움` 같은 대체 이름이고, 공식 이름이 생기면 다음 수집 때 바뀐다. `Pokemon.id`=PokeAPI pokemon id(폼 단위,
