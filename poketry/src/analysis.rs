@@ -274,6 +274,8 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> SlotPla
     //   1. 최종 팀 점수: `team` + `chosen_mons` 전부로 `team_weakness` 를 구하고,
     //      `weak_spot(..).len()` 을 `spot_count` 에, `team_score(..)` 를 `score` 에 넣습니다.
     //      팀을 모으는 방법은 다듬기에서 `current` 를 만든 것과 같습니다.
+    let mut v = team.to_vec();
+    v.extend(chosen_mons.iter());
     //   2. 자리마다 포켓몬 목록 만들기
     //      지금 `chosen` 에는 자리마다 고른 타입 조합이 들어 있습니다. 예: `[[물, 땅], [강철], [페어리]]`.
     //      "물/땅 타입을 넣으세요"만으로는 불친절하니, 자리마다 "이런 포켓몬이 있어요" 목록을 붙입니다.
@@ -282,6 +284,10 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> SlotPla
     //      ① 도감 전체를 하나씩 봅니다. `pokedex` 의 포켓몬 `p` 마다요.
     //      ② 팀에 이미 있는 포켓몬은 뺍니다. 사용자가 넣은 팀원을 다시 추천하면 안 되니까요.
     //         이름이 아니라 `id` 로 비교합니다. 함수 맨 위에서 `shapes` 를 만들 때 쓴 `filter` 조건과 같습니다.
+    let fitlered_pokedex: Vec<&Pokemon> = pokedex
+        .into_iter()
+        .filter(|p| team.iter().all(|c| p.id != c.id))
+        .collect();
     //      ③ 타입 조합이 맞는 것만 남깁니다. `shape_of(p)` 는 `p` 의 타입을 정렬된 `Vec<Type>` 으로 만들어 줍니다.
     //         이게 이 자리의 조합과 같으면 남깁니다. `for shape in &chosen` 으로 돌면 `shape` 가 `&Vec<Type>`(참조)라서
     //         `shape_of(p) == *shape` 처럼 `*` 로 한 겹 벗겨 비교합니다.
@@ -291,22 +297,33 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> SlotPla
     //      이걸 `chosen` 의 자리마다 되풀이하면 `Vec<SlotPick>` 이 완성됩니다.
     //
     //      반복자 체인이 헷갈리면 `for` 로 먼저 써 보세요:
-    //        let mut slots: Vec<SlotPick> = Vec::new();
-    //        for shape in &chosen {
-    //            let mut picks: Vec<&Pokemon> = Vec::new();
-    //            for p in pokedex {
-    //                // ② 팀에 있으면 건너뛰기, ③ 조합이 같을 때만 picks 에 넣기
-    //            }
-    //            // ④ picks 정렬
-    //            slots.push(SlotPick { slot_types: shape.clone(), picks });
-    //        }
+    let mut slots: Vec<SlotPick> = Vec::new();
+    for shape in &chosen {
+        let mut picks: Vec<&Pokemon> = fitlered_pokedex
+            .iter()
+            .filter(|fp| shape_of(fp) == *shape)
+            .copied()
+            .collect();
+        // ④ picks 정렬
+        picks.sort_by_key(|p| -(p.capture_rate as i32));
+        slots.push(SlotPick {
+            slot_types: shape.clone(),
+            picks: picks.clone(),
+        });
+    }
     //   3. `SlotPlan { slots, spot_count, score }` 를 돌려줍니다.
     //   6마리면 `chosen` 이 비어서 `slots` 도 비고, 점수는 원래 팀 점수가 됩니다.
-    //
+    let weaknesses = team_weakness(&v);
+    let score = team_score(&weaknesses);
+    let spot_count = weak_spot(&weaknesses).len();
+    SlotPlan {
+        slots,
+        spot_count,
+        score,
+    }
+
     // 확인: 아래 tests 의 `#[ignore]` 붙은 테스트 중 `빈자리_…`·`다듬은_뒤에는_…`·`팀이_다_차면_…` 세 개에서
     //   `#[ignore]` 를 지우고 `cargo test -p poketry`.
-    let _ = (team, chosen, chosen_mons, pokedex);
-    todo!()
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -408,7 +425,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn 빈자리_수만큼_서로_다른_타입_조합을_고르고_그_조합_포켓몬만_추천한다() {
         let team = find_team(&["리자몽", "가디안", "루카리오"]).unwrap();
         let plan = recommend_slots(&team, pokedex());
