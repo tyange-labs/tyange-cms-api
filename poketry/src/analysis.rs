@@ -242,6 +242,47 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<Slo
     //
     // 확인: 아래 tests 의 `다듬은_뒤에는_…` 테스트에서 `#[ignore]` 를 지우고 `cargo test -p poketry`.
 
+    loop {
+        let mut changed = false;
+
+        for i in 0..chosen.len() {
+            let mut current: Vec<&Pokemon> = team.to_vec();
+            current.extend(chosen_mons.iter());
+            let mut best_key = team_key(&current);
+
+            for shape in &shapes {
+                if chosen.contains(shape) {
+                    continue;
+                }
+
+                let candidate = virtual_mon(shape);
+                let key = {
+                    let mut trial: Vec<&Pokemon> = team.to_vec();
+                    trial.extend(
+                        chosen_mons
+                            .iter()
+                            .enumerate()
+                            .filter(|c| i != c.0)
+                            .map(|c| c.1),
+                    );
+                    trial.push(&candidate);
+                    team_key(&trial)
+                };
+
+                if key < best_key {
+                    chosen[i] = shape.clone();
+                    chosen_mons[i] = candidate;
+                    best_key = key;
+                    changed = true;
+                }
+            }
+        }
+
+        if !changed {
+            break;
+        }
+    }
+
     // TODO(C4단계 ① 라): 고른 타입 조합마다 그 조합의 실제 포켓몬을 추천하세요.
     //   - `recommend(team, pokedex)` 를 **한 번만** 불러 둡니다(원래 팀 기준 순위).
     //   - `chosen` 의 조합 `shape` 마다: 추천 중 `shape_of(r.candidate) == *shape` 인 것만 걸러 `.cloned()` 로 복사해
