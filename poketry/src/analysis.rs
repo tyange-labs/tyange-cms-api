@@ -274,11 +274,32 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> SlotPla
     //   1. 최종 팀 점수: `team` + `chosen_mons` 전부로 `team_weakness` 를 구하고,
     //      `weak_spot(..).len()` 을 `spot_count` 에, `team_score(..)` 를 `score` 에 넣습니다.
     //      팀을 모으는 방법은 다듬기에서 `current` 를 만든 것과 같습니다.
-    //   2. 자리마다 포켓몬: `chosen` 의 조합 `shape` 마다, 도감(`pokedex`)에서
-    //      - 팀에 이미 있는 포켓몬(`id` 로 비교)은 빼고,
-    //      - `shape_of(p) == *shape` 인 것만 남겨 `Vec<&Pokemon>` 으로 모은 뒤,
-    //      - 포획률(`capture_rate`)이 높은 순으로 정렬합니다. 높은 순은 `recommend` 의 정렬에서 쓴 `Reverse` 를 떠올려 보세요.
-    //      `SlotPick { slot_types: shape.clone(), picks }` 로 담아 `Vec<SlotPick>` 을 만듭니다.
+    //   2. 자리마다 포켓몬 목록 만들기
+    //      지금 `chosen` 에는 자리마다 고른 타입 조합이 들어 있습니다. 예: `[[물, 땅], [강철], [페어리]]`.
+    //      "물/땅 타입을 넣으세요"만으로는 불친절하니, 자리마다 "이런 포켓몬이 있어요" 목록을 붙입니다.
+    //
+    //      [물, 땅] 자리 하나만 보면 순서는 이렇습니다.
+    //      ① 도감 전체를 하나씩 봅니다. `pokedex` 의 포켓몬 `p` 마다요.
+    //      ② 팀에 이미 있는 포켓몬은 뺍니다. 사용자가 넣은 팀원을 다시 추천하면 안 되니까요.
+    //         이름이 아니라 `id` 로 비교합니다. 함수 맨 위에서 `shapes` 를 만들 때 쓴 `filter` 조건과 같습니다.
+    //      ③ 타입 조합이 맞는 것만 남깁니다. `shape_of(p)` 는 `p` 의 타입을 정렬된 `Vec<Type>` 으로 만들어 줍니다.
+    //         이게 이 자리의 조합과 같으면 남깁니다. `for shape in &chosen` 으로 돌면 `shape` 가 `&Vec<Type>`(참조)라서
+    //         `shape_of(p) == *shape` 처럼 `*` 로 한 겹 벗겨 비교합니다.
+    //      ④ 남은 것을 포획률(`capture_rate`) 높은 순으로 정렬합니다. 잡기 쉬운 포켓몬부터 보여 주려는 거예요.
+    //         `recommend` 끝의 `sort_by_key` 와 `Reverse` 를 보세요. 이번엔 기준이 포획률 하나뿐입니다.
+    //      ⑤ `SlotPick` 에 담습니다. `slot_types` 에는 이 자리 조합(`shape.clone()`), `picks` 에는 방금 만든 목록.
+    //      이걸 `chosen` 의 자리마다 되풀이하면 `Vec<SlotPick>` 이 완성됩니다.
+    //
+    //      반복자 체인이 헷갈리면 `for` 로 먼저 써 보세요:
+    //        let mut slots: Vec<SlotPick> = Vec::new();
+    //        for shape in &chosen {
+    //            let mut picks: Vec<&Pokemon> = Vec::new();
+    //            for p in pokedex {
+    //                // ② 팀에 있으면 건너뛰기, ③ 조합이 같을 때만 picks 에 넣기
+    //            }
+    //            // ④ picks 정렬
+    //            slots.push(SlotPick { slot_types: shape.clone(), picks });
+    //        }
     //   3. `SlotPlan { slots, spot_count, score }` 를 돌려줍니다.
     //   6마리면 `chosen` 이 비어서 `slots` 도 비고, 점수는 원래 팀 점수가 됩니다.
     //
