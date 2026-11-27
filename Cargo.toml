@@ -20,9 +20,15 @@ poem = { version = "3.1.12", features = [
     "multipart",
     "static-files",
     "test",
+    "tower-compat",
 ] }
 poem-openapi = { version = "5", features = [
     "swagger-ui",
+] }
+rmcp = { version = "3.12.0", default-features = false, features = [
+    "server",
+    "macros",
+    "transport-streamable-http-server",
 ] }
 reqwest = { version = "0.12.15", default-features = false, features = [
     "charset",
@@ -48,6 +54,8 @@ tokio = { version = "1.44.1", features = [
 web-push-native = "0.5.0"
 webauthn-rs = { version = "0.5.5", features = ["conditional-ui"] }
 webauthn-rs-proto = "0.5.5"
+url = "2.5.4"
+
 [dependencies.uuid]
 version = "1.16.0"
 # Lets you generate random UUIDs

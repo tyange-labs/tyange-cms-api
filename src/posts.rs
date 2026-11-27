@@ -13,6 +13,36 @@ use crate::models::{
 };
 use crate::utils::parse_tags;
 
+/// 글 하나(본문·태그 포함). 없으면 `None`.
+pub async fn find_post(db: &sqlx::Pool<Sqlite>, post_id: &str) -> Result<Option<Post>, sqlx::Error> {
+    let row = query_as::<Sqlite, PostResponseDb>(
+        r#"
+        SELECT p.post_id, p.title, p.description, p.published_at,
+               COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', p.created_at), '') AS created_at,
+        p.content, p.status,
+        IFNULL(GROUP_CONCAT(t.category || '::' || t.name, ','), '') AS tags
+        FROM posts p
+        LEFT JOIN post_tags pt ON p.post_id = pt.post_id
+        LEFT JOIN tags t ON pt.tag_id = t.tag_id
+        WHERE p.post_id = ?
+        GROUP BY p.post_id
+        "#,
+    )
+    .bind(post_id)
+    .fetch_optional(db)
+    .await?;
+    Ok(row.map(|p| Post {
+        post_id: p.post_id,
+        title: p.title,
+        description: p.description,
+        published_at: p.published_at,
+        created_at: p.created_at,
+        tags: parse_tags(&p.tags),
+        content: p.content,
+        status: p.status,
+    }))
+}
+
 pub async fn create_post(
     state: &AppState,
     user: &AuthenticatedUser,

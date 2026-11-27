@@ -2,6 +2,7 @@ mod blog_redeploy;
 mod book_info;
 mod db;
 mod gotolib_push;
+mod mcp;
 mod middlewares;
 mod models;
 mod openapi;
@@ -305,7 +306,17 @@ async fn main() -> Result<(), std::io::Error> {
             .nest("/images", StaticFilesEndpoint::new(upload_base_path))
     }
 
-    let app = configure_routes(&state).data(push).data(api_keys).data(state).with(
+    // Claude 커넥터(원격 MCP). MCP_PUBLIC_URL과 MCP_OAUTH_CLIENT_ID가 둘 다 있을 때만 켜진다.
+    let mut routes = configure_routes(&state);
+    match mcp::McpConfig::from_env() {
+        Some(config) => {
+            println!("[mcp] 켜짐: {}/mcp", config.public_url);
+            routes = mcp::add_routes(routes, state.clone(), Arc::new(config));
+        }
+        None => println!("[mcp] 꺼져 있습니다(MCP_PUBLIC_URL, MCP_OAUTH_CLIENT_ID)."),
+    }
+
+    let app = routes.data(push).data(api_keys).data(state).with(
         Cors::new()
             .allow_origin("http://localhost:3001")
             .allow_origin("http://localhost:3000")

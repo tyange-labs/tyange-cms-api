@@ -432,6 +432,41 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
         .await
         .map_err(InternalServerError)?;
 
+    // MCP 커넥터(src/mcp)의 OAuth. 승인 코드는 5분짜리 일회용, 토큰은 액세스·리프레시 모두 해시만 저장한다.
+    // resource는 토큰이 발급된 MCP 주소(RFC 8707) — 다른 주소용 토큰은 받지 않는다.
+    query(
+        r#"
+        CREATE TABLE IF NOT EXISTS mcp_oauth_codes (
+            code_hash TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            client_id TEXT NOT NULL,
+            redirect_uri TEXT NOT NULL,
+            code_challenge TEXT NOT NULL,
+            resource TEXT NOT NULL,
+            expires_at INTEGER NOT NULL
+        )
+        "#,
+    )
+    .execute(pool)
+    .await
+    .map_err(InternalServerError)?;
+    query(
+        r#"
+        CREATE TABLE IF NOT EXISTS mcp_oauth_tokens (
+            token_hash TEXT PRIMARY KEY,
+            kind TEXT NOT NULL CHECK (kind IN ('access', 'refresh')),
+            user_id TEXT NOT NULL,
+            client_id TEXT NOT NULL,
+            resource TEXT NOT NULL,
+            expires_at INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        "#,
+    )
+    .execute(pool)
+    .await
+    .map_err(InternalServerError)?;
+
     // Craft 폴더 → 포스트 동기화 제거(2026-11) — Claude 커넥터로 글을 올리는 방식으로 바꾸면서 걷어냄.
     // 동기화가 만든 글(posts)은 그대로 두고, 문서↔글 연결과 이미지 캐시 표만 지운다. 반복 실행해도 안전.
     let _ = query("DROP TABLE IF EXISTS craft_sync_posts").execute(pool).await;
