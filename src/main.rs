@@ -308,16 +308,22 @@ async fn main() -> Result<(), std::io::Error> {
 
     // Claude 커넥터(원격 MCP). MCP_PUBLIC_URL과 MCP_OAUTH_CLIENT_ID가 둘 다 있을 때만 켜진다.
     let mut routes = configure_routes(&state);
-    match mcp::McpConfig::from_env() {
+    let mcp_config = mcp::McpConfig::from_env();
+    match &mcp_config {
         Some(config) => {
             println!("[mcp] 켜짐: {}/mcp", config.public_url);
-            routes = mcp::add_routes(routes, state.clone(), Arc::new(config));
+            routes = mcp::add_routes(routes, state.clone(), Arc::new(config.clone()));
         }
         None => println!("[mcp] 꺼져 있습니다(MCP_PUBLIC_URL, MCP_OAUTH_CLIENT_ID)."),
     }
 
+    let mut cors = Cors::new();
+    // MCP 승인 화면(같은 출처)이 패스키 로그인을 POST한다. 브라우저가 Origin을 붙이므로 허용 목록에 넣어야 한다.
+    if let Some(config) = &mcp_config {
+        cors = cors.allow_origin(config.public_url.as_str());
+    }
     let app = routes.data(push).data(api_keys).data(state).with(
-        Cors::new()
+        cors
             .allow_origin("http://localhost:3001")
             .allow_origin("http://localhost:3000")
             .allow_origin("http://localhost:4000")
