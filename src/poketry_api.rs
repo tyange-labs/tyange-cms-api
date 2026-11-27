@@ -26,8 +26,8 @@ pub struct PokemonItem {
 #[oai(rename_all = "snake_case")]
 pub struct WeaknessRow {
     pub attack_type: String,
-    pub weak_count: i32,
-    pub resist_count: i32,
+    pub weak_weight: i32,
+    pub resist_weight: i32,
 }
 
 #[derive(Debug, Object)]
@@ -118,8 +118,8 @@ impl From<&poketry::Weakness> for WeaknessRow {
     fn from(w: &poketry::Weakness) -> Self {
         WeaknessRow {
             attack_type: w.attack_type.name().to_string(),
-            weak_count: w.twice_multiplier_count,
-            resist_count: w.under_multiplier_count,
+            weak_weight: w.weak_weight,
+            resist_weight: w.resist_weight,
         }
     }
 }

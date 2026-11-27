@@ -18,12 +18,11 @@ pub fn defense_multiplier(attack: Type, defender: &Pokemon) -> f32 {
     multiplier_for(attack, &defender.types())
 }
 
-// TODO(R5): 4배 약점·무효를 2배·반감보다 무겁게 세기. 계획은 CLAUDE.md "poketry 이어서 하기" 백로그 R5.
 #[derive(Debug, Clone, Serialize)]
 pub struct Weakness {
     pub attack_type: Type,
-    pub under_multiplier_count: i32,
-    pub twice_multiplier_count: i32,
+    pub resist_weight: i32,
+    pub weak_weight: i32,
 }
 
 pub fn weakness_of(members: &[Vec<Type>]) -> Vec<Weakness> {
@@ -35,8 +34,14 @@ pub fn weakness_of(members: &[Vec<Type>]) -> Vec<Weakness> {
 
         for types in members {
             let m = multiplier_for(attack, types);
-            if m >= 2.0 {
+            if m >= 4.0 {
+                weak += 2;
+            } else if m >= 2.0 {
                 weak += 1;
+            } else if m == 0.0 {
+                resist += 3;
+            } else if m <= 0.25 {
+                resist += 2;
             } else if m < 1.0 {
                 resist += 1;
             }
@@ -44,8 +49,8 @@ pub fn weakness_of(members: &[Vec<Type>]) -> Vec<Weakness> {
 
         result.push(Weakness {
             attack_type: attack,
-            twice_multiplier_count: weak,
-            under_multiplier_count: resist,
+            weak_weight: weak,
+            resist_weight: resist,
         });
     }
 
@@ -61,7 +66,7 @@ pub fn weak_spot(weaknesses: &[Weakness]) -> Vec<Type> {
     let mut result: Vec<Type> = Vec::new();
 
     for weakness in weaknesses {
-        if weakness.twice_multiplier_count > weakness.under_multiplier_count {
+        if weakness.weak_weight > weakness.resist_weight {
             result.push(weakness.attack_type);
         }
     }
@@ -73,7 +78,7 @@ pub fn team_score(weakness: &[Weakness]) -> i32 {
     let mut result = 0;
 
     for weak in weakness {
-        result = result + (weak.under_multiplier_count - weak.twice_multiplier_count);
+        result = result + (weak.resist_weight - weak.weak_weight);
     }
 
     result
@@ -311,6 +316,21 @@ mod tests {
     }
 
     #[test]
+    fn 약점과_내성은_배율_단계만큼_무겁게_센다() {
+        let row = |attack: Type, types: Vec<Type>| {
+            let table = weakness_of(&[types]);
+            let w = table.iter().find(|w| w.attack_type == attack).unwrap();
+            (w.weak_weight, w.resist_weight)
+        };
+        assert_eq!(row(Type::Ice, vec![Type::Grass, Type::Flying]), (2, 0));
+        assert_eq!(row(Type::Fire, vec![Type::Grass]), (1, 0));
+        assert_eq!(row(Type::Normal, vec![Type::Grass]), (0, 0));
+        assert_eq!(row(Type::Water, vec![Type::Grass]), (0, 1));
+        assert_eq!(row(Type::Grass, vec![Type::Fire, Type::Dragon]), (0, 2));
+        assert_eq!(row(Type::Normal, vec![Type::Ghost]), (0, 3));
+    }
+
+    #[test]
     fn 타입_목록으로_팀_약점표를_만든다() {
         let members = vec![vec![Type::Fire], vec![Type::Water, Type::Ground]];
         let table = weakness_of(&members);
@@ -318,11 +338,11 @@ mod tests {
 
         let row = |attack: Type| {
             let w = table.iter().find(|w| w.attack_type == attack).unwrap();
-            (w.twice_multiplier_count, w.under_multiplier_count)
+            (w.weak_weight, w.resist_weight)
         };
         assert_eq!(row(Type::Water), (1, 0));
-        assert_eq!(row(Type::Grass), (1, 1));
-        assert_eq!(row(Type::Electric), (0, 1));
+        assert_eq!(row(Type::Grass), (2, 1));
+        assert_eq!(row(Type::Electric), (0, 3));
 
         let team = find_team(&["리자몽", "가디안", "루카리오", "갸라도스", "마기라스"]).unwrap();
         let types: Vec<Vec<Type>> = team.iter().map(|p| p.types()).collect();
@@ -332,8 +352,8 @@ mod tests {
                 .map(|w| {
                     (
                         w.attack_type,
-                        w.twice_multiplier_count,
-                        w.under_multiplier_count,
+                        w.weak_weight,
+                        w.resist_weight,
                     )
                 })
                 .collect()
@@ -394,7 +414,22 @@ mod tests {
         ])
         .unwrap();
         let swaps = recommend_swap(&team, pokedex());
-        assert_eq!(swaps[0].candidate.name, "아머까오");
+        let tied: Vec<&Swap> = swaps
+            .iter()
+            .take_while(|s| (s.spot_count, s.score) == (swaps[0].spot_count, swaps[0].score))
+            .collect();
+
+        assert!(tied.len() > 1, "1등과 동점인 교체가 있어야 의미가 있습니다");
+        assert!(
+            tied.windows(2)
+                .all(|w| w[0].candidate.capture_rate >= w[1].candidate.capture_rate),
+            "구멍 수·점수가 같으면 포획률 높은 순이어야 합니다"
+        );
+        assert!(
+            tied.iter()
+                .any(|s| s.candidate.capture_rate != tied[0].candidate.capture_rate),
+            "동점 안에 포획률이 다른 교체가 있어야 의미가 있습니다"
+        );
     }
 
     #[test]

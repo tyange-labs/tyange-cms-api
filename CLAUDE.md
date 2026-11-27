@@ -50,12 +50,17 @@ Rust + Poem 프레임워크. cargo 사용.
 남은 일 전체는 `grep -rn "TODO(" poketry/src src/poketry_api.rs`로 볼 수 있다. `todo!()`가 붙은 TODO가 지금 단계이고,
 한 줄짜리 `TODO(R번호)`는 백로그 표시다. 커밋 나누는 법·설명 방식은 Claude 메모리에도 있다.
 
-**지금 단계**: 단계 TODO(A~E)와 백로그 R1~R4·R7은 끝났다. 다음은 아래 백로그(위에서부터 권장).
+**지금 단계**: 단계 TODO(A~E)와 백로그 R1~R5·R7은 끝났다. 다음은 아래 백로그(위에서부터 권장).
 
 **백로그** (위에서부터 권장. R1~R3(`recommend_slots` 정리·팀원 비교를 id로·C2 결과 개수 테스트)과 R7(쓰는 곳 없는 `recommend`·`Recommendation` 삭제)은 2026-11 사용자 요청으로 Claude가 끝냈다. R4(상성 계산을 타입 기준으로)는 ①~④ 사용자, ⑤⑥ Claude —
-  바닥이 `multiplier_for(attack, &[Type])`·`weakness_of(&[Vec<Type>])`이고 `defense_multiplier`·`team_weakness`는 그 위의 얇은 함수, `recommend_slots`는 `Vec<Type>`만 다룬다(`virtual_mon` 삭제). 전후 출력이 6개 팀에서 같음을 확인)
-- **R5** 4배·무효 가중치 — 지금은 2배 이상이면 약점 1, 1배 미만이면 내성 1로 똑같이 센다(설명·계산이 쉬워서 고른 단순화).
-  예: 4배는 약점 2, 무효는 내성 2. `Weakness` 필드가 개수 → 가중합이 되고 `weak_spot`·`team_score`·테스트 기대값이 바뀐다. 바꿀 곳은 `weakness_of` 한 곳이다.
+  바닥이 `multiplier_for(attack, &[Type])`·`weakness_of(&[Vec<Type>])`이고 `defense_multiplier`·`team_weakness`는 그 위의 얇은 함수, `recommend_slots`는 `Vec<Type>`만 다룬다(`virtual_mon` 삭제). 전후 출력이 6개 팀에서 같음을 확인).
+  R5(가중치)도 사용자 요청으로 Claude가 했다.
+- **약점·내성 가중치는 게임 배율에서 끌어낸다**(2026-11, 사용자 결정 — "임의로 정하지 말고 실제 게임이 어떻게 하는지 보고").
+  레전드 Z-A는 본가와 같이 두 타입 배율을 곱한다(4×/2×/1×/0.5×/0.25×/0×. 레전드 아르세우스의 2.5×·0.4× 감쇠는 따르지 않음 —
+  공략 사이트 여러 곳과 Bulbapedia 데미지 문서의 Z-A 보스전 "4× 이상" 규칙으로 확인, Bulbapedia 원문은 403이라 직접 인용 못 함).
+  가중치 = 1×에서 몇 단계인가(log₂): 4×→약점 2, 2×→약점 1, 0.5×→내성 1, 0.25×→내성 2. **무효(0×)는 단계가 정의되지 않아
+  사용자가 내성 3으로 정했다**(0.25×보다 한 단계 더). 계산은 `weakness_of` 한 곳, `Weakness` 필드는 `weak_weight`·`resist_weight`
+  (API `WeaknessRow`도 같은 이름 — 예전 `weak_count`·`resist_count`). 보스전 0.63×·트레이너전 0.7× 같은 보정은 팀 비교에 영향이 없어 넣지 않았다.
 - **R6** 자리별 근거 — `SlotPick`에 "이 조합이 막아 주는 약점 타입" 또는 "이 조합을 빼면 늘어나는 구멍 수". GUI에서 근거를 보여 줄 때.
 - 선택 과제: C4 ② — 빠지는 포켓몬(`out`)이 원래 그 약점 타입을 견디던 교체는 약점을 줄이지 못하니 거르기(TODO는 단계가 끝나 지웠다).
   D — 같은 이름 두 번이면 400으로 막을지, 그룹당 개수를 요청 `limit: Option<u32>`로, 이름 대신 `ids: Vec<u32>`로 받기(GUI가 붙으면 id 쪽이 안전).
