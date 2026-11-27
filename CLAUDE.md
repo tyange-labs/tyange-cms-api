@@ -174,7 +174,11 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
     서브도메인을 쓰는 이유: Claude가 인가 서버 정보를 도메인 루트의 `/.well-known/`에서 찾아서 `tyange.com/api/cms` 아래로는 확실하지 않다.
   - **이미지**: `create_post`·`update_post`가 본문 `![…](https://…)`를 내려받아 저장하고 주소를 `MCP_IMAGE_BASE_URL`(기본 `https://tyange.com/api/cms`)+`/images/…`로 바꾼다(지운 Craft 동기화와 같은 방식).
     실패한 그림은 원래 주소를 두고 결과 `images.warnings`로 알린다. SSRF 방지: https만, 풀린 주소 중 하나라도 내부망이면 거부, 검사한 IP로 연결 고정, 리다이렉트 3번·https·도메인만.
-  - 테스트 15개(`mcp/tests.rs`, `mcp/images.rs`): OAuth 흐름과 거부 경우, 도구 호출 전체, 가짜 이미지 서버. 보안 검사 13종을 하나씩 빼는 변이에서 모두 실패 확인.
+  - 리다이렉트는 claude.ai/claude.com 콜백 + **루프백**(`http://localhost|127.0.0.1|[::1]:<포트>/…`, RFC 8252) — 맥의 Claude Code도 OAuth로 붙을 수 있다
+    (`claude mcp add --transport http tyange <MCP_PUBLIC_URL>/mcp --client-id tyange-claude` 식. Claude Code 플래그는 그쪽 문서 확인).
+  - **로컬에서 도구 써 보기**: `scripts/mcp-local.sh serve` → `scripts/mcp-local.sh token`이 출력하는 `claude mcp add … --header "Authorization: Bearer …"` 실행.
+    OAuth·패스키 없이 로컬 DB(`./data/mcp-local`)에 토큰을 직접 넣는다. 블로그 재배포·패스키·수집 작업은 끈 채로 뜬다(로컬에서 글을 공개해도 운영 블로그가 재배포되지 않게).
+  - 테스트 18개(`mcp/tests.rs`, `mcp/images.rs`): OAuth 흐름과 거부 경우, 루프백, 도구 호출 전체, 가짜 이미지 서버. 보안 검사 16종을 하나씩 빼는 변이에서 모두 실패 확인.
   - **배포에 필요한 사람 작업**: DNS(`mcp.tyange.com`) → nginx server 블록(TLS, `proxy_pass http://127.0.0.1:8080`) → repo variable `MCP_PUBLIC_URL` → 배포 →
     admin 계정에 패스키가 있어야 승인 가능 → 맞춤 커넥터 추가(URL `<MCP_PUBLIC_URL>/mcp`, 고급 설정에서 OAuth 클라이언트 id). claude.ai 웹뿐 아니라
     **iOS 앱에서도 추가할 수 있다**(사용자 확인). 모바일도 같은 리다이렉트 `https://claude.ai/api/mcp/auth_callback`을 쓰고, 패스키 RP ID가 `tyange.com`이라 하위 도메인 승인 화면에서도 동작한다.

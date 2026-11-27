@@ -701,9 +701,18 @@ async fn claude_code_can_finish_oauth_through_a_loopback_redirect() {
     let loopback = "http://localhost:8765/callback";
     let mut body = json!({ "access_token": jwt("admin", "admin") });
     for (key, value) in authorize_params() {
-        body[key] = json!(if key == "redirect_uri" { loopback.to_string() } else { value });
+        body[key] = json!(if key == "redirect_uri" {
+            loopback.to_string()
+        } else {
+            value
+        });
     }
-    let resp = h.cli.post("/oauth/authorize/approve").body_json(&body).send().await;
+    let resp = h
+        .cli
+        .post("/oauth/authorize/approve")
+        .body_json(&body)
+        .send()
+        .await;
     resp.assert_status_is_ok();
     let body: Value = resp.json().await.value().deserialize();
     let redirect = body["redirect"].as_str().unwrap();
@@ -732,6 +741,29 @@ async fn claude_code_can_finish_oauth_through_a_loopback_redirect() {
             ("code_verifier", VERIFIER),
         ])
         .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST, "승인 때와 다른 redirect_uri 로는 코드를 못 바꾼다");
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "승인 때와 다른 redirect_uri 로는 코드를 못 바꾼다"
+    );
     assert_eq!(body["error"], "invalid_grant");
+}
+
+#[tokio::test]
+async fn initialize_names_the_server() {
+    let h = harness().await;
+    let (access, _) = h.login().await;
+    let (status, body, _) = h
+        .rpc(
+            Some(&access),
+            "initialize",
+            json!({
+                "protocolVersion": "2025-11-25",
+                "capabilities": {},
+                "clientInfo": { "name": "test", "version": "1" },
+            }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["result"]["serverInfo"]["name"], "tyange-cms");
 }

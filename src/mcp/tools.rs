@@ -8,7 +8,7 @@ use poem::http::request::Parts;
 use rmcp::handler::server::common::Extension;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{CallToolResult, ContentBlock, ServerCapabilities, ServerConfig};
+use rmcp::model::{CallToolResult, ContentBlock, Implementation, ServerCapabilities, ServerConfig};
 use rmcp::{schemars, tool, tool_handler, tool_router, ErrorData, ServerHandler};
 use serde::{Deserialize, Serialize};
 use sqlx::{query, Row};
@@ -392,7 +392,9 @@ impl CmsTools {
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for CmsTools {
     fn get_info(&self) -> ServerConfig {
-        ServerConfig::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+            .with_server_info(Implementation::new("tyange-cms", env!("CARGO_PKG_VERSION")))
+            .with_instructions(
             "tyange 블로그 CMS. 글 목록·조회·작성·수정·공개 전환·삭제를 한다. 새 글은 사용자가 공개하라고 하지 않는 한 draft 로 올린다.",
         )
     }
