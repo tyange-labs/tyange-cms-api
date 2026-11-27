@@ -179,6 +179,10 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
   - **로컬에서 도구 써 보기**: `scripts/mcp-local.sh serve` → `scripts/mcp-local.sh token`이 출력하는 `claude mcp add … --header "Authorization: Bearer …"` 실행.
     OAuth·패스키 없이 로컬 DB(`./data/mcp-local`)에 토큰을 직접 넣는다. 블로그 재배포·패스키·수집 작업은 끈 채로 뜬다(로컬에서 글을 공개해도 운영 블로그가 재배포되지 않게).
   - 테스트 18개(`mcp/tests.rs`, `mcp/images.rs`): OAuth 흐름과 거부 경우, 루프백, 도구 호출 전체, 가짜 이미지 서버. 보안 검사 16종을 하나씩 빼는 변이에서 모두 실패 확인.
+  - **nginx (Lightsail, `ssh lightsail`)**: `/etc/nginx/sites-available/mcp.tyange.com`(→ sites-enabled 링크), `proxy_pass http://localhost:8080` 루트 그대로. 버전 관리 밖.
+    이 서버는 443을 **`172.26.12.137:443`에만** 연다(tailscale serve가 tailnet 쪽 443을 써서, 모든 주소 listen이나 IPv6 443은 충돌 — 2026-11-05 메모가 gotolib 설정에 있음).
+    그래서 `certbot --nginx`로 설정까지 고치게 두지 말고 `certbot certonly --nginx -d mcp.tyange.com`으로 인증서만 받은 뒤 443 블록을 손으로 같은 모양으로 쓴다.
+    SSH 키는 1Password 에이전트라 Claude 명령은 사용자가 한 번 승인(`! ssh lightsail 'echo ok'`)한 뒤에만 통한다.
   - **배포에 필요한 사람 작업**: DNS(`mcp.tyange.com`) → nginx server 블록(TLS, `proxy_pass http://127.0.0.1:8080`) → repo variable `MCP_PUBLIC_URL` → 배포 →
     admin 계정에 패스키가 있어야 승인 가능 → 맞춤 커넥터 추가(URL `<MCP_PUBLIC_URL>/mcp`, 고급 설정에서 OAuth 클라이언트 id). claude.ai 웹뿐 아니라
     **iOS 앱에서도 추가할 수 있다**(사용자 확인). 모바일도 같은 리다이렉트 `https://claude.ai/api/mcp/auth_callback`을 쓰고, 패스키 RP ID가 `tyange.com`이라 하위 도메인 승인 화면에서도 동작한다.
