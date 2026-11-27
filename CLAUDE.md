@@ -49,7 +49,7 @@ Rust + Poem 프레임워크. cargo 사용.
 **지금 단계와 순서**
 1. **C4 ②** — `poketry/src/analysis.rs` `recommend_fixes`(`TODO(C4단계 ②)`, 사용자 작성). 6마리 팀에서 약점 타입마다
    `recommend_swap` 결과 중 들어오는 포켓몬이 그 타입을 견디는(`defense_multiplier < 1.0`) 교체만 모은다.
-   확인: `약점_타입마다_…` 테스트의 `#[ignore]` 해제 후 `cargo test -p poketry`.
+   확인: `cargo test -p poketry`에서 `약점_타입마다_…` 테스트 통과(ignore는 이미 풀려 있다, 지금 실패 중).
 2. **D** — `src/poketry_api.rs`(사용자 작성). `TODO(D단계 ①)`: `From<&Pokemon> for PokemonItem`(아직 `todo!()`).
    `TODO(D단계 ②)`: `POST /poketry/analyze` 핸들러 — 1~3(마릿수 검사·`find_team`·약점 계산)은 작성됨, 4~5(추천·응답 담기) 남음.
    응답은 `plan: Option<SlotPlanItem>`(5마리 이하) / `fixes: Vec<FixItem>`(6마리). 확인: 루트 `cargo build`.
