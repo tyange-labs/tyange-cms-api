@@ -5,6 +5,9 @@
 //! - `/oauth/authorize`: 승인 화면. 기존 패스키 로그인(`/passkeys/login/*`)으로 받은 로그인 JWT를
 //!   `/oauth/authorize/approve`에 넘기면, admin 계정일 때 승인 코드를 만들어 Claude로 돌려보낸다.
 //! - `/oauth/token`: 코드 + PKCE(S256) → 토큰 쌍, 리프레시 토큰 → 새 쌍(회전).
+//! - `/oauth/passkey-setup`: admin 패스키를 비밀번호 없이 처음 등록하는 화면. 서버 DB에 직접 넣은 일회용 코드
+//!   (`scripts/mcp-setup-code.sh`, SSH 접속이 곧 본인 확인)로 그 admin에게 패스키 등록 의식을 열어 준다.
+//!   승인은 패스키로만 받는다.
 //!
 //! 클라이언트는 미리 정한 공개 클라이언트 하나(`MCP_OAUTH_CLIENT_ID`)만 받는다. 동적 등록(DCR)·CIMD는 없다 —
 //! 쓰는 사람이 한 명이라 Claude 커넥터 설정에서 "Use your own OAuth client"로 이 id를 넣는다.
@@ -47,6 +50,9 @@ pub fn add_routes(route: Route, config: Arc<McpConfig>) -> Route {
         .at("/oauth/authorize", get(authorize_page).data(c()))
         .at("/oauth/authorize/approve", post(approve).data(c()))
         .at("/oauth/token", post(token).data(c()))
+        .at("/oauth/passkey-setup", get(passkey_setup_page))
+        .at("/oauth/passkey-setup/start", post(passkey_setup_start))
+        .at("/oauth/passkey-setup/finish", post(passkey_setup_finish))
 }
 
 #[handler]
@@ -295,6 +301,73 @@ async fn approve(
     Ok(no_frame(Json(serde_json::json!({ "redirect": redirect }))))
 }
 
+#[handler]
+fn passkey_setup_page() -> Response {
+    no_frame(Html(SETUP_HTML))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SetupStartRequest {
+    pub code: String,
+}
+
+#[derive(Deserialize)]
+pub struct SetupFinishRequest {
+    pub code: String,
+    #[serde(flatten)]
+    pub registration: crate::routes::passkeys::RegisterFinishRequest,
+}
+
+/// 등록 코드의 주인(admin)을 찾는다. 코드가 없거나 만료면 401, admin이 아니면 403.
+async fn setup_user(
+    db: &sqlx::SqlitePool,
+    code: &str,
+) -> poem::Result<tyange_cms_api::auth::authorization::AuthenticatedUser> {
+    let user_id = tokens::peek_setup_code(db, code).await.ok_or_else(|| {
+        poem::Error::from_string(
+            "만료되었거나 알 수 없는 등록 코드입니다. 코드를 다시 발급하세요.",
+            StatusCode::UNAUTHORIZED,
+        )
+    })?;
+    let role: Option<String> = sqlx::query_scalar("SELECT user_role FROM users WHERE user_id = ?")
+        .bind(&user_id)
+        .fetch_optional(db)
+        .await
+        .map_err(|e| poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
+    match role.as_deref() {
+        Some("admin") => Ok(tyange_cms_api::auth::authorization::AuthenticatedUser {
+            user_id,
+            role: "admin".to_string(),
+        }),
+        _ => Err(poem::Error::from_string(
+            "관리자 계정의 등록 코드가 아닙니다.",
+            StatusCode::FORBIDDEN,
+        )),
+    }
+}
+
+#[handler]
+async fn passkey_setup_start(
+    state: Data<&Arc<AppState>>,
+    Json(body): Json<SetupStartRequest>,
+) -> poem::Result<Response> {
+    let user = setup_user(&state.db, &body.code).await?;
+    let challenge = crate::routes::passkeys::start_registration(&state, &user).await?;
+    Ok(no_frame(Json(challenge)))
+}
+
+#[handler]
+async fn passkey_setup_finish(
+    state: Data<&Arc<AppState>>,
+    Json(body): Json<SetupFinishRequest>,
+) -> poem::Result<Response> {
+    let user = setup_user(&state.db, &body.code).await?;
+    let item =
+        crate::routes::passkeys::finish_registration(&state, &user, body.registration).await?;
+    tokens::consume_setup_code(&state.db, &body.code).await;
+    Ok(no_frame(Json(item)))
+}
+
 #[derive(Debug, Deserialize)]
 pub struct TokenRequest {
     pub grant_type: String,
@@ -382,7 +455,7 @@ async fn token(
 }
 
 /// 승인 화면. 패스키로 로그인 → 로그인 JWT로 승인 → Claude로 돌아간다. 인가 요청 값은 이 화면의 주소(쿼리)에서 읽는다.
-const AUTHORIZE_HTML: &str = r#"<!doctype html>
+pub const AUTHORIZE_HTML: &str = r#"<!doctype html>
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -434,12 +507,79 @@ document.getElementById('go').addEventListener('click', async () => {
       },
     };
     const login = await postJson('/passkeys/login/finish', { challenge_id: start.challenge_id, credential });
+    if (login.user_role !== 'admin') throw new Error('관리자 계정의 패스키가 아닙니다. 관리자 패스키를 먼저 등록하세요(서버에서 등록 코드를 발급받아 /oauth/passkey-setup).');
     const params = Object.fromEntries(new URLSearchParams(location.search));
     const done = await postJson('/oauth/authorize/approve', { access_token: login.access_token, ...params });
     msg('승인했습니다. Claude로 돌아갑니다…');
     location.href = done.redirect;
   } catch (e) {
     msg('승인하지 못했습니다: ' + e.message);
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
+"#;
+
+/// admin 패스키 등록 화면. `?code=`의 일회용 코드로 등록 의식을 열고, 만든 패스키를 서버에 저장한다.
+pub const SETUP_HTML: &str = r#"<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>관리자 패스키 등록</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, system-ui, sans-serif; max-width: 420px; margin: 0 auto; padding: 48px 16px; line-height: 1.5; }
+  h1 { font-size: 1.3rem; }
+  button { width: 100%; padding: 14px; font-size: 1rem; border-radius: 10px; border: 0; background: #2563eb; color: #fff; }
+  button:disabled { opacity: .5; }
+  #msg { margin-top: 16px; min-height: 1.5em; }
+</style>
+</head>
+<body>
+<h1>tyange CMS 관리자 패스키 등록</h1>
+<p>이 기기(1Password·iCloud 키체인 등)에 관리자 패스키를 만듭니다. 등록한 뒤에는 Claude 커넥터를 이 패스키로 승인합니다. 등록 코드는 한 번만 쓸 수 있습니다.</p>
+<button id="go">패스키 등록</button>
+<p id="msg"></p>
+<script>
+const b64u = {
+  toBuf: (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), c => c.charCodeAt(0)).buffer,
+  fromBuf: (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
+};
+const msg = (t) => { document.getElementById('msg').textContent = t; };
+async function postJson(url, body) {
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const text = await res.text();
+  if (!res.ok) throw new Error(text || res.status);
+  return text ? JSON.parse(text) : {};
+}
+const code = new URLSearchParams(location.search).get('code') || '';
+if (!code) { msg('등록 코드가 없습니다. 서버에서 발급받은 주소로 여세요.'); document.getElementById('go').disabled = true; }
+document.getElementById('go').addEventListener('click', async () => {
+  const btn = document.getElementById('go');
+  btn.disabled = true; msg('패스키를 만드는 중…');
+  try {
+    const start = await postJson('/oauth/passkey-setup/start', { code });
+    const pk = start.options.publicKey;
+    pk.challenge = b64u.toBuf(pk.challenge);
+    pk.user.id = b64u.toBuf(pk.user.id);
+    (pk.excludeCredentials || []).forEach(c => { c.id = b64u.toBuf(c.id); });
+    const cred = await navigator.credentials.create({ publicKey: pk });
+    const r = cred.response;
+    const credential = {
+      id: cred.id, rawId: b64u.fromBuf(cred.rawId), type: cred.type, extensions: {},
+      response: {
+        attestationObject: b64u.fromBuf(r.attestationObject),
+        clientDataJSON: b64u.fromBuf(r.clientDataJSON),
+        transports: r.getTransports ? r.getTransports() : undefined,
+      },
+    };
+    await postJson('/oauth/passkey-setup/finish', { code, challenge_id: start.challenge_id, label: 'Claude 커넥터', credential });
+    msg('등록했습니다. 이제 Claude에서 커넥터를 연결할 때 이 패스키로 승인하세요.');
+  } catch (e) {
+    msg('등록하지 못했습니다: ' + e.message);
     btn.disabled = false;
   }
 });

@@ -200,7 +200,11 @@ async fn main() -> Result<(), std::io::Error> {
                     .with(SizeLimit::new(upload_max_bytes))
                     .with(Auth),
             )
-            .at("/login", post(login))
+            // MCP 승인 화면(mcp.tyange.com)도 비밀번호 로그인을 쓰므로 패스키 로그인처럼 IP별 횟수를 제한한다.
+            .at(
+                "/login",
+                post(login).with(RateLimit::new(20, Duration::from_secs(60))),
+            )
             // 패스키: 등록은 로그인한 상태에서, 로그인은 사용자명 없이. 로그인 쪽은 인터넷에 열려
             // 있으므로 IP별 rate limit을 건다. 본문은 WebAuthn 응답 하나라 작게 제한한다.
             .at(

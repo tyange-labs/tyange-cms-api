@@ -10,6 +10,9 @@ use uuid::Uuid;
 pub const CODE_TTL_SECS: i64 = 5 * 60;
 pub const ACCESS_TTL_SECS: i64 = 60 * 60;
 pub const REFRESH_TTL_SECS: i64 = 60 * 24 * 60 * 60;
+/// `scripts/mcp-setup-code.sh`도 같은 15분을 쓴다.
+#[cfg(test)]
+pub const SETUP_CODE_TTL_SECS: i64 = 15 * 60;
 
 pub fn now() -> i64 {
     SystemTime::now()
@@ -171,4 +174,40 @@ pub async fn rotate_refresh(
     .flatten()?;
     let pair = issue_pair(db, &user_id, client_id, &resource).await.ok()?;
     Some((pair, resource))
+}
+
+/// 패스키 등록 코드를 만든다. 운영에서는 `scripts/mcp-setup-code.sh`가 같은 모양으로 DB에 직접 넣는다(이 함수는 테스트용).
+#[cfg(test)]
+pub async fn store_setup_code(db: &SqlitePool, user_id: &str) -> Result<String, sqlx::Error> {
+    let secret = random_secret("mcps_");
+    query("INSERT INTO mcp_passkey_setup_codes (code_hash, user_id, expires_at) VALUES (?, ?, ?)")
+        .bind(hash(&secret))
+        .bind(user_id)
+        .bind(now() + SETUP_CODE_TTL_SECS)
+        .execute(db)
+        .await?;
+    Ok(secret)
+}
+
+/// 만료되지 않은 등록 코드의 사용자 id. 지우지는 않는다(등록 의식이 실패하면 다시 시도할 수 있게).
+pub async fn peek_setup_code(db: &SqlitePool, code: &str) -> Option<String> {
+    query_as::<_, (String,)>(
+        "SELECT user_id FROM mcp_passkey_setup_codes WHERE code_hash = ? AND expires_at > ?",
+    )
+    .bind(hash(code))
+    .bind(now())
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten()
+    .map(|(user_id,)| user_id)
+}
+
+/// 패스키를 저장한 뒤 코드를 지운다(일회용). 만료된 코드도 같이 정리한다.
+pub async fn consume_setup_code(db: &SqlitePool, code: &str) {
+    let _ = query("DELETE FROM mcp_passkey_setup_codes WHERE code_hash = ? OR expires_at <= ?")
+        .bind(hash(code))
+        .bind(now())
+        .execute(db)
+        .await;
 }
