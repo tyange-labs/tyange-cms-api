@@ -400,70 +400,6 @@ struct UpdateSectionResponse {
     updated_at: String,
 }
 
-// 파싱에 성공한 "구조체"를 재직렬화한다 — 원본 value를 그대로 재직렬화하면 스키마에
-// 없는 키(예전 identity.role/location/availability처럼)가 계속 살아남는다. 구조체를
-// 거쳐 다시 직렬화하면 알려진 필드만 남고, serde(default)가 채운 값도 일관되게 저장된다.
-fn validate_portfolio_section(
-    section_key: &str,
-    value: &serde_json::Value,
-) -> Result<String, String> {
-    use crate::models::{
-        PortfolioCareerSection, PortfolioIdentity, PortfolioIntroSection, PortfolioMeta,
-        PortfolioProject,
-    };
-
-    match section_key {
-        "meta" => {
-            let parsed: PortfolioMeta = serde_json::from_value(value.clone())
-                .map_err(|e| format!("meta 검증 실패: {}", e))?;
-            serde_json::to_string(&parsed).map_err(|e| e.to_string())
-        }
-        "identity" => {
-            let parsed: PortfolioIdentity = serde_json::from_value(value.clone())
-                .map_err(|e| format!("identity 검증 실패: {}", e))?;
-            serde_json::to_string(&parsed).map_err(|e| e.to_string())
-        }
-        "featured_projects" => {
-            let parsed: Vec<PortfolioProject> = serde_json::from_value(value.clone())
-                .map_err(|e| format!("featured_projects 검증 실패: {}", e))?;
-            serde_json::to_string(&parsed).map_err(|e| e.to_string())
-        }
-        "career" => {
-            let parsed: PortfolioCareerSection = serde_json::from_value(value.clone())
-                .map_err(|e| format!("career 검증 실패: {}", e))?;
-            serde_json::to_string(&parsed).map_err(|e| e.to_string())
-        }
-        "intro" => {
-            let parsed: PortfolioIntroSection = serde_json::from_value(value.clone())
-                .map_err(|e| format!("intro 검증 실패: {}", e))?;
-            serde_json::to_string(&parsed).map_err(|e| e.to_string())
-        }
-        "portfolio_pdf" => {
-            use crate::models::{PORTFOLIO_PDF_MAX_BYTES, PORTFOLIO_PDF_MAX_PAGES};
-            let parsed: crate::models::PortfolioPdfSection = serde_json::from_value(value.clone())
-                .map_err(|e| format!("portfolio_pdf 검증 실패: {}", e))?;
-            if parsed.pages.len() > PORTFOLIO_PDF_MAX_PAGES {
-                return Err(format!("portfolio_pdf 페이지는 최대 {}장입니다.", PORTFOLIO_PDF_MAX_PAGES));
-            }
-            let mut seen = std::collections::HashSet::new();
-            for page in &parsed.pages {
-                if page.id.trim().is_empty() || page.template.trim().is_empty() {
-                    return Err("portfolio_pdf 페이지의 id와 template은 비어 있을 수 없습니다.".to_string());
-                }
-                if !seen.insert(page.id.as_str()) {
-                    return Err(format!("portfolio_pdf 페이지 id가 중복됩니다: {}", page.id));
-                }
-            }
-            let serialized = serde_json::to_string(&parsed).map_err(|e| e.to_string())?;
-            if serialized.len() > PORTFOLIO_PDF_MAX_BYTES {
-                return Err(format!("portfolio_pdf 문서는 {}KB 이하여야 합니다.", PORTFOLIO_PDF_MAX_BYTES / 1024));
-            }
-            Ok(serialized)
-        }
-        _ => Err(format!("알 수 없는 섹션: {}", section_key)),
-    }
-}
-
 // pool과 트랜잭션(&mut *tx) 양쪽에서 다 쓸 수 있도록 Executor로 제네릭화했다 —
 // update_portfolio/delete_portfolio가 여러 statement를 트랜잭션 하나로 묶으면서
 // 이 헬퍼도 트랜잭션 안에서 호출해야 했다.
@@ -863,36 +799,15 @@ impl PortfolioApi {
     ) -> poem::Result<Json<ApiResponse<SectionContentResponse>>> {
         ensure_admin(&guard.0)?;
 
-        let row: Option<(String, String)> = sqlx::query_as(
-            r#"
-            SELECT s.content, s.updated_at
-            FROM portfolio_section s
-            JOIN portfolio p ON p.portfolio_id = s.portfolio_id
-            WHERE p.slug = ? AND s.section_key = ?
-            "#,
-        )
-        .bind("dev")
-        .bind(&section_key)
-        .fetch_optional(&self.state.db)
-        .await
-        .map_err(|err| {
-            poem::Error::from_string(
-                format!("{} 섹션 조회 실패: {}", section_key, err),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            )
-        })?;
-        let (content, updated_at) = row.ok_or_else(|| {
-            poem::Error::from_string(
-                format!("{} 섹션이 아직 없습니다.", section_key),
-                StatusCode::NOT_FOUND,
-            )
-        })?;
-        let value: serde_json::Value = serde_json::from_str(&content).map_err(|err| {
-            poem::Error::from_string(
-                format!("{} 섹션 파싱 실패: {}", section_key, err),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            )
-        })?;
+        let (value, updated_at) = crate::portfolio::get_section(&self.state.db, &section_key)
+            .await
+            .map_err(|err| poem::Error::from_string(err, StatusCode::INTERNAL_SERVER_ERROR))?
+            .ok_or_else(|| {
+                poem::Error::from_string(
+                    format!("{} 섹션이 아직 없습니다.", section_key),
+                    StatusCode::NOT_FOUND,
+                )
+            })?;
 
         Ok(Json(ApiResponse {
             status: true,
@@ -916,61 +831,21 @@ impl PortfolioApi {
     ) -> poem::Result<Json<ApiResponse<UpdateSectionResponse>>> {
         ensure_admin(&guard.0)?;
 
-        let serialized = validate_portfolio_section(&section_key, &payload.0.content.0)
-            .map_err(|err| poem::Error::from_string(err, StatusCode::BAD_REQUEST))?;
-
-        let portfolio_id: Option<i32> =
-            sqlx::query_scalar("SELECT portfolio_id FROM portfolio WHERE slug = ?")
-                .bind("dev")
-                .fetch_optional(&self.state.db)
+        let updated_at =
+            crate::portfolio::save_section(&self.state.db, &section_key, &payload.0.content.0)
                 .await
-                .map_err(|err| {
-                    poem::Error::from_string(
-                        format!("포트폴리오 조회 실패: {}", err),
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                    )
+                .map_err(|err| match err {
+                    crate::portfolio::SaveError::Invalid(msg) => {
+                        poem::Error::from_string(msg, StatusCode::BAD_REQUEST)
+                    }
+                    crate::portfolio::SaveError::NoPortfolio => poem::Error::from_string(
+                        "포트폴리오 데이터를 찾지 못했습니다.",
+                        StatusCode::NOT_FOUND,
+                    ),
+                    crate::portfolio::SaveError::Db(msg) => {
+                        poem::Error::from_string(msg, StatusCode::INTERNAL_SERVER_ERROR)
+                    }
                 })?;
-        let portfolio_id = portfolio_id.ok_or_else(|| {
-            poem::Error::from_string(
-                "포트폴리오 데이터를 찾지 못했습니다.",
-                StatusCode::NOT_FOUND,
-            )
-        })?;
-
-        query(
-            r#"
-            INSERT INTO portfolio_section (portfolio_id, section_key, content, created_at, updated_at)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            ON CONFLICT(portfolio_id, section_key) DO UPDATE SET
-                content = excluded.content,
-                updated_at = CURRENT_TIMESTAMP
-            "#,
-        )
-        .bind(portfolio_id)
-        .bind(&section_key)
-        .bind(&serialized)
-        .execute(&self.state.db)
-        .await
-        .map_err(|err| {
-            poem::Error::from_string(
-                format!("{} 섹션 저장 실패: {}", section_key, err),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            )
-        })?;
-
-        let updated_at: String = sqlx::query_scalar(
-            "SELECT updated_at FROM portfolio_section WHERE portfolio_id = ? AND section_key = ?",
-        )
-        .bind(portfolio_id)
-        .bind(&section_key)
-        .fetch_one(&self.state.db)
-        .await
-        .map_err(|err| {
-            poem::Error::from_string(
-                format!("updated_at 조회 실패: {}", err),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            )
-        })?;
 
         Ok(Json(ApiResponse {
             status: true,

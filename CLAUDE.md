@@ -166,6 +166,10 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
   - **MCP**: `/mcp`, `rmcp` 3.12 Streamable HTTP를 무상태·JSON 응답으로 poem에 tower 호환으로 붙였다. 도구: `list_posts`·`get_post`·`list_tags`(읽기 전용 표시),
     `create_post`(기본 **draft**, 공개는 사용자가 분명히 말할 때만)·`update_post`(바꿀 필드만, `tags`를 보내면 전체 교체)·`set_post_status`·`delete_post`(파괴적 표시 +
     `confirm_title`에 제목, 제목 없으면 본문 앞 30자를 정확히 넣어야 지움 — 사용자 결정). 실패는 프로토콜 오류가 아니라 `isError` 결과로 돌려준다.
+    포트폴리오(2026-11): `list_portfolio_sections`·`get_portfolio_section`(읽기 전용)·`update_portfolio_section`(섹션 통째 교체, 파괴적 표시).
+    교체는 **읽었을 때의 `updated_at`을 `base_updated_at`으로 보내야만** 저장한다(빠뜨린 항목으로 덮어쓰기·tyange-cms에서 고친 걸 덮어쓰기 방지, 섹션이 없으면 생략).
+    검증은 HTTP와 같은 `src/portfolio.rs::validate_portfolio_section`(구조체로 파싱해 다시 직렬화 — 모르는 키는 버려짐). 섹션별 JSON 모양은 도구 설명에 있다.
+    포트폴리오 전체 교체·삭제는 넣지 않았다. tyange-dev는 빌드 때 읽으므로 그 사이트를 다시 배포해야 반영된다(자동 재배포 없음).
   - **인증(OAuth 2.1, 이 서버가 인가 서버)**: Claude 개인 플랜은 OAuth 또는 인증 없음만 되고 고정 헤더는 일부 조직 베타라 OAuth가 필수였다. 보호 자원 메타데이터(`/.well-known/oauth-protected-resource[/mcp]`),
     인가 서버 메타데이터(`/.well-known/oauth-authorization-server`, `openid-configuration`), `/oauth/authorize`(패스키 승인 화면 → 기존 `/passkeys/login/*`의 로그인 JWT를
     `/oauth/authorize/approve`에 넘기면 admin일 때 코드 발급. **승인은 패스키로만** — 사용자 결정), `/oauth/token`(코드 + PKCE S256, 리프레시 회전). 클라이언트는 미리 정한 공개 클라이언트 하나뿐(DCR·CIMD 없음 —

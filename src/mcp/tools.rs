@@ -94,6 +94,29 @@ pub struct DeletePostArgs {
     pub confirm_title: String,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SectionKeyArgs {
+    /// `meta`, `identity`, `featured_projects`, `career`, `intro`, `portfolio_pdf` 중 하나.
+    pub section_key: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct UpdateSectionArgs {
+    pub section_key: String,
+    /// 섹션 전체 내용(JSON). 일부만 보내면 나머지는 지워진다 — get_portfolio_section 결과를 고쳐서 통째로 보낸다.
+    pub content: serde_json::Value,
+    /// get_portfolio_section 이 준 updated_at 을 그대로. 그 뒤에 누가 고쳤으면 저장하지 않는다. 섹션이 아직 없으면 생략.
+    pub base_updated_at: Option<String>,
+}
+
+const PORTFOLIO_SECTIONS_HELP: &str = "섹션별 JSON 모양:
+- meta: {\"slug\": \"dev\", \"version\": 1}
+- identity: {\"name\", \"email\", \"github_url\"}
+- featured_projects: [{\"slug\", \"title\", \"period\", \"body_markdown\"(설명 마크다운), \"links\": [{\"label\", \"url\"}], \"folder\"(같은 값끼리 한 묶음, 없으면 \"\")}]
+- career: {\"summary_label\", \"summary_value\", \"companies\": [{\"company\", \"period\", \"employment_type\", \"role\", \"position\", \"career_items_markdown\"}]}
+- intro: {\"content\"(마크다운), \"tech_stack\": [{\"name\", \"icon_url\"}]}
+- portfolio_pdf: {\"theme\": {...}, \"pages\": [{\"id\", \"template\", \"dark\", \"data\"}]} (PDF 슬라이드 편집기 문서, 최대 40장·256KB)";
+
 #[tool_router(router = tool_router)]
 impl CmsTools {
     pub fn new(state: Arc<AppState>, images: Arc<ImageRehoster>) -> Self {
@@ -350,6 +373,89 @@ impl CmsTools {
     }
 
     #[tool(
+        description = "포트폴리오(tyange-dev) 섹션 목록과 마지막 수정 시각. 내용은 get_portfolio_section 으로 본다.",
+        annotations(read_only_hint = true)
+    )]
+    async fn list_portfolio_sections(&self) -> Result<CallToolResult, ErrorData> {
+        let sections = crate::portfolio::list_sections(&self.state.db)
+            .await
+            .map_err(internal)?;
+        let sections: Vec<serde_json::Value> = sections
+            .into_iter()
+            .map(|(key, updated_at, bytes)| {
+                serde_json::json!({ "section_key": key, "updated_at": updated_at, "bytes": bytes })
+            })
+            .collect();
+        Ok(ok_json(serde_json::json!({ "sections": sections })))
+    }
+
+    #[tool(
+        description = "포트폴리오 섹션 하나의 내용(JSON)과 updated_at. 고치기 전에 반드시 먼저 읽는다.",
+        annotations(read_only_hint = true)
+    )]
+    async fn get_portfolio_section(
+        &self,
+        Parameters(args): Parameters<SectionKeyArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match crate::portfolio::get_section(&self.state.db, &args.section_key).await {
+            Ok(Some((content, updated_at))) => Ok(ok_json(serde_json::json!({
+                "section_key": args.section_key,
+                "updated_at": updated_at,
+                "content": content,
+            }))),
+            Ok(None) => Ok(fail(format!(
+                "{} 섹션이 아직 없습니다. {PORTFOLIO_SECTIONS_HELP}",
+                args.section_key
+            ))),
+            Err(err) => Err(internal(err)),
+        }
+    }
+
+    #[tool(
+        description = "포트폴리오 섹션 하나를 통째로 바꾼다. 먼저 get_portfolio_section 으로 읽고, 그 content 를 고쳐 전체를 보내며 base_updated_at 에 읽은 updated_at 을 넣는다(그 사이 바뀌었으면 저장하지 않는다). 프로젝트 하나만 고칠 때도 featured_projects 배열 전체를 보낸다. 블로그 글과 달리 tyange-dev 사이트에는 그 사이트를 다시 배포해야 반영된다.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = true
+        )
+    )]
+    async fn update_portfolio_section(
+        &self,
+        Extension(parts): Extension<Parts>,
+        Parameters(args): Parameters<UpdateSectionArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        if let Err(result) = user_of(&parts) {
+            return Ok(result);
+        }
+        let current = crate::portfolio::get_section(&self.state.db, &args.section_key)
+            .await
+            .map_err(internal)?;
+        if let Some((_, current_updated_at)) = &current {
+            if args.base_updated_at.as_deref() != Some(current_updated_at.as_str()) {
+                return Ok(fail(format!(
+                    "저장하지 않았습니다. {} 섹션의 지금 updated_at 은 \"{}\" 입니다. get_portfolio_section 으로 최신 내용을 다시 읽고 고쳐서 그 updated_at 을 base_updated_at 으로 보내세요.",
+                    args.section_key, current_updated_at
+                )));
+            }
+        }
+
+        match crate::portfolio::save_section(&self.state.db, &args.section_key, &args.content).await
+        {
+            Ok(updated_at) => Ok(ok_json(serde_json::json!({
+                "section_key": args.section_key,
+                "updated_at": updated_at,
+            }))),
+            Err(crate::portfolio::SaveError::Invalid(msg)) => {
+                Ok(fail(format!("{msg}\n{PORTFOLIO_SECTIONS_HELP}")))
+            }
+            Err(crate::portfolio::SaveError::NoPortfolio) => Ok(fail(
+                "포트폴리오 데이터가 없습니다. tyange-cms 에서 처음 한 번 만들어야 합니다.",
+            )),
+            Err(crate::portfolio::SaveError::Db(msg)) => Err(internal(msg)),
+        }
+    }
+
+    #[tool(
         description = "글을 지운다. 되돌릴 수 없다. confirm_title 에 지울 글의 제목(제목이 없으면 본문 앞 30자)을 정확히 넣어야 지워진다. 사용자가 지우라고 분명히 말했을 때만 쓴다.",
         annotations(
             read_only_hint = false,
@@ -395,7 +501,7 @@ impl ServerHandler for CmsTools {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("tyange-cms", env!("CARGO_PKG_VERSION")))
             .with_instructions(
-            "tyange 블로그 CMS. 글 목록·조회·작성·수정·공개 전환·삭제를 한다. 새 글은 사용자가 공개하라고 하지 않는 한 draft 로 올린다.",
+            "tyange 블로그 CMS. 글 목록·조회·작성·수정·공개 전환·삭제, 포트폴리오(tyange-dev) 섹션 조회·수정을 한다. 새 글은 사용자가 공개하라고 하지 않는 한 draft 로 올린다. 포트폴리오는 섹션을 먼저 읽고 고친 전체를 보낸다.",
         )
     }
 }
