@@ -1,6 +1,8 @@
 use poem::http::StatusCode;
 use poem_openapi::{payload::Json, Object, OpenApi};
-use poketry::{find_team, team_score, team_weakness, weak_spot};
+use poketry::{
+    find_team, pokedex, recommend_fixes, recommend_slots, team_score, team_weakness, weak_spot,
+};
 
 use crate::models::ApiResponse;
 
@@ -102,21 +104,13 @@ impl From<poketry::WeakSpotFix<'_>> for FixItem {
 
 impl From<&poketry::Pokemon> for PokemonItem {
     fn from(p: &poketry::Pokemon) -> Self {
-        // TODO(D단계 ①): poketry 의 `Pokemon` 을 API 응답용 `PokemonItem` 으로 옮겨 담으세요.
-        //
-        // - `id`, `species_id`, `capture_rate` 는 숫자라 `p.id` 처럼 쓰면 그대로 복사됩니다.
-        // - `name` 은 `String` 이라 그냥 `p.name` 으로는 못 가져옵니다. `p` 는 빌린 값(`&Pokemon`)이라
-        //   안의 String 을 빼 갈 수 없어요. 복사본을 만드는 메서드를 쓰세요.
-        // - `types` 가 핵심입니다. 계산용 `Pokemon` 은 `type1` + `type2: Option<Type>` 이지만,
-        //   프론트에는 `["불꽃", "비행"]` 같은 문자열 배열이 쓰기 편해서 모양을 바꿉니다.
-        //   재료: `p.types()` 는 `Vec<Type>`(1개 또는 2개)을 주고, `Type` 의 `.name()` 은 `"불꽃"` 같은 `&'static str` 을 줍니다.
-        //   `Vec<Type>` → `Vec<String>` 은 "하나씩 꺼내서(iter) 바꾸고(map) 다시 모으기(collect)" 입니다.
-        //   `&str` → `String` 은 `.to_string()`.
-        //
-        // 아래 `WeaknessRow` 의 `From` 이 같은 모양의 예시입니다.
-        // 확인: `cargo build` 가 에러 없이 되면 됩니다. (실제로 부르는 건 ②에서)
-        let _ = p;
-        todo!()
+        PokemonItem {
+            id: p.id,
+            species_id: p.species_id,
+            name: p.name.clone(),
+            types: p.types().iter().map(|t| t.name().to_string()).collect(),
+            capture_rate: p.capture_rate,
+        }
     }
 }
 
@@ -141,6 +135,26 @@ impl From<poketry::Swap<'_>> for SwapItem {
     }
 }
 
+// TODO(E단계): 이 API 를 서버에 등록하고 실제 요청으로 확인하세요. 지금은 `main.rs` 가 모르는 struct 라서
+//   빌드할 때 "never constructed" 경고가 납니다(등록하면 사라집니다).
+//
+//   1. `src/main.rs` 위쪽 `use` 에 `use poketry_api::PoketryApi;` 를 넣습니다(`mod poketry_api;` 는 이미 있습니다).
+//   2. `OpenApiService::new((PostsApi { … }, TagsApi { … }, …, CraftApi { … }, …), …)` 튜플 맨 끝에 `PoketryApi,` 를 넣습니다.
+//      필드가 없는 struct 라 `PoketryApi { }` 가 아니라 이름만 씁니다.
+//   3. 서버를 띄우고(`cargo run`, 포트는 `LISTEN_ADDR`·기본 8080) 요청을 보냅니다:
+//        curl -s -X POST localhost:8080/poketry/analyze -H 'Content-Type: application/json' \
+//          -d '{"names":["리자몽","가디안","루카리오","갸라도스","마기라스"]}' | jq
+//      5마리면 `plan` 이 채워지고 `fixes` 는 `[]`, "님피아" 를 더해 6마리면 `plan` 이 `null` 이고 `fixes` 가 약점 타입마다 하나.
+//      실패도 확인: `{"names":["없는몬"]}` → 400 "'없는몬' 은(는) 도감에 없습니다.", `{"names":[]}` → 400.
+//      `/api-docs`(Swagger)에서도 보낼 수 있습니다.
+//   4. 위 네 요청을 통합 테스트로 남깁니다. 모양은 `src/routes/portfolio_routes_test.rs` 처럼
+//      `OpenApiService::new(PoketryApi, "test", "1.0")` 를 `poem::test::TestClient::new(..)` 에 바로 물리고
+//      `.post("/poketry/analyze").body_json(&serde_json::json!({ "names": [...] })).send().await` 로 보냅니다.
+//      확인할 것: 상태 코드, 5마리 → `data.plan` 있음·`data.fixes` 빔, 6마리 → 반대.
+//      DB 가 필요 없는 API 라 `AppState`·`init_db` 준비는 필요 없습니다.
+//   막히기 쉬운 곳: 테스트 파일은 `src/routes.rs` 에 `mod poketry_api_test;` 처럼 걸어야 돕니다(`mod portfolio_routes_test;` 줄 참고).
+//
+// 확인: 루트에서 `cargo build` 경고에서 `poketry_api` 가 사라지고, `cargo test` 가 통과하면 끝.
 pub struct PoketryApi;
 
 #[OpenApi]
@@ -163,36 +177,23 @@ impl PoketryApi {
         let spots = weak_spot(&weakness);
         let score = team_score(&weakness);
 
-        // TODO(D단계 ②): 추천을 계산하고 응답에 옮겨 담으세요. 위 1~3(마릿수 검사·이름 → 포켓몬·약점 계산)은 됐습니다.
-        //
-        //   응답 예 (5마리 팀):  { team: [5마리], weaknesses: [18줄], weak_spots: ["물", "바위"], score: -3,
-        //                          plan: Some({ slots: [{ slot_types: ["풀", "강철"], picks: [포켓몬…] }], spot_count, score }),
-        //                          fixes: [] }
-        //   6마리 팀이면 반대로 plan: None, fixes: [{ weak_type: "물", swaps: [교체…] }, …].
-        //
-        //   4. 추천: `if team.len() == 6 { … } else { … }` 로 `(plan, fixes)` 두 개를 한 번에 만듭니다.
-        //      - 6마리: `(None, poketry::recommend_fixes(&team, poketry::pokedex()))`
-        //      - 그보다 적으면: `(Some(poketry::recommend_slots(..)), Vec::new())` — 인자는 `recommend_slots` 시그니처를 보세요.
-        //      `if` 의 두 갈래는 같은 타입이어야 해서, 이 단계에서는 poketry 타입(`SlotPlan`, `WeakSpotFix`) 그대로 두고
-        //      5에서 API 타입으로 바꾸는 게 편합니다.
-        //   5. 옮겨 담기: 결과 타입마다 `From` 이 있어서(①과 이 파일 위쪽) `.into()` 로 바뀝니다.
-        //      - `team`: `Vec<&Pokemon>` → `Vec<PokemonItem>`. `From<&Pokemon>` 이라 꺼낸 원소(`&&Pokemon`)를 한 번 벗겨야 합니다
-        //        (`team.into_iter()` 로 꺼내면 `&Pokemon` 이 나와요).
-        //      - `weaknesses`: `From<&Weakness>` 라 `weakness.iter()` 로.
-        //      - `weak_spots`: `Vec<Type>` → `Vec<String>` (①의 types 와 같은 방법).
-        //      - `plan`: `Option<SlotPlan>` 안의 값을 바꿀 때는 `Option` 의 `map(Into::into)`.
-        //      - `fixes`: `From<WeakSpotFix>`(값) 이라 `into_iter()` 로.
-        //      - 마지막은 `Ok(Json(ApiResponse { status: true, data: Some(AnalyzeResponse { … }), message: None }))`.
-        //   막히기 쉬운 곳: `team` 을 4에서 `&team` 으로 빌려 쓰는 동안에는 `into_iter()` 로 넘길 수 없어요.
-        //   추천을 먼저 계산하고(4) 응답을 만들 때(5) 넘기면 순서가 맞습니다.
-        //
-        // 확인: 루트에서 `cargo build` 가 되면 이 단계는 끝입니다. 실제 요청은 다음 단계(E)에서 서버에 등록한 뒤 보냅니다.
-        //
-        // 생각해 볼 거리 (선택):
-        // - 같은 이름이 두 번 들어오면? 지금은 막지 않습니다. 400 으로 막을지 정해 보세요.
-        // - 그룹당 개수를 요청의 `limit: Option<u32>` 로 받기, 이름 대신 `ids: Vec<u32>` 로 받기
-        //   (GUI 가 붙으면 id 쪽이 안전합니다 — 이름은 표시용).
-        let _ = (spots, score);
-        todo!()
+        let (plan, fixes) = if team.len() == 6 {
+            (None, recommend_fixes(&team, pokedex()))
+        } else {
+            (Some(recommend_slots(&team, pokedex())), Vec::new())
+        };
+
+        Ok(Json(ApiResponse {
+            status: true,
+            data: Some(AnalyzeResponse {
+                team: team.into_iter().map(Into::into).collect(),
+                weaknesses: weakness.iter().map(Into::into).collect(),
+                weak_spots: spots.iter().map(|t| t.name().to_string()).collect(),
+                score,
+                plan: plan.map(Into::into),
+                fixes: fixes.into_iter().map(Into::into).collect(),
+            }),
+            message: None,
+        }))
     }
 }
