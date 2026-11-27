@@ -337,14 +337,16 @@ pub fn recommend_fixes<'a>(team: &[&'a Pokemon], pokedex: &'a [Pokemon]) -> Vec<
     let swaps = recommend_swap(team, pokedex);
     let mut fixes: Vec<WeakSpotFix> = Vec::new();
     for w in weak_spots {
+        let mut new_swaps: Vec<Swap> = Vec::new();
         for s in &swaps {
             if defense_multiplier(w, s.candidate) < 1.0 {
-                fixes.push(WeakSpotFix {
-                    weak_type: w,
-                    swaps: swaps.clone(),
-                })
+                new_swaps.push(s.clone())
             }
         }
+        fixes.push(WeakSpotFix {
+            weak_type: w,
+            swaps: new_swaps,
+        })
     }
     fixes
 }
