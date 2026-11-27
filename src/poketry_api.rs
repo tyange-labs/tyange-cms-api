@@ -150,13 +150,6 @@ impl PoketryApi {
         &self,
         body: Json<AnalyzeRequest>,
     ) -> poem::Result<Json<ApiResponse<AnalyzeResponse>>> {
-        // TODO(D단계 ②): 핸들러 본문을 쓰세요. 요청 `{"names": [...]}` 를 받아 분석 결과를 돌려줍니다.
-        //
-        // 1. 마릿수 검사: `body.names` 가 비었거나 6마리를 넘으면 400.
-        //    400 응답은 이 저장소의 다른 라우트와 같은 방식입니다:
-        //      `return Err(poem::Error::from_string("1~6마리를 보내 주세요.", StatusCode::BAD_REQUEST));`
-        //    (`body.names` 를 바로 쓸 수 있는 건 `Json<T>` 가 안쪽 값으로 자동 역참조(`Deref`)돼서예요)
-
         if body.names.is_empty() || body.names.len() > 6 {
             return Err(poem::Error::from_string(
                 "1~6마리를 보내 주세요.",
@@ -164,42 +157,42 @@ impl PoketryApi {
             ));
         }
 
-        //
-        // 2. 이름 → 포켓몬: `poketry::find_team(&body.names)` 는 `Result<Vec<&Pokemon>, UnknownPokemon>` 을 줍니다.
-        //    도감에 없는 이름이면 `Err` 인데, 이걸 400 으로 바꿔서 바로 돌려보내세요.
-        //    힌트: `Result` 의 `map_err` 로 에러를 `poem::Error` 로 바꾸고 끝에 `?` 를 붙이면,
-        //    에러일 때 함수가 거기서 바로 끝납니다. 메시지는 `e.to_string()`
-        //    (`UnknownPokemon` 이 `Display` 를 구현해서 "'xx' 은(는) 도감에 없습니다." 가 됩니다).
-
         let team = find_team(&body.names).map_err(poem::error::BadRequest)?;
-
-        //
-        // 3. 계산: `poketry::team_weakness(&team)` 로 약점표를 만들고, 그걸로 `poketry::weak_spot(..)`·`poketry::team_score(..)`.
 
         let weakness = team_weakness(&team);
         let spots = weak_spot(&weakness);
         let score = team_score(&weakness);
+
+        // TODO(D단계 ②): 추천을 계산하고 응답에 옮겨 담으세요. 위 1~3(마릿수 검사·이름 → 포켓몬·약점 계산)은 됐습니다.
         //
-        // 4. 추천 (poketry C4단계 함수): 6마리면 `poketry::recommend_fixes(&team, poketry::pokedex())`
-        //    (약점 타입별 교체 후보), 그보다 적으면 `poketry::recommend_slots(..)`(빈자리별 타입 조합 + 그 조합 포켓몬,
-        //    점수는 빈자리를 다 채운 팀 기준 하나). 둘 중 하나만 채웁니다: `plan` 은 `None`/`Some(..)`, `fixes` 는 빈 Vec/채운 Vec.
-        //    `if team.len() == 6 { … } else { … }` 로 (plan, fixes) 두 개를 한 번에 만들면 깔끔합니다.
-        //    그룹마다 몇 개까지 줄지는 `SlotItem`·`FixItem` 의 `From` 이 `PICKS_PER_GROUP` 으로 잘라 줍니다.
+        //   응답 예 (5마리 팀):  { team: [5마리], weaknesses: [18줄], weak_spots: ["물", "바위"], score: -3,
+        //                          plan: Some({ slots: [{ slot_types: ["풀", "강철"], picks: [포켓몬…] }], spot_count, score }),
+        //                          fixes: [] }
+        //   6마리 팀이면 반대로 plan: None, fixes: [{ weak_type: "물", swaps: [교체…] }, …].
         //
-        // 5. 응답으로 옮겨 담기: 결과 타입마다 `From` 이 있어서(①과 이 파일 위쪽) `.into()` 로 바뀝니다.
-        //    `From` 이 참조(`&T`)를 받는지 값(`T`)을 받는지 보고 `iter()` 와 `into_iter()` 중에 고르세요.
-        //    `Pokemon`·`Weakness` 는 참조로, `SlotPlan`·`WeakSpotFix` 는 값으로 받게 만들어 뒀습니다.
-        //    `Option` 안의 값을 바꿀 때는 `Option` 의 `map` 을 쓰면 됩니다.
-        //    `weak_spots` 는 `Vec<Type>` → `Vec<String>` (①의 types 와 같은 방법).
-        //    마지막은 `Ok(Json(ApiResponse { status: true, data: Some(AnalyzeResponse { … }), message: None }))`.
+        //   4. 추천: `if team.len() == 6 { … } else { … }` 로 `(plan, fixes)` 두 개를 한 번에 만듭니다.
+        //      - 6마리: `(None, poketry::recommend_fixes(&team, poketry::pokedex()))`
+        //      - 그보다 적으면: `(Some(poketry::recommend_slots(..)), Vec::new())` — 인자는 `recommend_slots` 시그니처를 보세요.
+        //      `if` 의 두 갈래는 같은 타입이어야 해서, 이 단계에서는 poketry 타입(`SlotPlan`, `WeakSpotFix`) 그대로 두고
+        //      5에서 API 타입으로 바꾸는 게 편합니다.
+        //   5. 옮겨 담기: 결과 타입마다 `From` 이 있어서(①과 이 파일 위쪽) `.into()` 로 바뀝니다.
+        //      - `team`: `Vec<&Pokemon>` → `Vec<PokemonItem>`. `From<&Pokemon>` 이라 꺼낸 원소(`&&Pokemon`)를 한 번 벗겨야 합니다
+        //        (`team.into_iter()` 로 꺼내면 `&Pokemon` 이 나와요).
+        //      - `weaknesses`: `From<&Weakness>` 라 `weakness.iter()` 로.
+        //      - `weak_spots`: `Vec<Type>` → `Vec<String>` (①의 types 와 같은 방법).
+        //      - `plan`: `Option<SlotPlan>` 안의 값을 바꿀 때는 `Option` 의 `map(Into::into)`.
+        //      - `fixes`: `From<WeakSpotFix>`(값) 이라 `into_iter()` 로.
+        //      - 마지막은 `Ok(Json(ApiResponse { status: true, data: Some(AnalyzeResponse { … }), message: None }))`.
+        //   막히기 쉬운 곳: `team` 을 4에서 `&team` 으로 빌려 쓰는 동안에는 `into_iter()` 로 넘길 수 없어요.
+        //   추천을 먼저 계산하고(4) 응답을 만들 때(5) 넘기면 순서가 맞습니다.
         //
-        // 확인: `cargo build` 가 되면 이 단계는 끝입니다. 실제 요청은 다음 단계(E)에서 서버에 등록한 뒤 보냅니다.
+        // 확인: 루트에서 `cargo build` 가 되면 이 단계는 끝입니다. 실제 요청은 다음 단계(E)에서 서버에 등록한 뒤 보냅니다.
         //
         // 생각해 볼 거리 (선택):
         // - 같은 이름이 두 번 들어오면? 지금은 막지 않습니다. 400 으로 막을지 정해 보세요.
         // - 그룹당 개수를 요청의 `limit: Option<u32>` 로 받기, 이름 대신 `ids: Vec<u32>` 로 받기
         //   (GUI 가 붙으면 id 쪽이 안전합니다 — 이름은 표시용).
-        let _ = (body, StatusCode::BAD_REQUEST);
+        let _ = (spots, score);
         todo!()
     }
 }

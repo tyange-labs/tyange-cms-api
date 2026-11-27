@@ -312,26 +312,6 @@ pub struct WeakSpotFix<'a> {
 }
 
 pub fn recommend_fixes<'a>(team: &[&'a Pokemon], pokedex: &'a [Pokemon]) -> Vec<WeakSpotFix<'a>> {
-    // TODO(C4단계 ②): 6마리 팀에서 약점 타입마다 "누구를 빼고 누구를 넣으면 그 약점을 받아 줄 수 있나" 목록을 만드세요.
-    //   약점 목록(`weak_spots`)과 교체 후보 전체(`swaps`, 이미 좋은 순서)는 됐고, 아래 `for` 만 고치면 됩니다.
-    //
-    //   원하는 결과 (팀이 물·전기·바위에 약할 때) — 약점 타입 하나에 `WeakSpotFix` 하나:
-    //     [ WeakSpotFix { weak_type: 물,   swaps: [물을 견디는 교체들] },
-    //       WeakSpotFix { weak_type: 전기, swaps: [전기를 견디는 교체들] },
-    //       WeakSpotFix { weak_type: 바위, swaps: [바위를 견디는 교체들] } ]
-    //   지금 결과: 견디는 교체를 하나 찾을 때마다 push 해서 `[물, 물, 물, …, 전기, 전기, …]` 가 되고,
-    //   `swaps` 에는 걸러지기 전 전체 후보가 들어갑니다.
-    //
-    //   1. 바깥 `for` 에 들어오면 약점 `w` 의 교체를 담을 빈 Vec 을 만듭니다. 담을 것은 `Swap` 이에요(`WeakSpotFix` 가 아니라).
-    //   2. 안쪽 `for` 에서는 `defense_multiplier(w, s.candidate) < 1.0` 인 `s` 를 그 Vec 에 담기만 합니다.
-    //   3. 안쪽 `for` 가 끝난 뒤(아직 바깥 `for` 안) `WeakSpotFix { weak_type: w, swaps: 1번 Vec }` 을 `fixes` 에 push 합니다.
-    //   막히기 쉬운 곳: `for s in &swaps` 의 `s` 는 `&Swap` 이라 `Vec<Swap>` 에 넣으려면 `.clone()` 이 필요합니다.
-    //   구조체 필드 이름과 변수 이름이 같으면 `swaps: swaps` 대신 `swaps` 만 써도 됩니다.
-    //
-    //   생각해 볼 거리 (선택): 빠지는 포켓몬(`out`)이 원래 `w` 를 견디던 녀석이면, 바꿔 봐야 그 약점은 줄지 않습니다.
-    //   그런 교체도 걸러 낼지 정해 보세요.
-    //
-    // 확인: `cargo test -p poketry` 에서 `약점_타입마다_그_타입을_견디는_교체만_추천한다` 가 통과하면 끝.
     let weaknesses = team_weakness(team);
     let weak_spots = weak_spot(&weaknesses);
     let swaps = recommend_swap(team, pokedex);
