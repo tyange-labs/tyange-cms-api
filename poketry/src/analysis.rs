@@ -74,39 +74,6 @@ pub fn team_score(weakness: &[Weakness]) -> i32 {
     result
 }
 
-// TODO(R7): C4부터 `recommend`·`Recommendation`은 C2 테스트만 쓴다. 남길지 지울지 정하기. CLAUDE.md "poketry 이어서 하기" 백로그 R7.
-#[derive(Debug, Clone, Serialize)]
-pub struct Recommendation<'a> {
-    pub spot_count: usize,
-    pub score: i32,
-    pub candidate: &'a Pokemon,
-}
-
-pub fn recommend<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<Recommendation<'a>> {
-    let mut result: Vec<Recommendation> = Vec::new();
-
-    let candidates: Vec<&Pokemon> = pokedex
-        .iter()
-        .filter(|p| !team.iter().any(|t| t.id == p.id))
-        .collect();
-
-    for candidate in candidates {
-        let mut new_team = team.to_vec();
-        new_team.push(candidate);
-        let weaknesses = team_weakness(&new_team);
-        let score = team_score(&weaknesses);
-        let spot_count = weak_spot(&weaknesses).len();
-        result.push(Recommendation {
-            spot_count,
-            score,
-            candidate,
-        });
-    }
-
-    result.sort_by_key(|k| (k.spot_count, -k.score, Reverse(k.candidate.capture_rate)));
-    result
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct Swap<'a> {
     pub out: &'a Pokemon,
@@ -364,44 +331,23 @@ mod tests {
     }
 
     #[test]
-    fn recommend_는_팀원을_뺀_도감_전체를_후보로_본다() {
-        let team = find_team(&["리자몽", "가디안", "루카리오", "갸라도스", "마기라스"]).unwrap();
-        let result = recommend(&team, pokedex());
-
-        assert_eq!(result.len(), pokedex().len() - team.len());
-        assert!(result.iter().all(|r| team.iter().all(|t| t.id != r.candidate.id)));
-    }
-
-    #[test]
     fn recommend_swap_은_팀원마다_도감_전체를_후보로_본다() {
-        let team = find_team(&["리자몽", "가디안", "루카리오", "갸라도스", "마기라스", "님피아"]).unwrap();
+        let team = find_team(&[
+            "리자몽",
+            "가디안",
+            "루카리오",
+            "갸라도스",
+            "마기라스",
+            "님피아",
+        ])
+        .unwrap();
         let result = recommend_swap(&team, pokedex());
 
         assert_eq!(result.len(), team.len() * (pokedex().len() - team.len()));
-        assert!(result.iter().all(|s| team.iter().all(|t| t.id != s.candidate.id)));
-    }
-
-    #[test]
-    fn recommend_구멍_수가_정렬_1순위다() {
-        let team = find_team(&["리자몽", "가디안", "루카리오", "갸라도스", "마기라스"]).unwrap();
-        let spots_with = |p: &Pokemon| {
-            let mut t = team.clone();
-            t.push(p);
-            weak_spot(&team_weakness(&t)).len()
-        };
-
-        let best_possible = pokedex()
-            .iter()
-            .filter(|c| !team.iter().any(|t| t.id == c.id))
-            .map(|c| spots_with(c))
-            .min()
-            .unwrap();
-        let picks = recommend(&team, pokedex());
-
-        assert_eq!(
-            spots_with(picks[0].candidate),
-            best_possible,
-            "구멍 수가 가장 적은 후보가 1등이어야 합니다"
+        assert!(
+            result
+                .iter()
+                .all(|s| team.iter().all(|t| t.id != s.candidate.id))
         );
     }
 
