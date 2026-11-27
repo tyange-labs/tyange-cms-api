@@ -4,8 +4,9 @@ pub mod pokemon;
 pub mod types;
 
 pub use analysis::{
-    SlotPick, SlotPlan, Swap, WeakSpotFix, Weakness, defense_multiplier, recommend_fixes,
-    recommend_slots, recommend_swap, team_score, team_weakness, weak_spot,
+    SlotPick, SlotPlan, Swap, WeakSpotFix, Weakness, defense_multiplier, multiplier_for,
+    recommend_fixes, recommend_slots, recommend_swap, team_score, team_weakness, weak_spot,
+    weakness_of,
 };
 pub use evolution::{EvolutionNode, chain_of, evolutions};
 pub use pokemon::{Pokemon, UnknownPokemon, find, find_team, pokedex};
