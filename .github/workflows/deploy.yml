@@ -88,7 +88,10 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && !inputs.skip_tests && !inputs.deploy_only }}
         run: cargo test --release --verbose
 
+      # 아래 배포 4단계는 PR에서는 돌지 않는다(PR은 빌드만 확인). 예전엔 조건이 없어서 PR을 열기만 해도
+      # 그 브랜치가 production에 배포됐다(2026-11, PR #1).
       - name: Stop service
+        if: ${{ github.event_name != 'pull_request' }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.HOST }}
@@ -98,13 +101,14 @@ jobs:
             sudo systemctl stop tyange-cms-api.service
 
       - name: Prepare deployment files
-        if: ${{ !inputs.deploy_only }}
+        if: ${{ github.event_name != 'pull_request' && !inputs.deploy_only }}
         run: |
           mkdir -p deploy
           cp "target/release/tyange-cms-api" deploy/
           cp .env deploy/
 
       - name: Deploy files via SCP
+        if: ${{ github.event_name != 'pull_request' }}
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.HOST }}
@@ -117,6 +121,7 @@ jobs:
           debug: true
 
       - name: Start service
+        if: ${{ github.event_name != 'pull_request' }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.HOST }}

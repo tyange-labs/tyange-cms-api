@@ -136,6 +136,10 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
 
 ## 현재 상태
 - 운영 중
+- **배포는 GitHub Actions(`.github/workflows/deploy.yml`)** (2026-11 확인). Forgejo 워크플로는 지웠다 — 아래 Forgejo·러너 캐시 이야기는 옛 기록이다.
+  master push·수동 실행에서 빌드 → 서비스 중지 → SCP → 시작. **PR에서는 빌드만 하고 배포 4단계는 건너뛴다**(`if: github.event_name != 'pull_request'`).
+  예전엔 조건이 없어서 PR #1(`feat/poketry`)을 여는 순간 그 브랜치가 production에 배포됐다. GitHub는 `pull_request` 실행에 PR 브랜치의 워크플로 파일을 쓴다.
+  `gh`는 `~/_dev/.envrc`의 `GH_CONFIG_DIR=~/.config/gh-personal`(개인 계정 `tyange`)로 써야 한다 — 기본 설정은 회사 계정이라 이 저장소에 읽기 권한뿐이다.
 - **API 키(개인 액세스 토큰)** (2026-10, `feat/api-keys`): `tyange` CLI 같은 클라이언트가 **비밀번호를 들고 있지 않고** CMS를 쓰게 하려고 다시 도입했다.
   (예전에 한 번 만들었다가 "CMS는 포스트·포트폴리오 운영에 집중"하며 걷어낸 기능이다 — 운영 DB의 `api_keys` 표가 그 흔적이고, 같은 모양으로 `init_db`가 만든다.)
   모듈 `src/auth/api_key.rs`, 엔드포인트 `openapi.rs::ApiKeysApi`, 테스트 `routes/api_keys_test.rs`(통합 9 + 단위 5).
