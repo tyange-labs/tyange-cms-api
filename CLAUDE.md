@@ -50,19 +50,12 @@ Rust + Poem 프레임워크. cargo 사용.
 남은 일 전체는 `grep -rn "TODO(" poketry/src src/poketry_api.rs`로 볼 수 있다. `todo!()`가 붙은 TODO가 지금 단계이고,
 한 줄짜리 `TODO(R번호)`는 백로그 표시다. 커밋 나누는 법·설명 방식은 Claude 메모리에도 있다.
 
-**지금 단계**: 단계 TODO(A~E)는 모두 끝났다. 지금은 백로그 **R4**(사용자 작성) — `poketry/src/analysis.rs`의 `TODO(R4 ①)`~`TODO(R4 ⑥)`를
-순서대로. ①`multiplier_for`·③`weakness_of`는 `todo!()`이고 각자 `#[ignore]` 테스트가 있다(다 쓰면 ignore 해제).
-②④는 기존 함수를 얇게, ⑤⑥은 `team_key`·`recommend_slots`가 `Vec<Type>`만 다루게(⑤⑥은 같이 해야 빌드됨).
-TODO대로 채운 임시 복사본에서 26개 통과를 확인해 뒀다. recommend_slots 테스트 2개는 `virtual_mon`·`team_key` 대신
-테스트 안의 `mons_of`·`key_of`를 쓰게 바꿔 놓아서, R4 중에 테스트를 고칠 필요는 없다.
+**지금 단계**: 단계 TODO(A~E)와 백로그 R1~R4·R7은 끝났다. 다음은 아래 백로그(위에서부터 권장).
 
-**백로그** (위에서부터 권장. R1~R3(`recommend_slots` 정리·팀원 비교를 id로·C2 결과 개수 테스트)과 R7(쓰는 곳 없는 `recommend`·`Recommendation` 삭제)은 2026-11 사용자 요청으로 Claude가 끝냈다)
-- **R4** 상성 계산을 타입 기준으로 — 바닥을 `fn multiplier_for(attack, types: &[Type])`·`fn weakness_of(members: &[Vec<Type>])`로 두고
-  `defense_multiplier`·`team_weakness`(`&Pokemon` 버전)는 타입을 꺼내 그걸 부르는 얇은 함수로. 그러면 욕심쟁이·다듬기·최종 점수가
-  `Vec<Type>`만 다뤄 `virtual_mon`·`chosen_mons`가 없어진다. API와 기존 테스트는 그대로 통과해야 한다(테스트가 안전망).
-  계기: 사용자가 "가상 포켓몬을 왜 만드나 → Pokemon만 받는 게 문제"라고 짚음. 뼈대는 Claude, 핵심 로직은 사용자.
+**백로그** (위에서부터 권장. R1~R3(`recommend_slots` 정리·팀원 비교를 id로·C2 결과 개수 테스트)과 R7(쓰는 곳 없는 `recommend`·`Recommendation` 삭제)은 2026-11 사용자 요청으로 Claude가 끝냈다. R4(상성 계산을 타입 기준으로)는 ①~④ 사용자, ⑤⑥ Claude —
+  바닥이 `multiplier_for(attack, &[Type])`·`weakness_of(&[Vec<Type>])`이고 `defense_multiplier`·`team_weakness`는 그 위의 얇은 함수, `recommend_slots`는 `Vec<Type>`만 다룬다(`virtual_mon` 삭제). 전후 출력이 6개 팀에서 같음을 확인)
 - **R5** 4배·무효 가중치 — 지금은 2배 이상이면 약점 1, 1배 미만이면 내성 1로 똑같이 센다(설명·계산이 쉬워서 고른 단순화).
-  예: 4배는 약점 2, 무효는 내성 2. `Weakness` 필드가 개수 → 가중합이 되고 `weak_spot`·`team_score`·테스트 기대값이 바뀐다. R4 뒤에.
+  예: 4배는 약점 2, 무효는 내성 2. `Weakness` 필드가 개수 → 가중합이 되고 `weak_spot`·`team_score`·테스트 기대값이 바뀐다. 바꿀 곳은 `weakness_of` 한 곳이다.
 - **R6** 자리별 근거 — `SlotPick`에 "이 조합이 막아 주는 약점 타입" 또는 "이 조합을 빼면 늘어나는 구멍 수". GUI에서 근거를 보여 줄 때.
 - 선택 과제: C4 ② — 빠지는 포켓몬(`out`)이 원래 그 약점 타입을 견디던 교체는 약점을 줄이지 못하니 거르기(TODO는 단계가 끝나 지웠다).
   D — 같은 이름 두 번이면 400으로 막을지, 그룹당 개수를 요청 `limit: Option<u32>`로, 이름 대신 `ids: Vec<u32>`로 받기(GUI가 붙으면 id 쪽이 안전).
