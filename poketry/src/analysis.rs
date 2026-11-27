@@ -29,8 +29,12 @@ use crate::types::{Type, effectiveness};
 //
 // 확인: tests 의 `타입_목록으로_배율을_계산한다` 에서 `#[ignore]` 줄을 지우고 `cargo test -p poketry`.
 pub fn multiplier_for(attack: Type, types: &[Type]) -> f32 {
-    let _ = (attack, types);
-    todo!()
+    let mut m = 1.0;
+    for t in types {
+        m *= effectiveness(attack, *t);
+    }
+
+    m
 }
 
 // TODO(R4 ②): ①이 통과하면 이 함수 본문 전체를 `multiplier_for` 한 번 부르는 것으로 바꾸세요.
@@ -39,15 +43,7 @@ pub fn multiplier_for(attack: Type, types: &[Type]) -> f32 {
 //   지금 있는 `type1` / `if let Some(second_type)` 코드는 전부 지웁니다. 같은 일을 ①이 하니까요.
 // 확인: `cargo test -p poketry` — 원래 있던 `단일_타입은_…`·`복합_타입은_곱한다`·`무효가_…` 테스트가 그대로 통과해야 합니다.
 pub fn defense_multiplier(attack: Type, defender: &Pokemon) -> f32 {
-    let first_multiplier = effectiveness(attack, defender.type1);
-
-    if let Some(second_type) = defender.type2 {
-        let second_multiplier = effectiveness(attack, second_type);
-
-        return first_multiplier * second_multiplier;
-    }
-
-    first_multiplier
+    multiplier_for(attack, &defender.types())
 }
 
 // TODO(R5): 4배 약점·무효를 2배·반감보다 무겁게 세기. 계획은 CLAUDE.md "poketry 이어서 하기" 백로그 R5.
@@ -74,26 +70,14 @@ pub struct Weakness {
 //
 // 확인: tests 의 `타입_목록으로_팀_약점표를_만든다` 에서 `#[ignore]` 줄을 지우고 `cargo test -p poketry`.
 pub fn weakness_of(members: &[Vec<Type>]) -> Vec<Weakness> {
-    let _ = members;
-    todo!()
-}
-
-// TODO(R4 ④): ③이 통과하면 이 함수 본문을 "타입 목록으로 바꾼 뒤 `weakness_of` 부르기" 두 줄로 바꾸세요.
-//   1. `team`(포켓몬 목록)을 `Vec<Vec<Type>>`(멤버마다 타입 목록)으로 바꿉니다.
-//      예: [리자몽, 루카리오] → [[불꽃, 비행], [격투, 강철]]
-//      하나씩 꺼내서(`iter`) 바꾸고(`map(|p| p.types())`) 모으기(`collect`). 변수 타입을 `Vec<Vec<Type>>` 로 적어 두면 `collect` 가 알아듣습니다.
-//   2. `weakness_of(&그 변수)` 를 돌려줍니다.
-//   지금 있는 `for attack in Type::ALL { … }` 는 ③으로 옮겨 갔으니 지웁니다.
-// 확인: `cargo test -p poketry` — 전부 통과해야 합니다(`team_weakness` 를 쓰는 테스트가 많아서 이게 안전망입니다).
-pub fn team_weakness(team: &[&Pokemon]) -> Vec<Weakness> {
     let mut result: Vec<Weakness> = Vec::new();
 
     for attack in Type::ALL {
         let mut weak = 0;
         let mut resist = 0;
 
-        for p in team {
-            let m = defense_multiplier(attack, p);
+        for types in members {
+            let m = multiplier_for(attack, types);
             if m >= 2.0 {
                 weak += 1;
             } else if m < 1.0 {
@@ -109,6 +93,18 @@ pub fn team_weakness(team: &[&Pokemon]) -> Vec<Weakness> {
     }
 
     result
+}
+
+// TODO(R4 ④): ③이 통과하면 이 함수 본문을 "타입 목록으로 바꾼 뒤 `weakness_of` 부르기" 두 줄로 바꾸세요.
+//   1. `team`(포켓몬 목록)을 `Vec<Vec<Type>>`(멤버마다 타입 목록)으로 바꿉니다.
+//      예: [리자몽, 루카리오] → [[불꽃, 비행], [격투, 강철]]
+//      하나씩 꺼내서(`iter`) 바꾸고(`map(|p| p.types())`) 모으기(`collect`). 변수 타입을 `Vec<Vec<Type>>` 로 적어 두면 `collect` 가 알아듣습니다.
+//   2. `weakness_of(&그 변수)` 를 돌려줍니다.
+//   지금 있는 `for attack in Type::ALL { … }` 는 ③으로 옮겨 갔으니 지웁니다.
+// 확인: `cargo test -p poketry` — 전부 통과해야 합니다(`team_weakness` 를 쓰는 테스트가 많아서 이게 안전망입니다).
+pub fn team_weakness(team: &[&Pokemon]) -> Vec<Weakness> {
+    let weakness: Vec<Vec<Type>> = team.iter().map(|p| p.types()).collect();
+    weakness_of(&weakness)
 }
 
 pub fn weak_spot(weaknesses: &[Weakness]) -> Vec<Type> {
