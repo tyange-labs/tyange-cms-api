@@ -1,6 +1,5 @@
 mod blog_redeploy;
 mod book_info;
-mod craft_sync;
 mod db;
 mod gotolib_push;
 mod middlewares;
@@ -38,7 +37,7 @@ use crate::routes::update_my_profile::update_my_profile;
 use crate::routes::upload_image::upload_image;
 use crate::{models::AppState, routes::add_user::add_user};
 use db::init_db;
-use openapi::{ApiKeysApi, CraftApi, ImagesApi, PortfolioApi, PostsApi, TagsApi, WeddingApi};
+use openapi::{ApiKeysApi, ImagesApi, PortfolioApi, PostsApi, TagsApi, WeddingApi};
 use poketry_api::PoketryApi;
 use poem::{
     delete,
@@ -135,19 +134,12 @@ async fn main() -> Result<(), std::io::Error> {
         gotolib_push::spawn_worker(db.clone(), service.clone());
     }
 
-    // Craft 폴더 → 포스트 동기화. CRAFT_SYNC_ENABLED=true이고 CRAFT_API_URL이 있을 때만 돈다.
-    let craft_sync = craft_sync::CraftSyncService::from_env();
-    craft_sync::spawn_worker(db.clone(), craft_sync.clone());
-
     // API 키 확인용. AuthGuard가 요청 데이터에서 꺼내 쓴다(lib 크레이트의 타입이라 AppState와 따로 싣는다).
     let api_keys = tyange_cms_api::auth::api_key::ApiKeyVerifier::new(db.clone());
 
     let state = Arc::new(AppState::new(db));
 
-    fn configure_routes(
-        state: &Arc<AppState>,
-        craft_sync: &Arc<craft_sync::CraftSyncService>,
-    ) -> Route {
+    fn configure_routes(state: &Arc<AppState>) -> Route {
         let upload_base_path = env::var("UPLOAD_PATH").unwrap_or(String::from(".uploads/images"));
         let upload_max_bytes = upload_size_limit();
 
@@ -180,10 +172,6 @@ async fn main() -> Result<(), std::io::Error> {
                 },
                 WeddingApi {
                     state: state.clone(),
-                },
-                CraftApi {
-                    state: state.clone(),
-                    craft_sync: craft_sync.clone(),
                 },
                 ApiKeysApi {
                     state: state.clone(),
@@ -316,7 +304,7 @@ async fn main() -> Result<(), std::io::Error> {
             .nest("/images", StaticFilesEndpoint::new(upload_base_path))
     }
 
-    let app = configure_routes(&state, &craft_sync).data(push).data(api_keys).data(state).with(
+    let app = configure_routes(&state).data(push).data(api_keys).data(state).with(
         Cors::new()
             .allow_origin("http://localhost:3001")
             .allow_origin("http://localhost:3000")

@@ -159,24 +159,12 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
     ② **`images.post_id` 외래키는 운영에도 cascade가 없어서, 이미지가 연결된 글은 운영에서도 못 지웠다** → 핸들러가 한 트랜잭션으로 `post_tags` 삭제 + `images.post_id = NULL`(파일과 행은 남기고
     연결만 끊음) + `posts` 삭제를 한다. 글이 없으면 404이고 아무것도 안 바뀐다. 테스트 `routes/post_delete_test.rs`(6개)가 변이 검사 3종(핸들러만/스키마만/둘 다 되돌림)으로 확인됐다.
     옛 `routes/delete_post.rs`(등록 안 된 죽은 코드, 테스트만 참조)는 그대로 둔다 — 같은 결함이 있지만 서빙되지 않는다.
-- **Craft 폴더 → 포스트 동기화** (2026-10, `feat/craft-sync`): Craft의 `CMS` 폴더에 문서를 쓰면 lovelog 짧은 글(태그 `lovelog`, 카테고리
-  `general`, 제목 없음)로 올린다. 모듈 `src/craft_sync.rs`(+`craft_sync/tests.rs`), 표 `craft_sync_posts`(문서↔글)·`craft_sync_images`(이미지 블록↔저장 경로).
-  - **폴링이다.** Craft Connect API에는 웹훅이 없다. `CRAFT_SYNC_INTERVAL_SECS`(기본 300, 최소 60)마다 문서 목록(`/documents?folderId=…&fetchMetadata=true`)의
-    `lastModifiedAt`만 비교하고, 바뀐 문서만 `/blocks?id=…&maxDepth=-1`로 본문을 읽는다. 지금 바로 돌리려면 `POST /admin/craft/sync`(관리자),
-    마지막 결과는 `GET /admin/craft/status`. 두 번이 겹쳐도 `run_lock`이 줄을 세운다.
-  - **규칙**: 새 문서 → 글 생성(`CRAFT_SYNC_STATUS`, 기본 published). 수정 → **본문만** 갱신(태그·상태는 CMS에서 바꾼 대로 둔다).
-    폴더에서 사라진 문서 → 글을 **draft로만** 돌린다(지우지 않음, 다시 나타나면 되살림). 빈 문서는 올리지 않는다.
-    **200자 초과(2026-09-23 이후 글)는 draft로 강제**하고 경고를 낸다 — 글자 수는 lovelog `plainLength`와 같은 규칙(`plain_len`).
-    기준일·한도는 lovelog `timeline.ts`·tyange-cms `short-form.ts`와 각자 들고 있으니 **함께 고친다.**
-  - 이미지·드로잉 블록은 내려받아 `store_image_from_reader`로 저장하고 본문 주소를 `CRAFT_SYNC_IMAGE_BASE_URL`(기본 `https://tyange.com/api/cms`) + `/images/…`로 바꾼다.
-    **저장된 이미지 주소는 `/api/cms`가 붙어야 열린다**(처음에 빠뜨려 404가 났었다). Craft 이미지 URL은 인증 없이 받아지지만 만료 여부는 모른다 — 그래서 내려받아 둔다.
-    같은 블록 ID는 다시 받지 않는다(캐시). 이미지가 바뀌었는데 블록 ID가 같으면 반영되지 않는다.
-  - **Craft 링크(`CRAFT_API_URL`)는 접근 권한 그 자체다.** 로그·에러·응답 어디에도 내지 않는다(`reqwest::Error::without_url`, 테스트로 고정).
-    Forgejo **secret**으로 등록해야 한다. 링크 범위가 공간 전체일 수 있으니 가능하면 `CMS` 폴더로 좁힐 것. 없으면 기능이 꺼진다.
-  - 빈 폴더 목록이 오면 draft 전환을 건너뛴다(API 오류로 글이 한꺼번에 내려가는 걸 막음). 같은 이유로 문서 하나의 오류는 그 문서만 건너뛰고 다음 라운드에 다시 한다.
-  - 제한: 중첩 목록의 들여쓰기는 평평하게 펴진다. 파일·비디오 블록은 건너뛴다(경고). 손글씨 사진 배경 제거(`extract-ink`)는 여기 없다 — 이미 처리된 이미지를 Craft에 넣는다.
-  - `main.rs`가 `CraftSyncService`를 만들어 `CraftApi`(openapi.rs)와 워커에 나눠 준다. `AppState`에 넣지 않은 건 `services`가 lib 크레이트에 없어서다.
-  - 테스트 14개: 가짜 Craft(로컬 poem 서버) + 인메모리 SQLite. 생성·중복 방지·수정(상태 보존)·사라짐/복귀·빈 목록 방어·빈 문서·200자·CMS에서 지운 글·Craft 실패(링크 누출 없음)·잘못된 이미지.
+- **Craft 폴더 → 포스트 동기화는 제거했다** (2026-11, `chore/remove-craft-sync`). Craft `CMS` 폴더를 폴링해 lovelog 짧은 글로 올리던 기능
+  (`src/craft_sync.rs`, `/admin/craft/sync`·`/admin/craft/status`, 표 `craft_sync_posts`·`craft_sync_images`). 글 올리기를 Claude 커넥터로
+  하기로 해서 걷어냈다(사용자 결정). 동기화가 만든 글은 남기고, 두 표는 `init_db`가 `DROP TABLE IF EXISTS`로 지운다. 워크플로의 `CRAFT_*` 환경변수도 뺐다
+  (GitHub secret `CRAFT_API_URL`·vars `CRAFT_SYNC_*`는 저장소 설정에 남아 있으니 필요하면 지울 것). 코드는 git 히스토리에 있다 —
+  특히 Craft 이미지 블록을 내려받아 `store_image_from_reader`로 저장하고 주소를 `CRAFT_SYNC_IMAGE_BASE_URL`+`/images/…`로 바꾸던 부분은
+  커넥터의 `create_post`에서 다시 쓸 만하다(`git show master:src/craft_sync.rs` — 머지 전이면 `origin/master`).
 - **gotolib 찜 소장 알림 (Web Push)** (2026-10, `feat/gotolib-push`): 찜 목록의 책이 '자주 가는 도서관'에 **미소장 → 소장**으로
   바뀌면 알린다. 모듈 `src/gotolib_push.rs`(+`gotolib_push/tests.rs`), 라우트 `routes/gotolib_push.rs`. 크레이트는
   `web-push-native`(요청만 만들고 전송은 reqwest; OpenSSL 불필요 — 옛 `web-push`+isahc는 쓰지 않는다).
