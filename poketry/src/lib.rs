@@ -9,5 +9,8 @@ pub use analysis::{
     weakness_of,
 };
 pub use evolution::{EvolutionNode, chain_of, evolutions};
-pub use pokemon::{Pokemon, UnknownPokemon, find, find_team, pokedex};
+pub use pokemon::{
+    Pokemon, UnknownPokemon, UnknownPokemonId, find, find_by_id, find_team, find_team_by_ids,
+    pokedex,
+};
 pub use types::{Type, effectiveness};

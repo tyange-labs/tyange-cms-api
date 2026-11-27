@@ -50,7 +50,7 @@ Rust + Poem 프레임워크. cargo 사용.
 남은 일 전체는 `grep -rn "TODO(" poketry/src src/poketry_api.rs`로 볼 수 있다. `todo!()`가 붙은 TODO가 지금 단계이고,
 한 줄짜리 `TODO(R번호)`는 백로그 표시다. 커밋 나누는 법·설명 방식은 Claude 메모리에도 있다.
 
-**지금 단계**: 단계 TODO(A~E)와 백로그 R1~R7은 모두 끝났다. 남은 건 아래 선택 과제뿐이다.
+**지금 단계**: 단계 TODO(A~E)·백로그 R1~R7·선택 과제가 모두 끝났다. 다음 큰 일은 프론트(tyange-cms 또는 별도 GUI)에서 이 API를 쓰는 것.
 
 **백로그** (위에서부터 권장. R1~R3(`recommend_slots` 정리·팀원 비교를 id로·C2 결과 개수 테스트)과 R7(쓰는 곳 없는 `recommend`·`Recommendation` 삭제)은 2026-11 사용자 요청으로 Claude가 끝냈다. R4(상성 계산을 타입 기준으로)는 ①~④ 사용자, ⑤⑥ Claude —
   바닥이 `multiplier_for(attack, &[Type])`·`weakness_of(&[Vec<Type>])`이고 `defense_multiplier`·`team_weakness`는 그 위의 얇은 함수, `recommend_slots`는 `Vec<Type>`만 다룬다(`virtual_mon` 삭제). 전후 출력이 6개 팀에서 같음을 확인).
@@ -65,8 +65,12 @@ Rust + Poem 프레임워크. cargo 사용.
   가중치 = 1×에서 몇 단계인가(log₂): 4×→약점 2, 2×→약점 1, 0.5×→내성 1, 0.25×→내성 2. **무효(0×)는 단계가 정의되지 않아
   사용자가 내성 3으로 정했다**(0.25×보다 한 단계 더). 계산은 `weakness_of` 한 곳, `Weakness` 필드는 `weak_weight`·`resist_weight`
   (API `WeaknessRow`도 같은 이름 — 예전 `weak_count`·`resist_count`). 보스전 0.63×·트레이너전 0.7× 같은 보정은 팀 비교에 영향이 없어 넣지 않았다.
-- 선택 과제: C4 ② — 빠지는 포켓몬(`out`)이 원래 그 약점 타입을 견디던 교체는 약점을 줄이지 못하니 거르기(TODO는 단계가 끝나 지웠다).
-  D — 같은 이름 두 번이면 400으로 막을지, 그룹당 개수를 요청 `limit: Option<u32>`로, 이름 대신 `ids: Vec<u32>`로 받기(GUI가 붙으면 id 쪽이 안전).
+- **선택 과제도 끝냈다**(2026-11, 사용자 요청으로 Claude 작성):
+  - `recommend_fixes`는 빠지는 포켓몬(`out`)이 원래 그 약점을 견디던(`< 1.0`) 교체를 거른다 — 바꿔도 그 약점이 줄지 않아서.
+  - `POST /poketry/analyze` 요청은 `{ names?: [이름], ids?: [PokeAPI id], limit?: 1~50(기본 10) }`. `names`·`ids`는 **정확히 하나**
+    (둘 다·둘 다 없음 → 400). GUI는 `ids`를 쓸 것(이름은 바뀔 수 있다). id 조회는 poketry `find_team_by_ids`(`UnknownPokemonId`).
+  - **같은 포켓몬(같은 id)이 두 번이면 400**(사용자 결정 — 게임은 허용하지만 분석 도구에선 대개 실수이고, 교체 추천이 겹쳐 나온다).
+  - `limit`은 빈자리마다 `picks`, 약점마다 `swaps` 개수. 자르는 건 핸들러(`truncate`), DTO `From`은 자르지 않는다.
 - 도감 `poketry/pokemon.json`은 `include_str!`로 내장, `OnceLock`으로 한 번만 파싱.
 - **이름이 아니라 id로 잇는다**(2026-11, 사용자 결정). 이름은 바뀔 수 있어서다 — 메가 42개는 PokeAPI에 한국어 이름이 없어
   `메가메가니움` 같은 대체 이름이고, 공식 이름이 생기면 다음 수집 때 바뀐다. `Pokemon.id`=PokeAPI pokemon id(폼 단위,

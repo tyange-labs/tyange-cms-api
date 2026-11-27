@@ -62,6 +62,27 @@ pub fn find_team<S: AsRef<str>>(names: &[S]) -> Result<Vec<&'static Pokemon>, Un
         .collect()
 }
 
+pub fn find_by_id(pokedex: &[Pokemon], id: u32) -> Option<&Pokemon> {
+    pokedex.iter().find(|p| p.id == id)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownPokemonId(pub u32);
+
+impl fmt::Display for UnknownPokemonId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "id {} 은(는) 도감에 없습니다.", self.0)
+    }
+}
+
+impl std::error::Error for UnknownPokemonId {}
+
+pub fn find_team_by_ids(ids: &[u32]) -> Result<Vec<&'static Pokemon>, UnknownPokemonId> {
+    ids.iter()
+        .map(|&id| find_by_id(pokedex(), id).ok_or(UnknownPokemonId(id)))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -91,6 +112,20 @@ mod tests {
         let team = find_team(&["리자몽", "갸라도스"]).unwrap();
         assert_eq!(team.len(), 2);
         assert_eq!(team[0].name, "리자몽");
+    }
+
+    #[test]
+    fn id로_팀을_만든다() {
+        let team = find_team_by_ids(&[6, 10034]).unwrap();
+        assert_eq!(team[0].name, "리자몽");
+        assert_eq!(team[1].species_id, 6);
+    }
+
+    #[test]
+    fn 없는_id면_그_id를_알려준다() {
+        let err = find_team_by_ids(&[6, 999999]).unwrap_err();
+        assert_eq!(err, UnknownPokemonId(999999));
+        assert_eq!(err.to_string(), "id 999999 은(는) 도감에 없습니다.");
     }
 
     #[test]

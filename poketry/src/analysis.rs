@@ -298,7 +298,7 @@ pub fn recommend_fixes<'a>(team: &[&'a Pokemon], pokedex: &'a [Pokemon]) -> Vec<
     for w in weak_spots {
         let mut new_swaps: Vec<Swap> = Vec::new();
         for s in &swaps {
-            if defense_multiplier(w, s.candidate) < 1.0 {
+            if defense_multiplier(w, s.candidate) < 1.0 && defense_multiplier(w, s.out) >= 1.0 {
                 new_swaps.push(s.clone())
             }
         }
@@ -371,13 +371,7 @@ mod tests {
         let counts = |table: Vec<Weakness>| -> Vec<(Type, i32, i32)> {
             table
                 .into_iter()
-                .map(|w| {
-                    (
-                        w.attack_type,
-                        w.weak_weight,
-                        w.resist_weight,
-                    )
-                })
+                .map(|w| (w.attack_type, w.weak_weight, w.resist_weight))
                 .collect()
         };
         assert_eq!(counts(weakness_of(&types)), counts(team_weakness(&team)));
@@ -630,6 +624,12 @@ mod tests {
             assert!(!fix.swaps.is_empty());
             for s in &fix.swaps {
                 assert!(defense_multiplier(fix.weak_type, s.candidate) < 1.0);
+                assert!(
+                    defense_multiplier(fix.weak_type, s.out) >= 1.0,
+                    "{} 를 빼는 교체는 {:?} 약점을 줄이지 못합니다",
+                    s.out.name,
+                    fix.weak_type
+                );
             }
         }
     }
