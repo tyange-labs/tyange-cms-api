@@ -87,8 +87,7 @@ pub fn recommend<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> Vec<Recommend
 
     let candidates: Vec<&Pokemon> = pokedex
         .iter()
-        // TODO(R2): 팀원 빼기를 `name` 대신 `id` 로 비교하기 (`t.id == p.id`).
-        .filter(|p| !team.iter().any(|t| t.name == p.name))
+        .filter(|p| !team.iter().any(|t| t.id == p.id))
         .collect();
 
     for candidate in candidates {
@@ -121,8 +120,7 @@ pub fn recommend_swap<'a>(team: &[&'a Pokemon], pokedex: &'a [Pokemon]) -> Vec<S
 
     let candidates: Vec<&Pokemon> = pokedex
         .iter()
-        // TODO(R2): 팀원 빼기를 `name` 대신 `id` 로 비교하기 (`t.id == p.id`).
-        .filter(|p| !team.iter().any(|t| t.name == p.name))
+        .filter(|p| !team.iter().any(|t| t.id == p.id))
         .collect();
 
     for i in 0..team.len() {
@@ -276,14 +274,13 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> SlotPla
 
     let mut v = team.to_vec();
     v.extend(chosen_mons.iter());
-    // TODO(R1): `fitlered_pokedex` → `filtered_pokedex` (오타), `pokedex.into_iter()` → `pokedex.iter()`.
-    let fitlered_pokedex: Vec<&Pokemon> = pokedex
-        .into_iter()
+    let filtered_pokedex: Vec<&Pokemon> = pokedex
+        .iter()
         .filter(|p| team.iter().all(|c| p.id != c.id))
         .collect();
     let mut slots: Vec<SlotPick> = Vec::new();
     for shape in &chosen {
-        let mut picks: Vec<&Pokemon> = fitlered_pokedex
+        let mut picks: Vec<&Pokemon> = filtered_pokedex
             .iter()
             .filter(|fp| shape_of(fp) == *shape)
             .copied()
@@ -291,8 +288,7 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> SlotPla
         picks.sort_by_key(|p| -(p.capture_rate as i32));
         slots.push(SlotPick {
             slot_types: shape.clone(),
-            // TODO(R1): `picks` 는 이미 소유한 Vec 이라 `clone()` 없이 그대로 넘기면 된다.
-            picks: picks.clone(),
+            picks,
         });
     }
     let weaknesses = team_weakness(&v);
@@ -367,7 +363,24 @@ mod tests {
         assert_eq!(defense_multiplier(Type::Ground, &p), 0.0);
     }
 
-    // TODO(R3): `recommend` 결과 개수 = 도감 수 − 팀 수, `recommend_swap` 결과 개수 = 팀 수 × (도감 수 − 팀 수) 테스트 추가.
+    #[test]
+    fn recommend_는_팀원을_뺀_도감_전체를_후보로_본다() {
+        let team = find_team(&["리자몽", "가디안", "루카리오", "갸라도스", "마기라스"]).unwrap();
+        let result = recommend(&team, pokedex());
+
+        assert_eq!(result.len(), pokedex().len() - team.len());
+        assert!(result.iter().all(|r| team.iter().all(|t| t.id != r.candidate.id)));
+    }
+
+    #[test]
+    fn recommend_swap_은_팀원마다_도감_전체를_후보로_본다() {
+        let team = find_team(&["리자몽", "가디안", "루카리오", "갸라도스", "마기라스", "님피아"]).unwrap();
+        let result = recommend_swap(&team, pokedex());
+
+        assert_eq!(result.len(), team.len() * (pokedex().len() - team.len()));
+        assert!(result.iter().all(|s| team.iter().all(|t| t.id != s.candidate.id)));
+    }
+
     #[test]
     fn recommend_구멍_수가_정렬_1순위다() {
         let team = find_team(&["리자몽", "가디안", "루카리오", "갸라도스", "마기라스"]).unwrap();
@@ -379,8 +392,7 @@ mod tests {
 
         let best_possible = pokedex()
             .iter()
-            // TODO(R2): 위 `recommend` 와 함께 `id` 비교로.
-            .filter(|c| !team.iter().any(|t| t.name == c.name))
+            .filter(|c| !team.iter().any(|t| t.id == c.id))
             .map(|c| spots_with(c))
             .min()
             .unwrap();

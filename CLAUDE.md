@@ -52,12 +52,7 @@ Rust + Poem 프레임워크. cargo 사용.
 
 **지금 단계**: 단계 TODO(A~E)는 모두 끝났다. 다음은 아래 백로그(위에서부터 권장).
 
-**백로그** (위에서부터 권장. R1~R3은 작아서 언제 끼워도 된다)
-- **R1** `recommend_slots` 정리(사용자 코드라 사용자가 고친다): `picks.clone()` → `picks`, `fitlered_pokedex` 오타,
-  `pokedex.into_iter()` → `iter()`.
-- **R2** 팀원 제외 비교를 `name` 대신 `id`로 — `recommend`·`recommend_swap`의 `filter`와 테스트 `recommend_구멍_수가_정렬_1순위다`.
-  "이름이 아니라 id로 잇는다" 결정의 남은 부분.
-- **R3** C2 결과 개수 테스트 — `recommend` = 도감 수 − 팀 수, `recommend_swap` = 팀 수 × (도감 수 − 팀 수).
+**백로그** (위에서부터 권장. R1~R3(`recommend_slots` 정리·팀원 비교를 id로·C2 결과 개수 테스트)은 2026-11 사용자 요청으로 Claude가 끝냈다)
 - **R4** 상성 계산을 타입 기준으로 — 바닥을 `fn multiplier_for(attack, types: &[Type])`·`fn weakness_of(members: &[Vec<Type>])`로 두고
   `defense_multiplier`·`team_weakness`(`&Pokemon` 버전)는 타입을 꺼내 그걸 부르는 얇은 함수로. 그러면 욕심쟁이·다듬기·최종 점수가
   `Vec<Type>`만 다뤄 `virtual_mon`·`chosen_mons`가 없어진다. API와 기존 테스트는 그대로 통과해야 한다(테스트가 안전망).
@@ -65,7 +60,7 @@ Rust + Poem 프레임워크. cargo 사용.
 - **R5** 4배·무효 가중치 — 지금은 2배 이상이면 약점 1, 1배 미만이면 내성 1로 똑같이 센다(설명·계산이 쉬워서 고른 단순화).
   예: 4배는 약점 2, 무효는 내성 2. `Weakness` 필드가 개수 → 가중합이 되고 `weak_spot`·`team_score`·테스트 기대값이 바뀐다. R4 뒤에.
 - **R6** 자리별 근거 — `SlotPick`에 "이 조합이 막아 주는 약점 타입" 또는 "이 조합을 빼면 늘어나는 구멍 수". GUI에서 근거를 보여 줄 때.
-- **R7** `recommend`·`Recommendation` 정리 — C4부터 API는 안 쓰고 C2 테스트만 쓴다. R2·R3 할 때 남길지 지울지 정한다.
+- **R7** `recommend`·`Recommendation` 정리 — C4부터 API는 안 쓰고 C2 테스트만 쓴다. 남길지 지울지 사용자가 정한다.
 - 선택 과제: C4 ② — 빠지는 포켓몬(`out`)이 원래 그 약점 타입을 견디던 교체는 약점을 줄이지 못하니 거르기(TODO는 단계가 끝나 지웠다).
   D — 같은 이름 두 번이면 400으로 막을지, 그룹당 개수를 요청 `limit: Option<u32>`로, 이름 대신 `ids: Vec<u32>`로 받기(GUI가 붙으면 id 쪽이 안전).
 - 도감 `poketry/pokemon.json`은 `include_str!`로 내장, `OnceLock`으로 한 번만 파싱.
