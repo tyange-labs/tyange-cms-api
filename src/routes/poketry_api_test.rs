@@ -29,6 +29,8 @@ async fn five_members_get_a_slot_plan() {
     let slots = data["plan"]["slots"].as_array().unwrap();
     assert_eq!(slots.len(), 1);
     assert!(!slots[0]["picks"].as_array().unwrap().is_empty());
+    assert_eq!(slots[0]["covers"], json!(["전기", "바위"]));
+    assert_eq!(slots[0]["spot_increase_if_removed"], json!(2));
     assert_eq!(data["fixes"], json!([]));
 }
 

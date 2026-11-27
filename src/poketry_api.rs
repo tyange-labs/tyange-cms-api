@@ -62,6 +62,8 @@ pub struct SlotPlanItem {
 #[oai(rename_all = "snake_case")]
 pub struct SlotItem {
     pub slot_types: Vec<String>,
+    pub covers: Vec<String>,
+    pub spot_increase_if_removed: i32,
     pub picks: Vec<PokemonItem>,
 }
 
@@ -88,6 +90,8 @@ impl From<poketry::SlotPick<'_>> for SlotItem {
     fn from(s: poketry::SlotPick<'_>) -> Self {
         SlotItem {
             slot_types: s.slot_types.iter().map(|t| t.name().to_string()).collect(),
+            covers: s.covers.iter().map(|t| t.name().to_string()).collect(),
+            spot_increase_if_removed: s.spot_increase_if_removed,
             picks: s.picks.into_iter().take(PICKS_PER_GROUP).map(Into::into).collect(),
         }
     }

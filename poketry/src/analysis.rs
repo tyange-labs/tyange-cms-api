@@ -124,9 +124,10 @@ pub fn recommend_swap<'a>(team: &[&'a Pokemon], pokedex: &'a [Pokemon]) -> Vec<S
 pub struct SlotPick<'a> {
     pub slot_types: Vec<Type>,
     pub picks: Vec<&'a Pokemon>,
+    pub covers: Vec<Type>,
+    pub spot_increase_if_removed: i32,
 }
 
-// TODO(R6): 자리마다 근거 붙이기(이 조합이 막아 주는 약점 타입, 빼면 늘어나는 구멍 수). CLAUDE.md "poketry 이어서 하기" 백로그 R6.
 #[derive(Debug, Clone, Serialize)]
 pub struct SlotPlan<'a> {
     pub slots: Vec<SlotPick<'a>>,
@@ -239,17 +240,38 @@ pub fn recommend_slots<'a>(team: &[&Pokemon], pokedex: &'a [Pokemon]) -> SlotPla
         .iter()
         .filter(|p| team.iter().all(|c| p.id != c.id))
         .collect();
+    let team_spots = weak_spot(&weakness_of(&base));
+    let full_spots = team_key(&v).0 as i32;
     let mut slots: Vec<SlotPick> = Vec::new();
-    for shape in &chosen {
+    for (i, shape) in chosen.iter().enumerate() {
         let mut picks: Vec<&Pokemon> = filtered_pokedex
             .iter()
             .filter(|fp| shape_of(fp) == *shape)
             .copied()
             .collect();
         picks.sort_by_key(|p| -(p.capture_rate as i32));
+
+        let covers: Vec<Type> = team_spots
+            .iter()
+            .copied()
+            .filter(|&w| multiplier_for(w, shape) < 1.0)
+            .collect();
+
+        let mut without = base.clone();
+        without.extend(
+            chosen
+                .iter()
+                .enumerate()
+                .filter(|(j, _)| *j != i)
+                .map(|(_, c)| c.clone()),
+        );
+        let spot_increase_if_removed = team_key(&without).0 as i32 - full_spots;
+
         slots.push(SlotPick {
             slot_types: shape.clone(),
             picks,
+            covers,
+            spot_increase_if_removed,
         });
     }
     let weaknesses = weakness_of(&v);
@@ -508,6 +530,53 @@ mod tests {
                         "{names:?}: {i}번 자리를 {shape:?} 로 바꾸면 더 좋아집니다"
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn 자리마다_막아_주는_약점과_빼면_늘어나는_구멍_수를_붙인다() {
+        let team = find_team(&["리자몽", "가디안", "루카리오", "갸라도스", "마기라스"]).unwrap();
+        let plan = recommend_slots(&team, pokedex());
+        let slot = &plan.slots[0];
+
+        assert_eq!(slot.slot_types, vec![Type::Ground, Type::Steel]);
+        assert_eq!(slot.covers, vec![Type::Electric, Type::Rock]);
+        assert_eq!(slot.spot_increase_if_removed, 2);
+    }
+
+    #[test]
+    fn 자리별_근거는_원래_팀_약점과_나머지_자리로_다시_계산한_값과_같다() {
+        for names in [
+            &["리자몽"][..],
+            &["리자몽", "가디안", "루카리오"],
+            &["갸라도스", "마기라스", "님피아", "루카리오"],
+        ] {
+            let team = find_team(names).unwrap();
+            let plan = recommend_slots(&team, pokedex());
+            let base: Vec<Vec<Type>> = team.iter().map(|p| p.types()).collect();
+            let team_spots = weak_spot(&weakness_of(&base));
+
+            for (i, slot) in plan.slots.iter().enumerate() {
+                let expected_covers: Vec<Type> = team_spots
+                    .iter()
+                    .copied()
+                    .filter(|&w| multiplier_for(w, &slot.slot_types) < 1.0)
+                    .collect();
+                assert_eq!(slot.covers, expected_covers, "{names:?} {i}번 자리");
+
+                let mut without = base.clone();
+                for (j, other) in plan.slots.iter().enumerate() {
+                    if j != i {
+                        without.push(other.slot_types.clone());
+                    }
+                }
+                let spots_without = weak_spot(&weakness_of(&without)).len() as i32;
+                assert_eq!(
+                    slot.spot_increase_if_removed,
+                    spots_without - plan.spot_count as i32,
+                    "{names:?} {i}번 자리"
+                );
             }
         }
     }
