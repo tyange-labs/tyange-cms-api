@@ -1,4 +1,3 @@
-mod blog_redeploy;
 mod book_info;
 mod db;
 mod gotolib_push;

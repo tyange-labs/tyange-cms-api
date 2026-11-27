@@ -1,6 +1,6 @@
 //! 패스키(WebAuthn) 서비스: 설정과 진행 중인 의식(ceremony) 상태 보관.
 //!
-//! - `PASSKEY_RP_ID`가 비어 있으면 기능 전체가 꺼진다(blog_redeploy와 같은 방식). 엔드포인트는
+//! - `PASSKEY_RP_ID`가 비어 있으면 기능 전체가 꺼진다(환경변수가 없으면 끄는 방식). 엔드포인트는
 //!   503을 돌려준다.
 //! - 등록·로그인 `start`에서 만든 상태는 `finish`가 올 때까지 메모리에 둔다. 단일 프로세스
 //!   서버라 DB에 직렬화할 필요가 없고(`danger-allow-state-serialisation`도 불필요), 5분이 지나면

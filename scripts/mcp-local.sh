@@ -6,7 +6,7 @@
 #   3) 출력된 `claude mcp add …` 실행 → Claude Code에서 "글 목록 보여 줘" 등
 #   끝나면 `claude mcp remove tyange-local`. 데이터는 ./data/mcp-local (git 제외)에만 쌓인다.
 #
-# 운영 서비스에 닿지 않게 블로그 재배포·패스키·수집 작업은 끈다(.env가 있어도 아래 값이 이긴다).
+# 운영 서비스에 닿지 않게 패스키·수집 작업은 끈다(.env가 있어도 아래 값이 이긴다).
 set -euo pipefail
 
 PORT="${MCP_LOCAL_PORT:-18081}"
@@ -22,7 +22,6 @@ case "${1:-}" in
       UPLOAD_PATH="$DIR/images" \
       LISTEN_ADDR="127.0.0.1:${PORT}" \
       JWT_ACCESS_SECRET=local-dev-only \
-      TYANGE_BLOG_REDEPLOY_TOKEN= \
       PASSKEY_RP_ID= \
       COVER_FETCH_ENABLED=false \
       YES24_FETCH_ENABLED=false \

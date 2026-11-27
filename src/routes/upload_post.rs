@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use crate::{
-    blog_redeploy::{is_blog_redeploy_target, BlogContentEvent, BlogVisibility},
     models::{CustomResponse, UploadPostRequest, UploadPostResponse},
     AppState,
 };
@@ -95,15 +94,6 @@ pub async fn upload_post(
             StatusCode::INTERNAL_SERVER_ERROR,
         )
     })?;
-
-    if is_blog_redeploy_target(
-        &payload.status,
-        payload.tags.iter().map(|tag| tag.tag.as_str()),
-    ) {
-        data.blog_redeploy
-            .dispatch_content_change(BlogContentEvent::Publish, &post_id, BlogVisibility::Visible)
-            .await;
-    }
 
     println!("Post saved successfully with ID: {}", post_id);
     Ok(Json(CustomResponse {

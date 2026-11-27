@@ -136,7 +136,7 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
 
 ## 현재 상태
 - 운영 중
-- **배포는 GitHub Actions(`.github/workflows/deploy.yml`)** (2026-11 확인). Forgejo 워크플로는 지웠다 — 아래 Forgejo·러너 캐시 이야기는 옛 기록이다.
+- **배포는 GitHub Actions(`.github/workflows/deploy.yml`)** (2026-11 확인). Forgejo 워크플로는 지웠고, 2026-11-27에 Forgejo 서버(git.tyange.com)와 러너·`ci-cache`도 서버에서 걷어냈다 — 아래 Forgejo·러너 캐시 이야기는 옛 기록이다.
   master push·수동 실행에서 빌드 → 서비스 중지 → SCP → 시작. **PR에서는 빌드만 하고 배포 4단계는 건너뛴다**(`if: github.event_name != 'pull_request'`).
   예전엔 조건이 없어서 PR #1(`feat/poketry`)을 여는 순간 그 브랜치가 production에 배포됐다. GitHub는 `pull_request` 실행에 PR 브랜치의 워크플로 파일을 쓴다.
   `gh`는 `~/_dev/.envrc`의 `GH_CONFIG_DIR=~/.config/gh-personal`(개인 계정 `tyange`)로 써야 한다 — 기본 설정은 회사 계정이라 이 저장소에 읽기 권한뿐이다.
@@ -160,7 +160,7 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
     연결만 끊음) + `posts` 삭제를 한다. 글이 없으면 404이고 아무것도 안 바뀐다. 테스트 `routes/post_delete_test.rs`(6개)가 변이 검사 3종(핸들러만/스키마만/둘 다 되돌림)으로 확인됐다.
     옛 `routes/delete_post.rs`(등록 안 된 죽은 코드, 테스트만 참조)는 그대로 둔다 — 같은 결함이 있지만 서빙되지 않는다.
 - **Claude 커넥터(원격 MCP)** (2026-11, `feat/mcp-connector`): 아이폰 Claude 앱 등에서 "Craft 문서를 블로그에 올려줘"처럼 쓰려고 만들었다.
-  모듈 `src/mcp.rs`(+`mcp/{tools,oauth,tokens,images,tests}.rs`), 글 저장 로직은 HTTP 라우트와 같은 `src/posts.rs`(권한·태그·블로그 재배포까지).
+  모듈 `src/mcp.rs`(+`mcp/{tools,oauth,tokens,images,tests}.rs`), 글 저장 로직은 HTTP 라우트와 같은 `src/posts.rs`(권한·태그까지).
   - **켜는 조건**: `MCP_PUBLIC_URL`(예: `https://mcp.tyange.com`, 서브도메인 — 사용자 결정)과 `MCP_OAUTH_CLIENT_ID`(워크플로 기본 `tyange-claude`). 워크플로는 repo variable `MCP_PUBLIC_URL`이 있을 때만 켜고,
     그 주소를 `PASSKEY_RP_ORIGIN`에 덧붙이며, main.rs는 CORS 허용 origin에도 넣는다(승인 화면이 같은 출처로 패스키 POST를 하는데 Origin이 붙어 빠지면 403 — 로컬에서 실제로 막히는 걸 확인하고 고침).
   - **MCP**: `/mcp`, `rmcp` 3.12 Streamable HTTP를 무상태·JSON 응답으로 poem에 tower 호환으로 붙였다. 도구: `list_posts`·`get_post`·`list_tags`(읽기 전용 표시),
@@ -181,7 +181,7 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
   - 리다이렉트는 claude.ai/claude.com 콜백 + **루프백**(`http://localhost|127.0.0.1|[::1]:<포트>/…`, RFC 8252) — 맥의 Claude Code도 OAuth로 붙을 수 있다
     (`claude mcp add --transport http tyange <MCP_PUBLIC_URL>/mcp --client-id tyange-claude` 식. Claude Code 플래그는 그쪽 문서 확인).
   - **로컬에서 도구 써 보기**: `scripts/mcp-local.sh serve` → `scripts/mcp-local.sh token`이 출력하는 `claude mcp add … --header "Authorization: Bearer …"` 실행.
-    OAuth·패스키 없이 로컬 DB(`./data/mcp-local`)에 토큰을 직접 넣는다. 블로그 재배포·패스키·수집 작업은 끈 채로 뜬다(로컬에서 글을 공개해도 운영 블로그가 재배포되지 않게).
+    OAuth·패스키 없이 로컬 DB(`./data/mcp-local`)에 토큰을 직접 넣는다. 패스키·수집 작업은 끈 채로 뜬다.
   - 테스트 18개(`mcp/tests.rs`, `mcp/images.rs`): OAuth 흐름과 거부 경우, 루프백, 도구 호출 전체, 가짜 이미지 서버. 보안 검사 16종을 하나씩 빼는 변이에서 모두 실패 확인.
   - **admin 패스키 첫 등록(비밀번호 없이)**: `scripts/mcp-setup-code.sh [user_id, 기본 tyange]`가 `ssh lightsail`로 운영 DB `mcp_passkey_setup_codes`에
     15분 일회용 코드(해시만)를 넣고 `https://mcp.tyange.com/oauth/passkey-setup?code=…` 주소를 출력한다. 그 화면에서 패스키를 만들면 admin에 등록되고 코드는 지워진다.
@@ -211,7 +211,7 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
     확인하지 못했다**(앱의 직접 조회와 같은 키를 쓴다) — 한도 오류가 보이면 주기를 늘릴 것.
   - 알림 조건: 지난번 상태가 **미소장**이었던 쌍이 소장이 됐을 때만. 처음 보는 쌍은 상태만 기록(이미 소장인 책을 쏟아내지 않는다). 모든 기기에
     전달이 실패하면 상태를 바꾸지 않아 다음 라운드에 다시 시도. 4권 이상이 한꺼번에 소장되면 한 통으로 합친다.
-  - VAPID 키는 서버가 처음 켜질 때 만들어 `VAPID_KEY_PATH`(기본 `./data/vapid_private.key`, 권한 600)에 보관한다 — 비밀값을 Forgejo에 두지 않으려고.
+  - VAPID 키는 서버가 처음 켜질 때 만들어 `VAPID_KEY_PATH`(기본 `./data/vapid_private.key`, 권한 600)에 보관한다 — 비밀값을 배포 설정(GitHub secrets)에 두지 않으려고.
     **이 파일을 잃으면 기존 구독이 못 쓰게 되어 앱이 다시 구독해야 한다**(백업 대상). 표: `gotolib_push_subscriptions`·`gotolib_watch_state`·`gotolib_push_runs`
     (이 DB를 쓰는 다른 앱의 `web_push_*`와 겹치지 않게 gotolib_ 접두). 비활성 계정 정리에 두 표도 포함.
   - **기본 켜짐**: 배포 워크플로가 `GOTOLIB_PUSH_ENABLED`에 vars가 없으면 `true`를 넣는다. 끄려면 vars `GOTOLIB_PUSH_ENABLED=false` + 재배포.
@@ -229,8 +229,8 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
     막힘으로 본다). 표지 없음은 30일 뒤 재확인, 일시 오류는 10분부터 두 배씩(최대 12시간) 5번 뒤 `missing`.
     og:image는 `https://image.aladin.co.kr/product/…`만 믿는다(다른 호스트는 받지 않는다). `/search/`·`/ttb/`·
     `/account/` 등 알라딘 robots.txt가 막는 경로는 부르지 않는다. 약관에 자동 수집 금지 조항이 없음을 사용자가 확인함.
-  - **코드는 `COVER_FETCH_ENABLED=true`일 때만 돈다**(`COVER_CONTACT`는 선택). 배포 워크플로는 vars가 없으면 `true`를 넣는다(기본 켜짐). 배포는 `.forgejo/workflows/deploy.yml`이
-    Forgejo vars(`COVER_FETCH_ENABLED`, 선택으로 `COVER_CONTACT`·`COVERS_DIR`)로 `.env`에 넣는다 — 끄려면 vars `COVER_FETCH_ENABLED=false`를 만들고 다시 배포한다.
+  - **코드는 `COVER_FETCH_ENABLED=true`일 때만 돈다**(`COVER_CONTACT`는 선택). 배포 워크플로는 vars가 없으면 `true`를 넣는다(기본 켜짐). 배포는 `.github/workflows/deploy.yml`이
+    GitHub vars(`COVER_FETCH_ENABLED`, 선택으로 `COVER_CONTACT`·`COVERS_DIR`)로 `.env`에 넣는다 — 끄려면 vars `COVER_FETCH_ENABLED=false`를 만들고 다시 배포한다.
     이미 저장된 썸네일은 계속 제공된다. 서버가 1.9GB라 작업은 동시 1건, 이미지 변환은 `spawn_blocking`.
   - 테스트: 가짜 알라딘(로컬 poem 서버, `SourceConfig.allow_http`)으로 정상/표지 없음/403/500/이미지 아님/외부 호스트를
     검증한다. **실제 알라딘을 부르는 테스트는 만들지 않는다.** 변이 검사(검사 숫자·호스트 검증·막힘 처리·큐 상한·확대 방지)로 확인함.
@@ -264,7 +264,7 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
 - **패스키(WebAuthn) 로그인 + gotolib 동기화 추가** (2026-10, `feat/passkeys`). `webauthn-rs`(0.5,
   `conditional-ui` feature = discoverable 로그인용). 로그인 검증이 끝나면 기존 `issue_login_response()`로
   같은 JWT를 발급하므로 `Auth`/`AuthGuard`는 바뀐 게 없다. 모듈: `src/passkey.rs`(설정·진행 중인 의식
-  상태, `blog_redeploy`처럼 lib+bin 양쪽에 `mod` 선언 필요), `routes/passkeys.rs`, `routes/gotolib_sync.rs`.
+  상태, lib+bin 양쪽에 `mod` 선언 필요), `routes/passkeys.rs`, `routes/gotolib_sync.rs`.
   - 의식 상태(`PasskeyRegistration`/`DiscoverableAuthentication`)는 **메모리**에 5분 보관하고 한 번 꺼내면
     폐기한다. 단일 프로세스라 DB 직렬화(`danger-allow-state-serialisation`)를 쓰지 않았다 — 서버를
     여러 대로 늘리면 `login/start`와 `finish`가 다른 인스턴스로 갈 수 있어 깨진다.
@@ -329,7 +329,7 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
   - wedding_guests 테이블: guest_id, name, companions, created_at
   - RateLimit 미들웨어 부활 (ce46308 구현 그대로): IP당 5회/분 + 30회/시간, 본문 4KB 상한
   - 리버스 프록시(tyange.com/api/cms) 뒤라 IP 식별에 TRUST_PROXY_FORWARDED_FOR=true 필요.
-    워크플로가 배포마다 .env를 덮어쓰므로 `.forgejo/workflows/deploy.yml`의 .env 생성
+    워크플로가 배포마다 .env를 덮어쓰므로 `.github/workflows/deploy.yml`의 .env 생성
     블록에 넣어야 유지된다
 - CI를 GitHub Actions에서 Forgejo Actions로 전환 (2026-09) — `.github/workflows` 삭제,
   `.forgejo/workflows/deploy.yml`로 이전. 원래 워크플로가 `deploy on tyange-home-server`
@@ -384,6 +384,10 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
   `is_success()`(2xx 전체)로 일반화 — `return_run_info`에 따라 204/201이 갈릴 수 있어서.
   `TYANGE_BLOG_REDEPLOY_TOKEN`은 이제 GitHub PAT가 아니라 해당 저장소의 Actions 실행 권한을
   가진 Forgejo API 토큰이어야 한다.
+- **블로그 자동 재배포 제거 (2026-11-27, 사용자 결정)** — Forgejo 서버를 내리면서 글 저장·수정·삭제 때
+  tyange-blog 워크플로를 실행하던 `src/blog_redeploy.rs`와 호출부·테스트를 모두 걷어냈다. 블로그는
+  tyange-blog를 직접 배포(푸시 또는 수동 실행)해야 반영된다. GitHub secrets `TYANGE_BLOG_REDEPLOY_*`는
+  더 쓰지 않으니 저장소 설정에서 지워도 된다.
 - 포트폴리오 죽은 라우트/테스트 정리 + markdown 필드 도입 (2026-09) — tyange-cms의
   포트폴리오 편집 UX가 너무 힘들다는 문제(중첩 폼, `highlights`/`bullets` 배열을
   textarea에서 `join('\n')`/`split('\n')`으로 왕복시키다 마지막 줄 Enter가 씹히는

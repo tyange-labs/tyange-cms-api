@@ -52,7 +52,6 @@ jobs:
       - name: Create .env file
         run: |
           echo JWT_ACCESS_SECRET=${{ secrets.JWT_ACCESS_SECRET }} > .env
-          echo TYANGE_BLOG_REDEPLOY_TOKEN=${{ secrets.TYANGE_BLOG_REDEPLOY_TOKEN }} >> .env
           echo TRUST_PROXY_FORWARDED_FOR=true >> .env
           # 패스키(WebAuthn). 비밀이 아니라 값을 그대로 둔다. RP ID가 tyange.com이면 그 아래
           # 서브도메인 어디서든 같은 패스키를 쓰고, ORIGIN은 패스키 의식을 시작하는 페이지다

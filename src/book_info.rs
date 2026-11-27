@@ -17,7 +17,7 @@
 //! - 실패도 기록한다(`missing`/`error` + 다음 시도 시각). 못 찾은 ISBN을 매번 다시 긁지 않는다.
 //!
 //! DB 테이블 이름(`book_covers`)과 환경 변수 이름(`COVERS_DIR`·`COVER_FETCH_ENABLED` 등)은 표지만
-//! 다루던 시절 이름 그대로 둔다 — 운영 배포 설정(Forgejo vars/secrets)을 같이 바꿔야 해서 코드 구조만
+//! 다루던 시절 이름 그대로 둔다 — 운영 배포 설정(GitHub vars/secrets)을 같이 바꿔야 해서 코드 구조만
 //! 정리하고 이름은 건드리지 않았다.
 
 use std::{collections::HashMap, env, path::Path, time::Duration};
