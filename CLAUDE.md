@@ -168,7 +168,7 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
     `confirm_title`에 제목, 제목 없으면 본문 앞 30자를 정확히 넣어야 지움 — 사용자 결정). 실패는 프로토콜 오류가 아니라 `isError` 결과로 돌려준다.
   - **인증(OAuth 2.1, 이 서버가 인가 서버)**: Claude 개인 플랜은 OAuth 또는 인증 없음만 되고 고정 헤더는 일부 조직 베타라 OAuth가 필수였다. 보호 자원 메타데이터(`/.well-known/oauth-protected-resource[/mcp]`),
     인가 서버 메타데이터(`/.well-known/oauth-authorization-server`, `openid-configuration`), `/oauth/authorize`(패스키 승인 화면 → 기존 `/passkeys/login/*`의 로그인 JWT를
-    `/oauth/authorize/approve`에 넘기면 admin일 때 코드 발급), `/oauth/token`(코드 + PKCE S256, 리프레시 회전). 클라이언트는 미리 정한 공개 클라이언트 하나뿐(DCR·CIMD 없음 —
+    `/oauth/authorize/approve`에 넘기면 admin일 때 코드 발급. **승인은 패스키로만** — 사용자 결정), `/oauth/token`(코드 + PKCE S256, 리프레시 회전). 클라이언트는 미리 정한 공개 클라이언트 하나뿐(DCR·CIMD 없음 —
     Claude 커넥터 설정의 "Use your own OAuth client"에 id만 넣고 secret은 비운다). 리다이렉트는 `https://claude.ai|claude.com/api/mcp/auth_callback`만. 코드 5분·액세스 1시간·리프레시 60일,
     모두 해시만 저장(`mcp_oauth_codes`·`mcp_oauth_tokens`), 토큰은 `resource`(= `<MCP_PUBLIC_URL>/mcp`)에 묶인다. `/mcp`는 토큰 없으면 401 + `WWW-Authenticate: Bearer resource_metadata=…`, admin 아니면 403.
     서브도메인을 쓰는 이유: Claude가 인가 서버 정보를 도메인 루트의 `/.well-known/`에서 찾아서 `tyange.com/api/cms` 아래로는 확실하지 않다.
@@ -179,6 +179,11 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
   - **로컬에서 도구 써 보기**: `scripts/mcp-local.sh serve` → `scripts/mcp-local.sh token`이 출력하는 `claude mcp add … --header "Authorization: Bearer …"` 실행.
     OAuth·패스키 없이 로컬 DB(`./data/mcp-local`)에 토큰을 직접 넣는다. 블로그 재배포·패스키·수집 작업은 끈 채로 뜬다(로컬에서 글을 공개해도 운영 블로그가 재배포되지 않게).
   - 테스트 18개(`mcp/tests.rs`, `mcp/images.rs`): OAuth 흐름과 거부 경우, 루프백, 도구 호출 전체, 가짜 이미지 서버. 보안 검사 16종을 하나씩 빼는 변이에서 모두 실패 확인.
+  - **admin 패스키 첫 등록(비밀번호 없이)**: `scripts/mcp-setup-code.sh [user_id, 기본 tyange]`가 `ssh lightsail`로 운영 DB `mcp_passkey_setup_codes`에
+    15분 일회용 코드(해시만)를 넣고 `https://mcp.tyange.com/oauth/passkey-setup?code=…` 주소를 출력한다. 그 화면에서 패스키를 만들면 admin에 등록되고 코드는 지워진다.
+    SSH 접속(1Password 키)이 본인 확인이다. 기기 교체·분실 때도 같은 방법. 계기: 2026-11 첫 연결 때 admin 계정에 패스키가 0개였다(1Password의 패스키는
+    gotolib 계정 `gl-…` 것이라 로그인은 되고 승인에서 막혔다). 패스키 등록 로직은 `routes::passkeys::{start,finish}_registration`으로 꺼내 HTTP·이 화면이 같이 쓴다.
+    `/login`에는 이때 IP당 분당 20회 제한을 걸었다.
   - **배포에 필요한 사람 작업**: DNS(`mcp.tyange.com`) → nginx server 블록(TLS, `proxy_pass http://127.0.0.1:8080`) → repo variable `MCP_PUBLIC_URL` → 배포 →
     admin 계정에 패스키가 있어야 승인 가능 → 맞춤 커넥터 추가(URL `<MCP_PUBLIC_URL>/mcp`, 고급 설정에서 OAuth 클라이언트 id). claude.ai 웹뿐 아니라
     **iOS 앱에서도 추가할 수 있다**(사용자 확인). 모바일도 같은 리다이렉트 `https://claude.ai/api/mcp/auth_callback`을 쓰고, 패스키 RP ID가 `tyange.com`이라 하위 도메인 승인 화면에서도 동작한다.

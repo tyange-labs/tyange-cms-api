@@ -467,6 +467,21 @@ pub async fn init_db(pool: &SqlitePool) -> Result<()> {
     .await
     .map_err(InternalServerError)?;
 
+    // MCP 승인용 admin 패스키를 비밀번호 없이 처음 등록할 때 쓰는 일회용 코드. 서버 DB에 직접 넣어서만 만든다
+    // (scripts/mcp-setup-code.sh — SSH 접속 자체가 본인 확인). 15분, 쓰면 지운다. 해시만 저장.
+    query(
+        r#"
+        CREATE TABLE IF NOT EXISTS mcp_passkey_setup_codes (
+            code_hash TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            expires_at INTEGER NOT NULL
+        )
+        "#,
+    )
+    .execute(pool)
+    .await
+    .map_err(InternalServerError)?;
+
     // Craft 폴더 → 포스트 동기화 제거(2026-11) — Claude 커넥터로 글을 올리는 방식으로 바꾸면서 걷어냄.
     // 동기화가 만든 글(posts)은 그대로 두고, 문서↔글 연결과 이미지 캐시 표만 지운다. 반복 실행해도 안전.
     let _ = query("DROP TABLE IF EXISTS craft_sync_posts").execute(pool).await;

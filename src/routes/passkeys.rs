@@ -14,7 +14,7 @@ use poem::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{query, Row};
-use tyange_cms_api::auth::authorization::current_user;
+use tyange_cms_api::auth::authorization::{current_user, AuthenticatedUser};
 use uuid::Uuid;
 use webauthn_rs::prelude::{
     CreationChallengeResponse, CredentialID, DiscoverableKey, Passkey, PublicKeyCredential,
@@ -46,9 +46,9 @@ pub struct ChallengeResponse<T: Serialize> {
 
 #[derive(Deserialize)]
 pub struct RegisterFinishRequest {
-    challenge_id: String,
-    label: Option<String>,
-    credential: RegisterPublicKeyCredential,
+    pub challenge_id: String,
+    pub label: Option<String>,
+    pub credential: RegisterPublicKeyCredential,
 }
 
 #[derive(Deserialize)]
@@ -162,7 +162,16 @@ pub async fn register_start(
     data: Data<&Arc<AppState>>,
 ) -> poem::Result<Json<ChallengeResponse<CreationChallengeResponse>>> {
     let user = current_user(req)?;
-    let webauthn = webauthn(&data)?;
+    start_registration(&data, user).await.map(Json)
+}
+
+/// 이 사용자에게 패스키를 하나 더 등록하는 의식을 시작한다. 로그인한 사용자(`register_start`)와
+/// MCP 커넥터의 일회용 등록 코드(`mcp::oauth`)가 같이 쓴다.
+pub async fn start_registration(
+    data: &AppState,
+    user: &AuthenticatedUser,
+) -> poem::Result<ChallengeResponse<CreationChallengeResponse>> {
+    let webauthn = webauthn(data)?;
 
     let rows = query("SELECT passkey FROM passkeys WHERE user_id = ?")
         .bind(&user.user_id)
@@ -180,7 +189,10 @@ pub async fn register_start(
         .collect();
 
     let (user_name, display_name) = if user.role == GOTOLIB_ROLE {
-        (GOTOLIB_PASSKEY_NAME.to_string(), GOTOLIB_PASSKEY_NAME.to_string())
+        (
+            GOTOLIB_PASSKEY_NAME.to_string(),
+            GOTOLIB_PASSKEY_NAME.to_string(),
+        )
     } else {
         let display_name: Option<String> =
             sqlx::query_scalar("SELECT display_name FROM users WHERE user_id = ?")
@@ -195,7 +207,7 @@ pub async fn register_start(
         (user.user_id.clone(), display_name)
     };
 
-    let user_handle = user_handle_for(&data, &user.user_id).await?;
+    let user_handle = user_handle_for(data, &user.user_id).await?;
     let (mut options, state) = webauthn
         .start_passkey_registration(user_handle, &user_name, &display_name, Some(exclude))
         .map_err(bad_request("패스키 등록을 시작하지 못했습니다."))?;
@@ -211,10 +223,10 @@ pub async fn register_start(
         })
         .ok_or_else(too_many_pending)?;
 
-    Ok(Json(ChallengeResponse {
+    Ok(ChallengeResponse {
         challenge_id,
         options,
-    }))
+    })
 }
 
 #[handler]
@@ -224,7 +236,16 @@ pub async fn register_finish(
     data: Data<&Arc<AppState>>,
 ) -> poem::Result<Json<PasskeyItem>> {
     let user = current_user(req)?;
-    let webauthn = webauthn(&data)?;
+    finish_registration(&data, user, payload).await.map(Json)
+}
+
+/// `start_registration`으로 시작한 의식을 끝내고 패스키를 저장한다. 시작한 사용자와 같아야 한다.
+pub async fn finish_registration(
+    data: &AppState,
+    user: &AuthenticatedUser,
+    payload: RegisterFinishRequest,
+) -> poem::Result<PasskeyItem> {
+    let webauthn = webauthn(data)?;
 
     let Some(Pending::Register {
         user_id,
@@ -277,12 +298,12 @@ pub async fn register_finish(
         other => db_error(other),
     })?;
 
-    Ok(Json(PasskeyItem {
+    Ok(PasskeyItem {
         id,
         label,
         created_at: None,
         last_used_at: None,
-    }))
+    })
 }
 
 /// 가입 시작: 이메일·비밀번호 없이 패스키 하나로 계정을 만든다. 계정 id는 서버가 정한다.
@@ -298,7 +319,12 @@ pub async fn signup_start(
     let user_handle = Uuid::new_v4();
     let user_id = format!("gl-{}", user_handle.simple());
     let (mut options, state) = webauthn
-        .start_passkey_registration(user_handle, GOTOLIB_PASSKEY_NAME, GOTOLIB_PASSKEY_NAME, None)
+        .start_passkey_registration(
+            user_handle,
+            GOTOLIB_PASSKEY_NAME,
+            GOTOLIB_PASSKEY_NAME,
+            None,
+        )
         .map_err(bad_request("가입을 시작하지 못했습니다."))?;
     prefer_discoverable(&mut options);
 
@@ -449,7 +475,10 @@ pub async fn login_finish(
         return Err(unauthorized());
     };
 
-    let keys: Vec<DiscoverableKey> = stored.iter().map(|(_, p)| DiscoverableKey::from(p)).collect();
+    let keys: Vec<DiscoverableKey> = stored
+        .iter()
+        .map(|(_, p)| DiscoverableKey::from(p))
+        .collect();
     let result = webauthn
         .finish_discoverable_authentication(&payload.credential, state, &keys)
         .map_err(|e| {
@@ -463,7 +492,9 @@ pub async fn login_finish(
             continue;
         }
         let updated = passkey.update_credential(&result).unwrap_or(false);
-        let passkey_json = updated.then(|| serde_json::to_string(&passkey).ok()).flatten();
+        let passkey_json = updated
+            .then(|| serde_json::to_string(&passkey).ok())
+            .flatten();
         query(
             r#"
             UPDATE passkeys

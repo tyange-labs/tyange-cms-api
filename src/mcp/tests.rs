@@ -42,7 +42,9 @@ async fn harness_with(images: ImageRehoster) -> Harness {
             .await
             .unwrap();
     }
-    let state = Arc::new(AppState::new(pool.clone()));
+    let passkeys =
+        crate::passkey::PasskeyService::build("example.com", PUBLIC_URL, "test").unwrap();
+    let state = Arc::new(AppState::new_with_passkeys(pool.clone(), passkeys));
     let config = Arc::new(McpConfig::new(PUBLIC_URL, CLIENT_ID).unwrap());
     let app = add_routes_with(Route::new(), state.clone(), config, Arc::new(images))
         .data(state)
@@ -766,4 +768,115 @@ async fn initialize_names_the_server() {
         .await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["result"]["serverInfo"]["name"], "tyange-cms");
+}
+
+// ── 비밀번호 없는 admin 패스키 등록 ─────────────────────────────────────────
+
+async fn setup_post(h: &Harness, path: &str, body: Value) -> (StatusCode, Value) {
+    let resp = h.cli.post(path).body_json(&body).send().await;
+    let status = resp.0.status();
+    let text = resp.0.into_body().into_string().await.unwrap();
+    (
+        status,
+        serde_json::from_str(&text).unwrap_or(Value::String(text)),
+    )
+}
+
+#[tokio::test]
+async fn setup_code_lets_the_admin_register_a_passkey_once() {
+    use webauthn_authenticator_rs::{softpasskey::SoftPasskey, WebauthnAuthenticator};
+    use webauthn_rs::prelude::{RegisterPublicKeyCredential, Url};
+    use webauthn_rs_proto::CreationChallengeResponse;
+
+    let h = harness().await;
+    let code = tokens::store_setup_code(&h.pool, "admin").await.unwrap();
+
+    let (status, start) =
+        setup_post(&h, "/oauth/passkey-setup/start", json!({ "code": code })).await;
+    assert_eq!(status, StatusCode::OK, "{start}");
+    let options: CreationChallengeResponse =
+        serde_json::from_value(start["options"].clone()).unwrap();
+    let mut authenticator = WebauthnAuthenticator::new(SoftPasskey::new(true));
+    let credential: RegisterPublicKeyCredential = authenticator
+        .do_registration(Url::parse(PUBLIC_URL).unwrap(), options)
+        .unwrap();
+
+    let (status, body) = setup_post(
+        &h,
+        "/oauth/passkey-setup/finish",
+        json!({ "code": code, "challenge_id": start["challenge_id"], "label": "Claude 커넥터", "credential": credential }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let (owner, label): (String, String) = sqlx::query_as("SELECT user_id, label FROM passkeys")
+        .fetch_one(&h.pool)
+        .await
+        .unwrap();
+    assert_eq!(owner, "admin");
+    assert_eq!(label, "Claude 커넥터");
+
+    let (status, _) = setup_post(&h, "/oauth/passkey-setup/start", json!({ "code": code })).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "쓴 코드는 다시 못 쓴다");
+}
+
+#[tokio::test]
+async fn setup_code_must_be_known_unexpired_and_belong_to_an_admin() {
+    let h = harness().await;
+    let (status, _) = setup_post(
+        &h,
+        "/oauth/passkey-setup/start",
+        json!({ "code": "mcps_unknown" }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    query("INSERT INTO mcp_passkey_setup_codes (code_hash, user_id, expires_at) VALUES (?, 'admin', ?)")
+        .bind(tokens::hash("mcps_expired"))
+        .bind(tokens::now() - 1)
+        .execute(&h.pool)
+        .await
+        .unwrap();
+    let (status, _) = setup_post(
+        &h,
+        "/oauth/passkey-setup/start",
+        json!({ "code": "mcps_expired" }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "만료된 코드");
+
+    let writer_code = tokens::store_setup_code(&h.pool, "writer").await.unwrap();
+    let (status, _) = setup_post(
+        &h,
+        "/oauth/passkey-setup/start",
+        json!({ "code": writer_code }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "admin 이 아닌 계정");
+
+    let (status, _) = setup_post(
+        &h,
+        "/oauth/passkey-setup/finish",
+        json!({ "code": writer_code, "challenge_id": "x", "credential": {} }),
+    )
+    .await;
+    assert!(
+        status.is_client_error(),
+        "finish 도 코드 주인을 다시 확인한다: {status}"
+    );
+    let count: i64 = query_scalar("SELECT COUNT(*) FROM passkeys")
+        .fetch_one(&h.pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[test]
+fn approval_is_passkey_only() {
+    let page = super::oauth::AUTHORIZE_HTML;
+    assert!(page.contains("/passkeys/login/start"));
+    assert!(!page.contains("'/login'"), "비밀번호 로그인은 없다");
+    assert!(!page.contains("type=\"password\""));
+    let setup = super::oauth::SETUP_HTML;
+    assert!(setup.contains("/oauth/passkey-setup/start"));
+    assert!(setup.contains("/oauth/passkey-setup/finish"));
 }
