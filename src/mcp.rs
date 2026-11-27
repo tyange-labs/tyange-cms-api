@@ -2,6 +2,7 @@
 //! 둘 다 있을 때만 켜진다. MCP 엔드포인트는 `<MCP_PUBLIC_URL>/mcp`, 인증은 이 서버가 직접 하는 OAuth
 //! (`oauth` 모듈)로 받은 액세스 토큰이다. 토큰 주인이 admin일 때만 도구를 쓸 수 있다.
 
+pub mod images;
 pub mod oauth;
 pub mod tokens;
 pub mod tools;
@@ -79,9 +80,23 @@ impl McpConfig {
 
 /// `/mcp`와 OAuth 경로들을 붙인다. 기존 `nest("/", api_service)`와 같이 쓰려고 개별 경로로 붙인다.
 pub fn add_routes(route: Route, state: Arc<AppState>, config: Arc<McpConfig>) -> Route {
+    add_routes_with(
+        route,
+        state,
+        config,
+        Arc::new(images::ImageRehoster::from_env()),
+    )
+}
+
+pub fn add_routes_with(
+    route: Route,
+    state: Arc<AppState>,
+    config: Arc<McpConfig>,
+    images: Arc<images::ImageRehoster>,
+) -> Route {
     let tools_state = state.clone();
     let service = StreamableHttpService::new(
-        move || Ok(tools::CmsTools::new(tools_state.clone())),
+        move || Ok(tools::CmsTools::new(tools_state.clone(), images.clone())),
         Arc::new(LocalSessionManager::default()),
         StreamableHttpServerConfig::default()
             .with_legacy_session_mode(false)

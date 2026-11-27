@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{query, Row};
 use tyange_cms_api::auth::authorization::AuthenticatedUser;
 
+use super::images::{ImageRehoster, RehostReport};
 use crate::models::{AppState, Tag, UpdatePostRequest, UploadPostRequest};
 use crate::utils::parse_tags;
 
@@ -25,6 +26,7 @@ const CONFIRM_PREVIEW_CHARS: usize = 30;
 #[derive(Clone)]
 pub struct CmsTools {
     state: Arc<AppState>,
+    images: Arc<ImageRehoster>,
     tool_router: ToolRouter<Self>,
 }
 
@@ -94,9 +96,10 @@ pub struct DeletePostArgs {
 
 #[tool_router(router = tool_router)]
 impl CmsTools {
-    pub fn new(state: Arc<AppState>) -> Self {
+    pub fn new(state: Arc<AppState>, images: Arc<ImageRehoster>) -> Self {
         Self {
             state,
+            images,
             tool_router: Self::tool_router(),
         }
     }
@@ -206,7 +209,7 @@ impl CmsTools {
     }
 
     #[tool(
-        description = "새 글을 올린다. 기본은 초안(draft). 사용자가 공개하라고 분명히 말했을 때만 status 를 published 로.",
+        description = "새 글을 올린다. 기본은 초안(draft). 사용자가 공개하라고 분명히 말했을 때만 status 를 published 로. 본문의 외부 이미지(![](https://…), 예: Craft 이미지)는 서버가 내려받아 블로그 이미지 주소로 바꿔 저장한다 — 결과의 images.warnings 에 실패한 이미지가 있으면 사용자에게 알린다.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -231,18 +234,21 @@ impl CmsTools {
             return Ok(fail(message));
         }
 
+        let (content, images) = self.images.rehost(&self.state.db, &args.content).await;
         let payload = UploadPostRequest {
             title: args.title,
             description: args.description.unwrap_or_default(),
             published_at,
             tags: to_tags(args.tags.unwrap_or_default()),
-            content: args.content,
+            content,
             status: status.clone(),
         };
         match crate::posts::create_post(&self.state, user, payload).await {
-            Ok(post_id) => Ok(ok_json(
-                serde_json::json!({ "post_id": post_id, "status": status }),
-            )),
+            Ok(post_id) => Ok(ok_json(serde_json::json!({
+                "post_id": post_id,
+                "status": status,
+                "images": images_json(&images),
+            }))),
             Err(err) => Ok(fail(err.to_string())),
         }
     }
@@ -291,12 +297,16 @@ impl CmsTools {
                 .collect(),
         };
 
+        let (content, images) = match args.content {
+            Some(content) => self.images.rehost(&self.state.db, &content).await,
+            None => (current.content, RehostReport::default()),
+        };
         let payload = UpdatePostRequest {
             title: args.title.unwrap_or(current.title),
             description: args.description.unwrap_or(current.description),
             published_at,
             tags,
-            content: args.content.unwrap_or(current.content),
+            content,
             status,
         };
         match crate::posts::update_post(&self.state, user, &args.post_id, payload).await {
@@ -305,6 +315,7 @@ impl CmsTools {
                 "title": post.title,
                 "status": post.status,
                 "published_at": post.published_at,
+                "images": images_json(&images),
             }))),
             Err(err) => Ok(fail(err.to_string())),
         }
@@ -440,6 +451,10 @@ fn to_tags(tags: Vec<TagArg>) -> Vec<Tag> {
             category: t.category.trim().to_string(),
         })
         .collect()
+}
+
+fn images_json(report: &RehostReport) -> serde_json::Value {
+    serde_json::json!({ "rehosted": report.rehosted, "warnings": report.warnings })
 }
 
 fn ok_json(value: serde_json::Value) -> CallToolResult {

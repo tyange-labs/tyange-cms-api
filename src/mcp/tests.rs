@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 use sqlx::{query, query_scalar, sqlite::SqlitePoolOptions, SqlitePool};
 use tyange_cms_api::auth::jwt::Claims;
 
-use super::{add_routes, oauth::pkce_challenge, tokens, McpConfig};
+use super::{add_routes_with, images::ImageRehoster, oauth::pkce_challenge, tokens, McpConfig};
 use crate::{db::init_db, models::AppState};
 
 const PUBLIC_URL: &str = "https://mcp.example.com";
@@ -19,6 +19,14 @@ struct Harness {
 }
 
 async fn harness() -> Harness {
+    harness_with(ImageRehoster::new(
+        env::temp_dir(),
+        "https://cms.example.com",
+    ))
+    .await
+}
+
+async fn harness_with(images: ImageRehoster) -> Harness {
     env::set_var("JWT_ACCESS_SECRET", "test-access-secret");
     let pool = SqlitePoolOptions::new()
         .max_connections(1)
@@ -36,7 +44,7 @@ async fn harness() -> Harness {
     }
     let state = Arc::new(AppState::new(pool.clone()));
     let config = Arc::new(McpConfig::new(PUBLIC_URL, CLIENT_ID).unwrap());
-    let app = add_routes(Route::new(), state.clone(), config)
+    let app = add_routes_with(Route::new(), state.clone(), config, Arc::new(images))
         .data(state)
         .map_to_response()
         .boxed();
@@ -534,5 +542,127 @@ fn delete_confirmation_uses_title_or_the_start_of_the_body() {
             "  오늘은\n\n 맑았다. 산책을 했다. 길에서 고양이를 만났다. 귀여웠다."
         ),
         "오늘은 맑았다. 산책을 했다. 길에서 고양이를 만났다."
+    );
+}
+
+// ── 이미지 옮겨 저장 ─────────────────────────────────────────────────────────
+
+const PNG: &[u8] = &[
+    0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0, 0, 1,
+];
+
+#[poem::handler]
+fn fake_png(hits: poem::web::Data<&Arc<std::sync::atomic::AtomicUsize>>) -> Vec<u8> {
+    hits.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    PNG.to_vec()
+}
+
+#[poem::handler]
+fn fake_text() -> &'static str {
+    "그림이 아님"
+}
+
+/// (포트, cat.png 요청 횟수)
+async fn image_server() -> (u16, Arc<std::sync::atomic::AtomicUsize>) {
+    use poem::{get, listener::TcpAcceptor, Server};
+    let hits = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let app = Route::new()
+        .at("/cat.png", get(fake_png))
+        .at("/text", get(fake_text))
+        .data(hits.clone());
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(Server::new_with_acceptor(TcpAcceptor::from_tokio(listener).unwrap()).run(app));
+    (port, hits)
+}
+
+#[tokio::test]
+async fn create_post_moves_external_images_to_this_server() {
+    let (port, hits) = image_server().await;
+    let dir = env::temp_dir().join(format!("mcp-images-{}", uuid::Uuid::new_v4()));
+    let h = harness_with(
+        ImageRehoster::new(dir.clone(), "https://cms.example.com/").allowing_insecure_loopback(),
+    )
+    .await;
+    let (access, _) = h.login().await;
+
+    let cat = format!("http://127.0.0.1:{port}/cat.png");
+    let text = format!("http://127.0.0.1:{port}/text");
+    let ours = "https://cms.example.com/images/old.png";
+    let content =
+        format!("![a]({cat})\n\n![b]({cat} \"같은 그림\")\n\n![c]({text})\n\n![d]({ours})");
+    let (is_error, out) = h
+        .call(
+            &access,
+            "create_post",
+            json!({ "title": "그림 글", "content": content }),
+        )
+        .await;
+    assert!(!is_error, "{out}");
+    let out: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(out["images"]["rehosted"], 1, "{out}");
+    assert_eq!(
+        out["images"]["warnings"].as_array().unwrap().len(),
+        1,
+        "{out}"
+    );
+    assert_eq!(
+        hits.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "같은 주소는 한 번만 받는다"
+    );
+
+    let saved: String = query_scalar("SELECT content FROM posts WHERE post_id = ?")
+        .bind(out["post_id"].as_str().unwrap())
+        .fetch_one(&h.pool)
+        .await
+        .unwrap();
+    assert!(!saved.contains(&cat), "{saved}");
+    assert!(
+        saved.contains(&text),
+        "실패한 그림은 원래 주소를 둔다: {saved}"
+    );
+    assert!(saved.contains(ours), "이미 우리 주소면 그대로: {saved}");
+    let new_url = saved
+        .split("](")
+        .nth(1)
+        .unwrap()
+        .split(')')
+        .next()
+        .unwrap()
+        .to_string();
+    assert!(
+        new_url.starts_with("https://cms.example.com/images/"),
+        "{new_url}"
+    );
+    assert_eq!(saved.matches(&new_url).count(), 2, "두 군데 모두 바뀐다");
+    let file = dir.join(new_url.rsplit('/').next().unwrap());
+    assert_eq!(std::fs::read(&file).unwrap(), PNG);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn production_policy_refuses_http_and_internal_addresses() {
+    let (port, hits) = image_server().await;
+    let h = harness().await;
+    let rehoster = ImageRehoster::new(env::temp_dir(), "https://cms.example.com");
+    for (url, expected) in [
+        (format!("http://127.0.0.1:{port}/cat.png"), "https 주소만"),
+        (format!("https://127.0.0.1:{port}/cat.png"), "내부망"),
+        ("https://localhost/cat.png".to_string(), "내부망"),
+    ] {
+        let (out, report) = rehoster.rehost(&h.pool, &format!("![x]({url})")).await;
+        assert_eq!(out, format!("![x]({url})"));
+        assert_eq!(report.rehosted, 0);
+        assert!(
+            report.warnings[0].contains(expected),
+            "{url}: {:?}",
+            report.warnings
+        );
+    }
+    assert_eq!(
+        hits.load(std::sync::atomic::Ordering::SeqCst),
+        0,
+        "요청 자체를 보내지 않는다"
     );
 }
