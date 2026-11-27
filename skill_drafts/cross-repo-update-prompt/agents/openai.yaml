@@ -1,7 +1,0 @@
-interface:
-  display_name: "Cross-Repo Prompt"
-  short_description: "Draft update prompts for related repositories"
-  default_prompt: "Use $cross-repo-update-prompt to create an implementation prompt for another repository based on changes in the current repository."
-
-policy:
-  allow_implicit_invocation: true

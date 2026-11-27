@@ -7,6 +7,8 @@ mod middlewares;
 mod models;
 mod openapi;
 mod passkey;
+// 포켓몬 Z-A 엔트리 분석 라우트. 아직 가이드 주석만 있다 — 파일 맨 위 D·E단계를 보고 채운다.
+mod poketry_api;
 mod routes;
 mod services;
 mod utils;
@@ -37,6 +39,7 @@ use crate::routes::upload_image::upload_image;
 use crate::{models::AppState, routes::add_user::add_user};
 use db::init_db;
 use openapi::{ApiKeysApi, CraftApi, ImagesApi, PortfolioApi, PostsApi, TagsApi, WeddingApi};
+use poketry_api::PoketryApi;
 use poem::{
     delete,
     endpoint::StaticFilesEndpoint,
@@ -185,6 +188,7 @@ async fn main() -> Result<(), std::io::Error> {
                 ApiKeysApi {
                     state: state.clone(),
                 },
+                PoketryApi,
             ),
             "tyange-cms-api",
             "1.0",

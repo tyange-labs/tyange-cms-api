@@ -12,6 +12,81 @@ Rust + Poem 프레임워크. cargo 사용.
 - API 변경 시 반드시 tyange-cms와 동기화 필요
 - **글 작업·동기화·배포 확인은 CLI `tyange`(`tyange-cli`)로 한다** — 직접 HTTP 요청이나 브라우저 조작 대신. `tyange cms posts|get|new|update|publish|draft|delete|sync`, `tyange ci --watch`. 쓰는 법과 설정은 `tyange-cli/CLAUDE.md`. API 응답·인증 방식을 바꾸면 그 CLI(`src/cms.rs`)도 같이 고친다.
 
+## poketry 워크스페이스 멤버 (2026-11)
+
+`poketry/`는 포켓몬 레전드 Z-A 엔트리 타입 상성 분석 라이브러리다. 원래 별도 CLI 저장소
+`za-entry`였고 `git subtree add --prefix=poketry`로 히스토리째 편입했다. 루트 `Cargo.toml`에
+`[workspace] members = ["poketry", "poketry/fetch"]` + path 의존성으로 걸려 있다.
+
+목표는 나중에 GUI를 붙이는 것 — 추천 목록을 근거와 함께 쭉 보여주고 고르게 하고, 진화형이 있는 포켓몬은
+진화 전부터 최종 진화형까지 이어진(갈라지는) 계통을 보여준다. 상성 분석·추천은 한 마리 단위(진화하면
+타입이 바뀌므로), 화면 표시는 계통 단위로 나눈다.
+
+- **사용자가 Rust 학습용으로 직접 작성하는 코드다.** `TODO(D단계)` 등 단계 TODO가 있는 곳은 대신 구현하지 말고,
+  요청받으면 가이드·힌트·리뷰만 준다. **역할 분담(2026-11, 사용자 요청)**: 구조체 선언·`use`·함수 시그니처·반복적인 변환 같은
+  뼈대는 Claude가 쓰고, 사용자에게 배움이 되는 핵심 로직만 `todo!()` + TODO로 남긴다. **다음 단계로 넘어갈 때마다**
+  이 상태(뼈대 완성 + 핵심만 비움, `cargo build` 통과)로 준비해 둔다. 커밋할 때는 사용자가 쓴 코드와 Claude가 쓴 주석·문서를 **나눠서** 커밋한다
+  (사용자 코드 커밋에는 Co-Authored-By를 넣지 않는다).
+- **코드에는 TODO 주석만 남긴다**(2026-11, 사용자 요청). 문서 주석·설명 주석·진행 표를 두지 않는다.
+  한 단계가 끝나면 그 TODO를 지우고(설명으로 바꾸지 않는다) 다음 단계 TODO를 단다. TODO는 그것만 읽고 따라 할 수 있게 쓴다.
+  예외: 아래 "백로그" 항목은 고칠 자리에 한 줄짜리 `TODO(R번호)` 표시만 단다(2026-11, 사용자 요청 — 세션이 바뀌어도 이어가려고).
+  그 단계를 시작할 때 Claude가 그 자리를 다른 단계 TODO처럼 풀어 쓴다(예시 데이터·번호 단계·`for` 뼈대·막히기 쉬운 곳·확인 방법).
+  `poketry/fetch`(수집 도구, 학습 코드 아님)는 예외로 주석을 둔다.
+- 끝난 단계: B(포획률 정렬)·C(구멍 수 버그)·C2(추천 전체 목록 + 근거, `Recommendation`·`Swap`)·
+  C3(`evolution.rs`: `EvolutionNode`, `evolutions()`, `chain_of(species_id)` → 계통 뿌리. 사용자 요청으로 `contains` 재귀·
+  재내보내기·테스트는 Claude가 작성, 변이 검사로 확인)·C4 ①(`recommend_slots`: 5마리 이하면 빈자리마다 도감에 있는 타입 조합(복합 타입 포함, 105가지)을
+  욕심쟁이로 하나씩 고른 뒤 한 자리씩 바꿔 보는 다듬기 + 그 조합 포켓몬(포획률 순). 결과는 `SlotPlan { slots, spot_count, score }` —
+  점수는 빈자리를 다 채운 팀 하나에 붙는다. 같은 조합 포켓몬은 상성 점수가 같아서 자리마다 점수를 두지 않는다)·
+  C4 ②(`recommend_fixes`: 6마리 팀에서 약점 타입마다 `recommend_swap` 결과 중 들어오는 포켓몬이 그 타입을 견디는 교체만 모은 `WeakSpotFix`)·
+  D(`src/poketry_api.rs` `POST /poketry/analyze`: 5마리 이하 `plan`, 6마리 `fixes`. 사용자 요청으로 Claude가 작성 — 임시 TestClient로
+  5마리·6마리·없는 이름 400·빈 목록 400 확인)·
+  E(`main.rs` `OpenApiService` 튜플에 `PoketryApi` 등록 — 인증 없는 공개 라우트, 통합 테스트 `src/routes/poketry_api_test.rs` 4개,
+  6마리 판정 변이 검사로 확인. 사용자 요청으로 Claude가 작성).
+- 프레임워크 비의존: poketry는 poem/poem-openapi에 의존하지 않는다(serde만). API 응답 모양(`Object` DTO)은
+  cms-api `src/poketry_api.rs`가 정한다.
+
+### poketry 이어서 하기 (세션이 바뀌면 여기부터)
+
+남은 일 전체는 `grep -rn "TODO(" poketry/src src/poketry_api.rs`로 볼 수 있다. `todo!()`가 붙은 TODO가 지금 단계이고,
+한 줄짜리 `TODO(R번호)`는 백로그 표시다. 커밋 나누는 법·설명 방식은 Claude 메모리에도 있다.
+
+**지금 단계**: 단계 TODO(A~E)·백로그 R1~R7·선택 과제가 모두 끝났다. 다음 큰 일은 프론트(tyange-cms 또는 별도 GUI)에서 이 API를 쓰는 것.
+
+**백로그** (위에서부터 권장. R1~R3(`recommend_slots` 정리·팀원 비교를 id로·C2 결과 개수 테스트)과 R7(쓰는 곳 없는 `recommend`·`Recommendation` 삭제)은 2026-11 사용자 요청으로 Claude가 끝냈다. R4(상성 계산을 타입 기준으로)는 ①~④ 사용자, ⑤⑥ Claude —
+  바닥이 `multiplier_for(attack, &[Type])`·`weakness_of(&[Vec<Type>])`이고 `defense_multiplier`·`team_weakness`는 그 위의 얇은 함수, `recommend_slots`는 `Vec<Type>`만 다룬다(`virtual_mon` 삭제). 전후 출력이 6개 팀에서 같음을 확인).
+  R5(가중치)·R6(자리별 근거)도 사용자 요청으로 Claude가 했다.
+- **자리별 근거**(R6, 2026-11): `SlotPick.covers` = **원래 팀**의 약점 타입 중 이 조합이 견디는(`multiplier_for < 1.0`) 것,
+  `SlotPick.spot_increase_if_removed` = 다른 빈자리는 그대로 두고 이 자리만 뺐을 때 늘어나는 구멍 수(`i32` — 이론상 음수도 가능).
+  API `SlotItem`에도 같은 이름. 둘은 서로 보완한다: 원래 구멍을 못 막아도(`covers` 빔) 다른 자리가 만든 새 구멍을 막아 +1이 되거나,
+  구멍과 무관하게 점수(내성 합) 때문에 뽑혀 +0인 자리도 있다 — GUI에서 근거를 보여 줄 때 둘 다 빈 자리는 "점수 보강"으로 설명하면 된다.
+- **약점·내성 가중치는 게임 배율에서 끌어낸다**(2026-11, 사용자 결정 — "임의로 정하지 말고 실제 게임이 어떻게 하는지 보고").
+  레전드 Z-A는 본가와 같이 두 타입 배율을 곱한다(4×/2×/1×/0.5×/0.25×/0×. 레전드 아르세우스의 2.5×·0.4× 감쇠는 따르지 않음 —
+  공략 사이트 여러 곳과 Bulbapedia 데미지 문서의 Z-A 보스전 "4× 이상" 규칙으로 확인, Bulbapedia 원문은 403이라 직접 인용 못 함).
+  가중치 = 1×에서 몇 단계인가(log₂): 4×→약점 2, 2×→약점 1, 0.5×→내성 1, 0.25×→내성 2. **무효(0×)는 단계가 정의되지 않아
+  사용자가 내성 3으로 정했다**(0.25×보다 한 단계 더). 계산은 `weakness_of` 한 곳, `Weakness` 필드는 `weak_weight`·`resist_weight`
+  (API `WeaknessRow`도 같은 이름 — 예전 `weak_count`·`resist_count`). 보스전 0.63×·트레이너전 0.7× 같은 보정은 팀 비교에 영향이 없어 넣지 않았다.
+- **선택 과제도 끝냈다**(2026-11, 사용자 요청으로 Claude 작성):
+  - `recommend_fixes`는 빠지는 포켓몬(`out`)이 원래 그 약점을 견디던(`< 1.0`) 교체를 거른다 — 바꿔도 그 약점이 줄지 않아서.
+  - `POST /poketry/analyze` 요청은 `{ names?: [이름], ids?: [PokeAPI id], limit?: 1~50(기본 10) }`. `names`·`ids`는 **정확히 하나**
+    (둘 다·둘 다 없음 → 400). GUI는 `ids`를 쓸 것(이름은 바뀔 수 있다). id 조회는 poketry `find_team_by_ids`(`UnknownPokemonId`).
+  - **같은 포켓몬(같은 id)이 두 번이면 400**(사용자 결정 — 게임은 허용하지만 분석 도구에선 대개 실수이고, 교체 추천이 겹쳐 나온다).
+  - `limit`은 빈자리마다 `picks`, 약점마다 `swaps` 개수. 자르는 건 핸들러(`truncate`), DTO `From`은 자르지 않는다.
+- 도감 `poketry/pokemon.json`은 `include_str!`로 내장, `OnceLock`으로 한 번만 파싱.
+- **이름이 아니라 id로 잇는다**(2026-11, 사용자 결정). 이름은 바뀔 수 있어서다 — 메가 42개는 PokeAPI에 한국어 이름이 없어
+  `메가메가니움` 같은 대체 이름이고, 공식 이름이 생기면 다음 수집 때 바뀐다. `Pokemon.id`=PokeAPI pokemon id(폼 단위,
+  메가리자몽X 10034), `species_id`=전국도감 번호(메가도 원래 종과 같음). 저장·API 입출력에는 id를 쓰고 `name`은 표시용.
+  도감·진화는 바뀌지 않는 참조 데이터라 SQLite가 아니라 JSON 내장을 유지한다 — 나중에 사용자 데이터(저장한 팀 등)를 DB에 두면 거기엔 id를 저장.
+- 진화 계통 `poketry/evolutions.json`(2026-11): 계통 179개, 나무 모양 노드 `{species_id, name, in_dex, evolves_to}`.
+  도감의 종은 모두 정확히 한 계통에 있다(단일 종 계통 57개 포함). 메가는 진화 단계가 아니라 폼이라 나무에 없다 —
+  도감에서 같은 `species_id`로 찾는다. 지금 도감 범위에선 `in_dex: false` 노드가 없지만 DLC 등으로 생길 수 있어 필드를 둔다.
+  Rust 쪽 읽기는 C3단계에서 사용자가 작성한다.
+- **갱신은 `cargo run -p poketry-fetch`**(루트에서, `poketry/fetch/` 크레이트) — 두 JSON을 함께 다시 만든다.
+  **저장소에 Python을 두지 않는다**는 사용자 요청으로 예전 `scripts/fetch_pokedex.py`를 Rust로 옮겼다(옮긴 직후 출력이
+  Python과 글자 하나까지 같음을 확인, 그 뒤 id 열 추가). 응답 캐시는 `poketry/.pokeapi-cache`(git 제외).
+  reqwest에 `rustls-tls-native-roots`를 켰다 — TLS 검사 프록시가 있는 망에서 내장 루트만으론 `UnknownIssuer`가 났다.
+  서버 빌드(루트 `cargo build`)에는 이 크레이트가 들어가지 않는다.
+- 테스트: 루트 `cargo test`는 cms-api만 돈다. poketry 포함은 `cargo test --workspace`(또는 `-p poketry`).
+
 ## OpenAPI 스펙 (2026-09)
 
 tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하려면 스펙이 필요해서 도입했다.
@@ -61,6 +136,10 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
 
 ## 현재 상태
 - 운영 중
+- **배포는 GitHub Actions(`.github/workflows/deploy.yml`)** (2026-11 확인). Forgejo 워크플로는 지웠다 — 아래 Forgejo·러너 캐시 이야기는 옛 기록이다.
+  master push·수동 실행에서 빌드 → 서비스 중지 → SCP → 시작. **PR에서는 빌드만 하고 배포 4단계는 건너뛴다**(`if: github.event_name != 'pull_request'`).
+  예전엔 조건이 없어서 PR #1(`feat/poketry`)을 여는 순간 그 브랜치가 production에 배포됐다. GitHub는 `pull_request` 실행에 PR 브랜치의 워크플로 파일을 쓴다.
+  `gh`는 `~/_dev/.envrc`의 `GH_CONFIG_DIR=~/.config/gh-personal`(개인 계정 `tyange`)로 써야 한다 — 기본 설정은 회사 계정이라 이 저장소에 읽기 권한뿐이다.
 - **API 키(개인 액세스 토큰)** (2026-10, `feat/api-keys`): `tyange` CLI 같은 클라이언트가 **비밀번호를 들고 있지 않고** CMS를 쓰게 하려고 다시 도입했다.
   (예전에 한 번 만들었다가 "CMS는 포스트·포트폴리오 운영에 집중"하며 걷어낸 기능이다 — 운영 DB의 `api_keys` 표가 그 흔적이고, 같은 모양으로 `init_db`가 만든다.)
   모듈 `src/auth/api_key.rs`, 엔드포인트 `openapi.rs::ApiKeysApi`, 테스트 `routes/api_keys_test.rs`(통합 9 + 단위 5).

@@ -1,0 +1,20 @@
+[package]
+name = "poketry-fetch"
+version = "0.1.0"
+edition = "2024"
+description = "PokeAPI 에서 레전드 Z-A 도감을 받아 poketry/pokemon.json·evolutions.json 을 만드는 도구"
+publish = false
+
+# 버전을 cms-api(루트 Cargo.toml)와 맞췄습니다. 이 크레이트는 서버 빌드에 들어가지 않습니다.
+[dependencies]
+reqwest = { version = "0.12.15", default-features = false, features = [
+    "charset",
+    "http2",
+    "json",
+    "rustls-tls",
+    # 회사망·프록시처럼 TLS 를 중간에서 검사하는 환경에서도 되도록 OS 인증서 저장소도 믿습니다.
+    "rustls-tls-native-roots",
+] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+tokio = { version = "1.44.1", features = ["macros", "rt-multi-thread", "time"] }
