@@ -8,6 +8,7 @@ mod openapi;
 mod passkey;
 // 포켓몬 Z-A 엔트리 분석 라우트. 아직 가이드 주석만 있다 — 파일 맨 위 D·E단계를 보고 채운다.
 mod poketry_api;
+mod posts;
 mod routes;
 mod services;
 mod utils;
