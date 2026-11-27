@@ -176,7 +176,8 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
     실패한 그림은 원래 주소를 두고 결과 `images.warnings`로 알린다. SSRF 방지: https만, 풀린 주소 중 하나라도 내부망이면 거부, 검사한 IP로 연결 고정, 리다이렉트 3번·https·도메인만.
   - 테스트 15개(`mcp/tests.rs`, `mcp/images.rs`): OAuth 흐름과 거부 경우, 도구 호출 전체, 가짜 이미지 서버. 보안 검사 13종을 하나씩 빼는 변이에서 모두 실패 확인.
   - **배포에 필요한 사람 작업**: DNS(`mcp.tyange.com`) → nginx server 블록(TLS, `proxy_pass http://127.0.0.1:8080`) → repo variable `MCP_PUBLIC_URL` → 배포 →
-    admin 계정에 패스키가 있어야 승인 가능 → claude.ai 설정 > 커넥터 > 사용자 지정 커넥터 추가(URL `<MCP_PUBLIC_URL>/mcp`, 고급 설정에서 OAuth 클라이언트 id).
+    admin 계정에 패스키가 있어야 승인 가능 → 맞춤 커넥터 추가(URL `<MCP_PUBLIC_URL>/mcp`, 고급 설정에서 OAuth 클라이언트 id). claude.ai 웹뿐 아니라
+    **iOS 앱에서도 추가할 수 있다**(사용자 확인). 모바일도 같은 리다이렉트 `https://claude.ai/api/mcp/auth_callback`을 쓰고, 패스키 RP ID가 `tyange.com`이라 하위 도메인 승인 화면에서도 동작한다.
 - **Craft 폴더 → 포스트 동기화는 제거했다** (2026-11, `chore/remove-craft-sync`). Craft `CMS` 폴더를 폴링해 lovelog 짧은 글로 올리던 기능
   (`src/craft_sync.rs`, `/admin/craft/sync`·`/admin/craft/status`, 표 `craft_sync_posts`·`craft_sync_images`). 글 올리기를 Claude 커넥터로
   하기로 해서 걷어냈다(사용자 결정). 동기화가 만든 글은 남기고, 두 표는 `init_db`가 `DROP TABLE IF EXISTS`로 지운다. 워크플로의 `CRAFT_*` 환경변수도 뺐다
