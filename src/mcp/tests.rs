@@ -395,11 +395,19 @@ async fn tools_list_has_the_cms_tools_and_marks_delete_destructive() {
         "update_post",
         "set_post_status",
         "delete_post",
+        "list_portfolio_sections",
+        "get_portfolio_section",
+        "update_portfolio_section",
     ] {
         assert!(names.contains(&name), "{name} 없음: {names:?}");
     }
     let delete = tools.iter().find(|t| t["name"] == "delete_post").unwrap();
     assert_eq!(delete["annotations"]["destructiveHint"], json!(true));
+    let section = tools
+        .iter()
+        .find(|t| t["name"] == "update_portfolio_section")
+        .unwrap();
+    assert_eq!(section["annotations"]["destructiveHint"], json!(true));
     let list = tools.iter().find(|t| t["name"] == "list_posts").unwrap();
     assert_eq!(list["annotations"]["readOnlyHint"], json!(true));
 }
@@ -879,4 +887,139 @@ fn approval_is_passkey_only() {
     let setup = super::oauth::SETUP_HTML;
     assert!(setup.contains("/oauth/passkey-setup/start"));
     assert!(setup.contains("/oauth/passkey-setup/finish"));
+}
+
+// ── 포트폴리오 ──────────────────────────────────────────────────────────────
+
+async fn seed_portfolio(pool: &SqlitePool) {
+    query("INSERT INTO portfolio (slug) VALUES ('dev')")
+        .execute(pool)
+        .await
+        .unwrap();
+    query(
+        r#"INSERT INTO portfolio_section (portfolio_id, section_key, content, created_at, updated_at)
+           VALUES ((SELECT portfolio_id FROM portfolio WHERE slug = 'dev'), 'featured_projects', ?, '2026-01-01 00:00:00', '2026-01-01 00:00:00')"#,
+    )
+    .bind(r#"[{"slug":"cms","title":"CMS","period":"2026","body_markdown":"설명","links":[],"folder":""}]"#)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn portfolio_section_can_be_read_then_replaced_with_the_latest_updated_at() {
+    let h = harness().await;
+    seed_portfolio(&h.pool).await;
+    let (access, _) = h.login().await;
+
+    let (is_error, text) = h.call(&access, "list_portfolio_sections", json!({})).await;
+    assert!(!is_error, "{text}");
+    assert!(text.contains("featured_projects"));
+
+    let (is_error, text) = h
+        .call(
+            &access,
+            "get_portfolio_section",
+            json!({ "section_key": "featured_projects" }),
+        )
+        .await;
+    assert!(!is_error, "{text}");
+    let got: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(got["updated_at"], "2026-01-01 00:00:00");
+    let mut projects = got["content"].clone();
+    projects.as_array_mut().unwrap().push(json!({
+        "slug": "poketry", "title": "poketry", "period": "2026-11",
+        "body_markdown": "타입 상성 분석", "links": [], "folder": "", "unknown_key": "버려져야 함",
+    }));
+
+    let (is_error, text) = h
+        .call(
+            &access,
+            "update_portfolio_section",
+            json!({ "section_key": "featured_projects", "content": projects, "base_updated_at": "2026-01-01 00:00:00" }),
+        )
+        .await;
+    assert!(!is_error, "{text}");
+    let saved: String = query_scalar(
+        "SELECT content FROM portfolio_section WHERE section_key = 'featured_projects'",
+    )
+    .fetch_one(&h.pool)
+    .await
+    .unwrap();
+    let saved: Value = serde_json::from_str(&saved).unwrap();
+    assert_eq!(saved.as_array().unwrap().len(), 2);
+    assert_eq!(saved[1]["slug"], "poketry");
+    assert!(
+        saved[1].get("unknown_key").is_none(),
+        "스키마에 없는 키는 저장하지 않는다"
+    );
+}
+
+#[tokio::test]
+async fn portfolio_update_needs_the_current_updated_at_and_a_valid_shape() {
+    let h = harness().await;
+    seed_portfolio(&h.pool).await;
+    let (access, _) = h.login().await;
+    let original: String = query_scalar(
+        "SELECT content FROM portfolio_section WHERE section_key = 'featured_projects'",
+    )
+    .fetch_one(&h.pool)
+    .await
+    .unwrap();
+
+    for base in [json!(null), json!("2025-12-31 23:59:59")] {
+        let (is_error, text) = h
+            .call(
+                &access,
+                "update_portfolio_section",
+                json!({ "section_key": "featured_projects", "content": [], "base_updated_at": base }),
+            )
+            .await;
+        assert!(
+            is_error,
+            "updated_at 이 없거나 오래되면 저장하지 않는다: {text}"
+        );
+        assert!(text.contains("2026-01-01 00:00:00"), "{text}");
+    }
+    let unchanged: String = query_scalar(
+        "SELECT content FROM portfolio_section WHERE section_key = 'featured_projects'",
+    )
+    .fetch_one(&h.pool)
+    .await
+    .unwrap();
+    assert_eq!(unchanged, original);
+
+    let (is_error, text) = h
+        .call(
+            &access,
+            "update_portfolio_section",
+            json!({ "section_key": "featured_projects", "content": [{ "title": "slug 없음" }], "base_updated_at": "2026-01-01 00:00:00" }),
+        )
+        .await;
+    assert!(is_error);
+    assert!(
+        text.contains("featured_projects 검증 실패") && text.contains("섹션별 JSON 모양"),
+        "{text}"
+    );
+
+    let (is_error, text) = h
+        .call(
+            &access,
+            "update_portfolio_section",
+            json!({ "section_key": "intro", "content": { "content": "안녕하세요", "tech_stack": [] } }),
+        )
+        .await;
+    assert!(
+        !is_error,
+        "아직 없는 섹션은 base_updated_at 없이 만든다: {text}"
+    );
+
+    let (is_error, _) = h
+        .call(
+            &access,
+            "get_portfolio_section",
+            json!({ "section_key": "nope" }),
+        )
+        .await;
+    assert!(is_error);
 }
