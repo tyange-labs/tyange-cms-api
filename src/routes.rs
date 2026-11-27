@@ -38,6 +38,8 @@ mod gotolib_sync_test;
 #[cfg(test)]
 mod passkeys_test;
 #[cfg(test)]
+mod poketry_api_test;
+#[cfg(test)]
 mod portfolio_routes_test;
 #[cfg(test)]
 mod post_delete_test;

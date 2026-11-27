@@ -39,7 +39,9 @@ Rust + Poem 프레임워크. cargo 사용.
   점수는 빈자리를 다 채운 팀 하나에 붙는다. 같은 조합 포켓몬은 상성 점수가 같아서 자리마다 점수를 두지 않는다)·
   C4 ②(`recommend_fixes`: 6마리 팀에서 약점 타입마다 `recommend_swap` 결과 중 들어오는 포켓몬이 그 타입을 견디는 교체만 모은 `WeakSpotFix`)·
   D(`src/poketry_api.rs` `POST /poketry/analyze`: 5마리 이하 `plan`, 6마리 `fixes`. 사용자 요청으로 Claude가 작성 — 임시 TestClient로
-  5마리·6마리·없는 이름 400·빈 목록 400 확인).
+  5마리·6마리·없는 이름 400·빈 목록 400 확인)·
+  E(`main.rs` `OpenApiService` 튜플에 `PoketryApi` 등록 — 인증 없는 공개 라우트, 통합 테스트 `src/routes/poketry_api_test.rs` 4개,
+  6마리 판정 변이 검사로 확인. 사용자 요청으로 Claude가 작성).
 - 프레임워크 비의존: poketry는 poem/poem-openapi에 의존하지 않는다(serde만). API 응답 모양(`Object` DTO)은
   cms-api `src/poketry_api.rs`가 정한다.
 
@@ -48,10 +50,9 @@ Rust + Poem 프레임워크. cargo 사용.
 남은 일 전체는 `grep -rn "TODO(" poketry/src src/poketry_api.rs`로 볼 수 있다. `todo!()`가 붙은 TODO가 지금 단계이고,
 한 줄짜리 `TODO(R번호)`는 백로그 표시다. 커밋 나누는 법·설명 방식은 Claude 메모리에도 있다.
 
-**지금 단계와 순서**
-1. **E** — `src/poketry_api.rs`의 `TODO(E단계)`: `main.rs`의 `OpenApiService` 튜플에 `PoketryApi` 등록, curl로 확인, 통합 테스트.
+**지금 단계**: 단계 TODO(A~E)는 모두 끝났다. 다음은 아래 백로그(위에서부터 권장).
 
-**백로그** (E 뒤, 위에서부터 권장. R1~R3은 작아서 언제 끼워도 된다)
+**백로그** (위에서부터 권장. R1~R3은 작아서 언제 끼워도 된다)
 - **R1** `recommend_slots` 정리(사용자 코드라 사용자가 고친다): `picks.clone()` → `picks`, `fitlered_pokedex` 오타,
   `pokedex.into_iter()` → `iter()`.
 - **R2** 팀원 제외 비교를 `name` 대신 `id`로 — `recommend`·`recommend_swap`의 `filter`와 테스트 `recommend_구멍_수가_정렬_1순위다`.

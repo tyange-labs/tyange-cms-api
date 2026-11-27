@@ -135,26 +135,6 @@ impl From<poketry::Swap<'_>> for SwapItem {
     }
 }
 
-// TODO(E단계): 이 API 를 서버에 등록하고 실제 요청으로 확인하세요. 지금은 `main.rs` 가 모르는 struct 라서
-//   빌드할 때 "never constructed" 경고가 납니다(등록하면 사라집니다).
-//
-//   1. `src/main.rs` 위쪽 `use` 에 `use poketry_api::PoketryApi;` 를 넣습니다(`mod poketry_api;` 는 이미 있습니다).
-//   2. `OpenApiService::new((PostsApi { … }, TagsApi { … }, …, CraftApi { … }, …), …)` 튜플 맨 끝에 `PoketryApi,` 를 넣습니다.
-//      필드가 없는 struct 라 `PoketryApi { }` 가 아니라 이름만 씁니다.
-//   3. 서버를 띄우고(`cargo run`, 포트는 `LISTEN_ADDR`·기본 8080) 요청을 보냅니다:
-//        curl -s -X POST localhost:8080/poketry/analyze -H 'Content-Type: application/json' \
-//          -d '{"names":["리자몽","가디안","루카리오","갸라도스","마기라스"]}' | jq
-//      5마리면 `plan` 이 채워지고 `fixes` 는 `[]`, "님피아" 를 더해 6마리면 `plan` 이 `null` 이고 `fixes` 가 약점 타입마다 하나.
-//      실패도 확인: `{"names":["없는몬"]}` → 400 "'없는몬' 은(는) 도감에 없습니다.", `{"names":[]}` → 400.
-//      `/api-docs`(Swagger)에서도 보낼 수 있습니다.
-//   4. 위 네 요청을 통합 테스트로 남깁니다. 모양은 `src/routes/portfolio_routes_test.rs` 처럼
-//      `OpenApiService::new(PoketryApi, "test", "1.0")` 를 `poem::test::TestClient::new(..)` 에 바로 물리고
-//      `.post("/poketry/analyze").body_json(&serde_json::json!({ "names": [...] })).send().await` 로 보냅니다.
-//      확인할 것: 상태 코드, 5마리 → `data.plan` 있음·`data.fixes` 빔, 6마리 → 반대.
-//      DB 가 필요 없는 API 라 `AppState`·`init_db` 준비는 필요 없습니다.
-//   막히기 쉬운 곳: 테스트 파일은 `src/routes.rs` 에 `mod poketry_api_test;` 처럼 걸어야 돕니다(`mod portfolio_routes_test;` 줄 참고).
-//
-// 확인: 루트에서 `cargo build` 경고에서 `poketry_api` 가 사라지고, `cargo test` 가 통과하면 끝.
 pub struct PoketryApi;
 
 #[OpenApi]

@@ -39,6 +39,7 @@ use crate::routes::upload_image::upload_image;
 use crate::{models::AppState, routes::add_user::add_user};
 use db::init_db;
 use openapi::{ApiKeysApi, CraftApi, ImagesApi, PortfolioApi, PostsApi, TagsApi, WeddingApi};
+use poketry_api::PoketryApi;
 use poem::{
     delete,
     endpoint::StaticFilesEndpoint,
@@ -187,6 +188,7 @@ async fn main() -> Result<(), std::io::Error> {
                 ApiKeysApi {
                     state: state.clone(),
                 },
+                PoketryApi,
             ),
             "tyange-cms-api",
             "1.0",
