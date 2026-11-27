@@ -159,6 +159,29 @@ tyange-cms 쪽에서 실제 백엔드 없이 Prism 같은 도구로 mocking하�
     ② **`images.post_id` 외래키는 운영에도 cascade가 없어서, 이미지가 연결된 글은 운영에서도 못 지웠다** → 핸들러가 한 트랜잭션으로 `post_tags` 삭제 + `images.post_id = NULL`(파일과 행은 남기고
     연결만 끊음) + `posts` 삭제를 한다. 글이 없으면 404이고 아무것도 안 바뀐다. 테스트 `routes/post_delete_test.rs`(6개)가 변이 검사 3종(핸들러만/스키마만/둘 다 되돌림)으로 확인됐다.
     옛 `routes/delete_post.rs`(등록 안 된 죽은 코드, 테스트만 참조)는 그대로 둔다 — 같은 결함이 있지만 서빙되지 않는다.
+- **Claude 커넥터(원격 MCP)** (2026-11, `feat/mcp-connector`): 아이폰 Claude 앱 등에서 "Craft 문서를 블로그에 올려줘"처럼 쓰려고 만들었다.
+  모듈 `src/mcp.rs`(+`mcp/{tools,oauth,tokens,images,tests}.rs`), 글 저장 로직은 HTTP 라우트와 같은 `src/posts.rs`(권한·태그·블로그 재배포까지).
+  - **켜는 조건**: `MCP_PUBLIC_URL`(예: `https://mcp.tyange.com`, 서브도메인 — 사용자 결정)과 `MCP_OAUTH_CLIENT_ID`(워크플로 기본 `tyange-claude`). 워크플로는 repo variable `MCP_PUBLIC_URL`이 있을 때만 켜고,
+    그 주소를 `PASSKEY_RP_ORIGIN`에 덧붙이며, main.rs는 CORS 허용 origin에도 넣는다(승인 화면이 같은 출처로 패스키 POST를 하는데 Origin이 붙어 빠지면 403 — 로컬에서 실제로 막히는 걸 확인하고 고침).
+  - **MCP**: `/mcp`, `rmcp` 3.12 Streamable HTTP를 무상태·JSON 응답으로 poem에 tower 호환으로 붙였다. 도구: `list_posts`·`get_post`·`list_tags`(읽기 전용 표시),
+    `create_post`(기본 **draft**, 공개는 사용자가 분명히 말할 때만)·`update_post`(바꿀 필드만, `tags`를 보내면 전체 교체)·`set_post_status`·`delete_post`(파괴적 표시 +
+    `confirm_title`에 제목, 제목 없으면 본문 앞 30자를 정확히 넣어야 지움 — 사용자 결정). 실패는 프로토콜 오류가 아니라 `isError` 결과로 돌려준다.
+  - **인증(OAuth 2.1, 이 서버가 인가 서버)**: Claude 개인 플랜은 OAuth 또는 인증 없음만 되고 고정 헤더는 일부 조직 베타라 OAuth가 필수였다. 보호 자원 메타데이터(`/.well-known/oauth-protected-resource[/mcp]`),
+    인가 서버 메타데이터(`/.well-known/oauth-authorization-server`, `openid-configuration`), `/oauth/authorize`(패스키 승인 화면 → 기존 `/passkeys/login/*`의 로그인 JWT를
+    `/oauth/authorize/approve`에 넘기면 admin일 때 코드 발급), `/oauth/token`(코드 + PKCE S256, 리프레시 회전). 클라이언트는 미리 정한 공개 클라이언트 하나뿐(DCR·CIMD 없음 —
+    Claude 커넥터 설정의 "Use your own OAuth client"에 id만 넣고 secret은 비운다). 리다이렉트는 `https://claude.ai|claude.com/api/mcp/auth_callback`만. 코드 5분·액세스 1시간·리프레시 60일,
+    모두 해시만 저장(`mcp_oauth_codes`·`mcp_oauth_tokens`), 토큰은 `resource`(= `<MCP_PUBLIC_URL>/mcp`)에 묶인다. `/mcp`는 토큰 없으면 401 + `WWW-Authenticate: Bearer resource_metadata=…`, admin 아니면 403.
+    서브도메인을 쓰는 이유: Claude가 인가 서버 정보를 도메인 루트의 `/.well-known/`에서 찾아서 `tyange.com/api/cms` 아래로는 확실하지 않다.
+  - **이미지**: `create_post`·`update_post`가 본문 `![…](https://…)`를 내려받아 저장하고 주소를 `MCP_IMAGE_BASE_URL`(기본 `https://tyange.com/api/cms`)+`/images/…`로 바꾼다(지운 Craft 동기화와 같은 방식).
+    실패한 그림은 원래 주소를 두고 결과 `images.warnings`로 알린다. SSRF 방지: https만, 풀린 주소 중 하나라도 내부망이면 거부, 검사한 IP로 연결 고정, 리다이렉트 3번·https·도메인만.
+  - 리다이렉트는 claude.ai/claude.com 콜백 + **루프백**(`http://localhost|127.0.0.1|[::1]:<포트>/…`, RFC 8252) — 맥의 Claude Code도 OAuth로 붙을 수 있다
+    (`claude mcp add --transport http tyange <MCP_PUBLIC_URL>/mcp --client-id tyange-claude` 식. Claude Code 플래그는 그쪽 문서 확인).
+  - **로컬에서 도구 써 보기**: `scripts/mcp-local.sh serve` → `scripts/mcp-local.sh token`이 출력하는 `claude mcp add … --header "Authorization: Bearer …"` 실행.
+    OAuth·패스키 없이 로컬 DB(`./data/mcp-local`)에 토큰을 직접 넣는다. 블로그 재배포·패스키·수집 작업은 끈 채로 뜬다(로컬에서 글을 공개해도 운영 블로그가 재배포되지 않게).
+  - 테스트 18개(`mcp/tests.rs`, `mcp/images.rs`): OAuth 흐름과 거부 경우, 루프백, 도구 호출 전체, 가짜 이미지 서버. 보안 검사 16종을 하나씩 빼는 변이에서 모두 실패 확인.
+  - **배포에 필요한 사람 작업**: DNS(`mcp.tyange.com`) → nginx server 블록(TLS, `proxy_pass http://127.0.0.1:8080`) → repo variable `MCP_PUBLIC_URL` → 배포 →
+    admin 계정에 패스키가 있어야 승인 가능 → 맞춤 커넥터 추가(URL `<MCP_PUBLIC_URL>/mcp`, 고급 설정에서 OAuth 클라이언트 id). claude.ai 웹뿐 아니라
+    **iOS 앱에서도 추가할 수 있다**(사용자 확인). 모바일도 같은 리다이렉트 `https://claude.ai/api/mcp/auth_callback`을 쓰고, 패스키 RP ID가 `tyange.com`이라 하위 도메인 승인 화면에서도 동작한다.
 - **Craft 폴더 → 포스트 동기화는 제거했다** (2026-11, `chore/remove-craft-sync`). Craft `CMS` 폴더를 폴링해 lovelog 짧은 글로 올리던 기능
   (`src/craft_sync.rs`, `/admin/craft/sync`·`/admin/craft/status`, 표 `craft_sync_posts`·`craft_sync_images`). 글 올리기를 Claude 커넥터로
   하기로 해서 걷어냈다(사용자 결정). 동기화가 만든 글은 남기고, 두 표는 `init_db`가 `DROP TABLE IF EXISTS`로 지운다. 워크플로의 `CRAFT_*` 환경변수도 뺐다

@@ -58,7 +58,8 @@ jobs:
           # 서브도메인 어디서든 같은 패스키를 쓰고, ORIGIN은 패스키 의식을 시작하는 페이지다
           # (쉼표로 추가). 이 줄들을 빼면 패스키 엔드포인트는 503이 된다.
           echo PASSKEY_RP_ID=tyange.com >> .env
-          echo PASSKEY_RP_ORIGIN=https://gotolib.tyange.com >> .env
+          # MCP 커넥터 승인 화면도 패스키를 쓰므로 그 주소를 origin에 덧붙인다(MCP_PUBLIC_URL이 있을 때만).
+          echo "PASSKEY_RP_ORIGIN=https://gotolib.tyange.com${{ vars.MCP_PUBLIC_URL && format(',{0}', vars.MCP_PUBLIC_URL) || '' }}" >> .env
           echo UPLOAD_PATH=${{ vars.UPLOAD_PATH }} >> .env
           echo DATABASE_PATH=${{ vars.DATABASE_PATH }} >> .env
           # gotolib 책 표지 수집. 기본은 켜짐. 끄려면 repo variable COVER_FETCH_ENABLED=false.
@@ -70,6 +71,11 @@ jobs:
           echo YES24_FETCH_INTERVAL_SECS=${{ vars.YES24_FETCH_INTERVAL_SECS }} >> .env
           # gotolib 찜한 책 소장 알림(Web Push). 기본 켜짐. 끄려면 GOTOLIB_PUSH_ENABLED=false.
           echo GOTOLIB_PUSH_ENABLED=${{ vars.GOTOLIB_PUSH_ENABLED || 'true' }} >> .env
+          # Claude 커넥터(원격 MCP). repo variable MCP_PUBLIC_URL(예: https://mcp.tyange.com)을 만들면 켜진다.
+          # 클라이언트 id는 비밀이 아니다(PKCE 공개 클라이언트) — Claude 커넥터 설정에 같은 값을 넣는다.
+          echo MCP_PUBLIC_URL=${{ vars.MCP_PUBLIC_URL }} >> .env
+          echo MCP_OAUTH_CLIENT_ID=${{ vars.MCP_OAUTH_CLIENT_ID || 'tyange-claude' }} >> .env
+          echo MCP_IMAGE_BASE_URL=${{ vars.MCP_IMAGE_BASE_URL }} >> .env
 
       - name: Build
         if: ${{ !inputs.deploy_only }}
