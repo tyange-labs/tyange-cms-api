@@ -5,11 +5,11 @@ use serde_json::json;
 use sqlx::{query, query_scalar, SqlitePool};
 
 use crate::{
-    blog_redeploy::{BlogContentEvent, BlogRedeployService, BlogVisibility, MockDispatchFailure},
     db::init_db,
     middlewares::admin_middleware::AdminOnly,
     middlewares::auth_middleware::Auth,
     models::AppState,
+    passkey::PasskeyService,
     routes::{
         add_user::add_user, delete_post::delete_post, get_all_posts::get_all_posts,
         update_post::update_post, upload_post::upload_post,
@@ -18,11 +18,6 @@ use crate::{
 use tyange_cms_api::auth::jwt::Claims;
 
 async fn create_test_state() -> Arc<AppState> {
-    let (blog_redeploy, _) = BlogRedeployService::mock();
-    create_test_state_with_redeploy(blog_redeploy).await
-}
-
-async fn create_test_state_with_redeploy(blog_redeploy: BlogRedeployService) -> Arc<AppState> {
     let db = SqlitePool::connect("sqlite::memory:")
         .await
         .expect("failed to connect sqlite");
@@ -55,7 +50,7 @@ async fn create_test_state_with_redeploy(blog_redeploy: BlogRedeployService) -> 
     .await
     .expect("failed to create post_tags");
 
-    Arc::new(AppState::new_with_blog_redeploy(db, blog_redeploy))
+    Arc::new(AppState::new_with_passkeys(db, PasskeyService::disabled()))
 }
 
 fn create_test_app(state: Arc<AppState>) -> impl Endpoint {
@@ -293,283 +288,4 @@ async fn admin_route_allows_admin_user() {
         .expect("failed to fetch created user");
 
     assert_eq!(created_role, "user");
-}
-
-#[tokio::test]
-async fn visible_publish_triggers_dispatch_once() {
-    let (blog_redeploy, mock_handle) = BlogRedeployService::mock();
-    let state = create_test_state_with_redeploy(blog_redeploy).await;
-    let cli = TestClient::new(create_test_app(state));
-
-    let response = cli
-        .post("/post/upload")
-        .header(
-            "Authorization",
-            issue_access_token("writer-visible", "user"),
-        )
-        .body_json(&json!({
-            "title": "published post",
-            "description": "desc",
-            "published_at": "2026-03-12T00:00:00Z",
-            "tags": [],
-            "content": "body",
-            "status": "published"
-        }))
-        .send()
-        .await;
-
-    response.assert_status_is_ok();
-
-    let calls = mock_handle.take_calls().await;
-    assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0].content_event, BlogContentEvent::Publish);
-    assert_eq!(calls[0].visibility, BlogVisibility::Visible);
-    assert!(!calls[0].post_id.is_empty());
-}
-
-#[tokio::test]
-async fn visible_publish_with_dev_tag_does_not_trigger_dispatch() {
-    let (blog_redeploy, mock_handle) = BlogRedeployService::mock();
-    let state = create_test_state_with_redeploy(blog_redeploy).await;
-    let cli = TestClient::new(create_test_app(state));
-
-    let response = cli
-        .post("/post/upload")
-        .header(
-            "Authorization",
-            issue_access_token("writer-visible-dev", "user"),
-        )
-        .body_json(&json!({
-            "title": "published dev post",
-            "description": "desc",
-            "published_at": "2026-03-12T00:00:00Z",
-            "tags": [{ "tag": "dev", "category": "series" }],
-            "content": "body",
-            "status": "published"
-        }))
-        .send()
-        .await;
-
-    response.assert_status_is_ok();
-    assert!(mock_handle.take_calls().await.is_empty());
-}
-
-#[tokio::test]
-async fn visible_update_triggers_dispatch_once() {
-    let (blog_redeploy, mock_handle) = BlogRedeployService::mock();
-    let state = create_test_state_with_redeploy(blog_redeploy).await;
-    query(
-        r#"
-        INSERT INTO posts (post_id, title, description, published_at, content, writer_id, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        "#,
-    )
-    .bind("post-visible-update")
-    .bind("title")
-    .bind("description")
-    .bind("2026-03-07T00:00:00Z")
-    .bind("content")
-    .bind("owner-visible")
-    .bind("published")
-    .execute(&state.db)
-    .await
-    .expect("failed to seed published post");
-
-    let cli = TestClient::new(create_test_app(state));
-    let response = cli
-        .put("/post/update/post-visible-update")
-        .header("Authorization", issue_access_token("owner-visible", "user"))
-        .body_json(&json!({
-            "title": "title updated",
-            "description": "description",
-            "published_at": "2026-03-07T00:00:00Z",
-            "tags": [],
-            "content": "content",
-            "status": "published"
-        }))
-        .send()
-        .await;
-
-    response.assert_status_is_ok();
-
-    let calls = mock_handle.take_calls().await;
-    assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0].content_event, BlogContentEvent::Update);
-    assert_eq!(calls[0].post_id, "post-visible-update");
-    assert_eq!(calls[0].visibility, BlogVisibility::Visible);
-}
-
-#[tokio::test]
-async fn visible_update_to_dev_tag_triggers_delete_dispatch_once() {
-    let (blog_redeploy, mock_handle) = BlogRedeployService::mock();
-    let state = create_test_state_with_redeploy(blog_redeploy).await;
-    query(
-        r#"
-        INSERT INTO posts (post_id, title, description, published_at, content, writer_id, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        "#,
-    )
-    .bind("post-visible-to-dev")
-    .bind("title")
-    .bind("description")
-    .bind("2026-03-07T00:00:00Z")
-    .bind("content")
-    .bind("owner-visible-dev")
-    .bind("published")
-    .execute(&state.db)
-    .await
-    .expect("failed to seed published post");
-
-    let cli = TestClient::new(create_test_app(state));
-    let response = cli
-        .put("/post/update/post-visible-to-dev")
-        .header(
-            "Authorization",
-            issue_access_token("owner-visible-dev", "user"),
-        )
-        .body_json(&json!({
-            "title": "title",
-            "description": "description",
-            "published_at": "2026-03-07T00:00:00Z",
-            "tags": [{ "tag": "dev", "category": "series" }],
-            "content": "content",
-            "status": "published"
-        }))
-        .send()
-        .await;
-
-    response.assert_status_is_ok();
-
-    let calls = mock_handle.take_calls().await;
-    assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0].content_event, BlogContentEvent::Delete);
-    assert_eq!(calls[0].post_id, "post-visible-to-dev");
-    assert_eq!(calls[0].visibility, BlogVisibility::Hidden);
-}
-
-#[tokio::test]
-async fn draft_or_dev_only_update_does_not_trigger_dispatch() {
-    let (blog_redeploy, mock_handle) = BlogRedeployService::mock();
-    let state = create_test_state_with_redeploy(blog_redeploy).await;
-    query(
-        r#"
-        INSERT INTO posts (post_id, title, description, published_at, content, writer_id, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        "#,
-    )
-    .bind("post-draft-update")
-    .bind("title")
-    .bind("description")
-    .bind("2026-03-07T00:00:00Z")
-    .bind("content")
-    .bind("owner-draft")
-    .bind("draft")
-    .execute(&state.db)
-    .await
-    .expect("failed to seed draft post");
-
-    let cli = TestClient::new(create_test_app(state));
-    let response = cli
-        .put("/post/update/post-draft-update")
-        .header("Authorization", issue_access_token("owner-draft", "user"))
-        .body_json(&json!({
-            "title": "title updated",
-            "description": "description updated",
-            "published_at": "2026-03-08T00:00:00Z",
-            "tags": [{ "tag": "dev", "category": "series" }],
-            "content": "content updated",
-            "status": "draft"
-        }))
-        .send()
-        .await;
-
-    response.assert_status_is_ok();
-    assert!(mock_handle.take_calls().await.is_empty());
-}
-
-#[tokio::test]
-async fn dispatch_failure_does_not_rollback_visible_publish() {
-    let (blog_redeploy, mock_handle) = BlogRedeployService::mock();
-    mock_handle
-        .fail_next(MockDispatchFailure {
-            content_event: BlogContentEvent::Publish,
-            post_id: "post-will-be-created".to_string(),
-            visibility: BlogVisibility::Visible,
-            status: Some(500),
-            message: "mock github failure".to_string(),
-        })
-        .await;
-
-    let state = create_test_state_with_redeploy(blog_redeploy).await;
-    let cli = TestClient::new(create_test_app(state.clone()));
-
-    let response = cli
-        .post("/post/upload")
-        .header(
-            "Authorization",
-            issue_access_token("writer-failure", "user"),
-        )
-        .body_json(&json!({
-            "title": "publish despite dispatch failure",
-            "description": "desc",
-            "published_at": "2026-03-12T00:00:00Z",
-            "tags": [],
-            "content": "body",
-            "status": "published"
-        }))
-        .send()
-        .await;
-
-    response.assert_status_is_ok();
-
-    let saved_count: i64 = query_scalar("SELECT COUNT(*) FROM posts WHERE title = ?")
-        .bind("publish despite dispatch failure")
-        .fetch_one(&state.db)
-        .await
-        .expect("failed to count saved posts");
-    assert_eq!(saved_count, 1);
-
-    let calls = mock_handle.take_calls().await;
-    let failures = mock_handle.take_failures().await;
-    assert_eq!(calls.len(), 1);
-    assert_eq!(failures.len(), 1);
-    assert_eq!(failures[0].content_event, BlogContentEvent::Publish);
-    assert_eq!(failures[0].visibility, BlogVisibility::Visible);
-}
-
-#[tokio::test]
-async fn visible_delete_triggers_dispatch_once() {
-    let (blog_redeploy, mock_handle) = BlogRedeployService::mock();
-    let state = create_test_state_with_redeploy(blog_redeploy).await;
-    query(
-        r#"
-        INSERT INTO posts (post_id, title, description, published_at, content, writer_id, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        "#,
-    )
-    .bind("post-visible-delete")
-    .bind("title")
-    .bind("description")
-    .bind("2026-03-07T00:00:00Z")
-    .bind("content")
-    .bind("owner-delete")
-    .bind("published")
-    .execute(&state.db)
-    .await
-    .expect("failed to seed published post");
-
-    let cli = TestClient::new(create_test_app(state.clone()));
-    let response = cli
-        .delete("/post/delete/post-visible-delete")
-        .header("Authorization", issue_access_token("owner-delete", "user"))
-        .send()
-        .await;
-
-    response.assert_status_is_ok();
-
-    let calls = mock_handle.take_calls().await;
-    assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0].content_event, BlogContentEvent::Delete);
-    assert_eq!(calls[0].post_id, "post-visible-delete");
-    assert_eq!(calls[0].visibility, BlogVisibility::Hidden);
 }
