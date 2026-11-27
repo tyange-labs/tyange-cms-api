@@ -8,6 +8,7 @@
 //!
 //! 클라이언트는 미리 정한 공개 클라이언트 하나(`MCP_OAUTH_CLIENT_ID`)만 받는다. 동적 등록(DCR)·CIMD는 없다 —
 //! 쓰는 사람이 한 명이라 Claude 커넥터 설정에서 "Use your own OAuth client"로 이 id를 넣는다.
+//! 리다이렉트는 Claude 앱 콜백과 루프백(Claude Code 등)만 받는다(`is_allowed_redirect`).
 
 use std::sync::Arc;
 
@@ -114,7 +115,7 @@ fn validate(config: &McpConfig, params: &AuthorizeParams) -> Result<ValidRequest
         return Err(Invalid::Stop("알 수 없는 클라이언트입니다."));
     }
     let redirect_uri = params.redirect_uri.clone().unwrap_or_default();
-    if !CLAUDE_REDIRECT_URIS.contains(&redirect_uri.as_str()) {
+    if !is_allowed_redirect(&redirect_uri) {
         return Err(Invalid::Stop("허용되지 않은 리다이렉트 주소입니다."));
     }
     let redirect = |error| Invalid::Redirect {
@@ -149,13 +150,36 @@ fn validate(config: &McpConfig, params: &AuthorizeParams) -> Result<ValidRequest
     })
 }
 
+/// Claude 앱(웹·데스크톱·모바일)의 콜백, 또는 루프백 주소(`http://localhost|127.0.0.1|[::1]:<포트>/…`).
+/// 루프백은 맥의 Claude Code 같은 네이티브 클라이언트용이다(RFC 8252 7.3 — 포트는 매번 달라서 보지 않는다).
+/// 코드가 사용자 자기 컴퓨터로만 가고 PKCE가 필수라 안전하다.
+pub fn is_allowed_redirect(redirect_uri: &str) -> bool {
+    if CLAUDE_REDIRECT_URIS.contains(&redirect_uri) {
+        return true;
+    }
+    let Ok(url) = url::Url::parse(redirect_uri) else {
+        return false;
+    };
+    let loopback = match url.host() {
+        Some(url::Host::Domain(domain)) => domain == "localhost",
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        None => false,
+    };
+    url.scheme() == "http"
+        && loopback
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.fragment().is_none()
+}
+
 fn redirect_with(
     config: &McpConfig,
     redirect_uri: &str,
     pairs: &[(&str, &str)],
     state: Option<&str>,
 ) -> String {
-    let mut url = url::Url::parse(redirect_uri).expect("허용 목록의 주소는 올바른 URL이다");
+    let mut url = url::Url::parse(redirect_uri).expect("허용된 리다이렉트 주소는 올바른 URL이다");
     {
         let mut query = url.query_pairs_mut();
         for (key, value) in pairs {

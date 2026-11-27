@@ -666,3 +666,72 @@ async fn production_policy_refuses_http_and_internal_addresses() {
         "요청 자체를 보내지 않는다"
     );
 }
+
+#[test]
+fn loopback_redirects_are_allowed_for_native_clients() {
+    use super::oauth::is_allowed_redirect;
+    for ok in [
+        "https://claude.ai/api/mcp/auth_callback",
+        "https://claude.com/api/mcp/auth_callback",
+        "http://localhost:8765/callback",
+        "http://127.0.0.1:51234/callback",
+        "http://[::1]:9000/cb",
+        "http://localhost/callback",
+    ] {
+        assert!(is_allowed_redirect(ok), "{ok}");
+    }
+    for bad in [
+        "https://evil.example/cb",
+        "http://localhost.evil.example/callback",
+        "http://evil.example/localhost",
+        "https://localhost:8765/callback",
+        "http://user@localhost:8765/callback",
+        "http://localhost:8765/callback#x",
+        "http://10.0.0.1:8765/callback",
+        "javascript:alert(1)",
+        "",
+    ] {
+        assert!(!is_allowed_redirect(bad), "{bad}");
+    }
+}
+
+#[tokio::test]
+async fn claude_code_can_finish_oauth_through_a_loopback_redirect() {
+    let h = harness().await;
+    let loopback = "http://localhost:8765/callback";
+    let mut body = json!({ "access_token": jwt("admin", "admin") });
+    for (key, value) in authorize_params() {
+        body[key] = json!(if key == "redirect_uri" { loopback.to_string() } else { value });
+    }
+    let resp = h.cli.post("/oauth/authorize/approve").body_json(&body).send().await;
+    resp.assert_status_is_ok();
+    let body: Value = resp.json().await.value().deserialize();
+    let redirect = body["redirect"].as_str().unwrap();
+    assert!(redirect.starts_with(loopback), "{redirect}");
+    let code = query_of(redirect)["code"].clone();
+
+    let (status, body) = h
+        .token(&[
+            ("grant_type", "authorization_code"),
+            ("code", &code),
+            ("redirect_uri", loopback),
+            ("client_id", CLIENT_ID),
+            ("code_verifier", VERIFIER),
+        ])
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (_, body) = h.approve(&jwt("admin", "admin")).await;
+    let code = query_of(body["redirect"].as_str().unwrap())["code"].clone();
+    let (status, body) = h
+        .token(&[
+            ("grant_type", "authorization_code"),
+            ("code", &code),
+            ("redirect_uri", loopback),
+            ("client_id", CLIENT_ID),
+            ("code_verifier", VERIFIER),
+        ])
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "승인 때와 다른 redirect_uri 로는 코드를 못 바꾼다");
+    assert_eq!(body["error"], "invalid_grant");
+}
